@@ -31,7 +31,7 @@ ENV LANG=C.UTF-8
 ENV EDITOR=vim
 
 # Порт для приложения
-EXPOSE 3000
+EXPOSE 8000
 
 # Установка точки входа
 ENTRYPOINT ["docker-entrypoint"]

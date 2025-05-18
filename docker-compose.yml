@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: postgres
+      POSTGRES_DB: tvoya_shina_development
+      POSTGRES_MULTIPLE_DATABASES: "tvoya_shina_test"
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: >
+      bash -c "
+        echo '\
+#!/bin/bash
+set -e
+set -u
+
+function create_user_and_database() {
+  local database=$$1
+  echo \"Creating database $$database\"
+  psql -v ON_ERROR_STOP=1 --username \"$$POSTGRES_USER\" <<-EOSQL
+    CREATE DATABASE $$database;
+    GRANT ALL PRIVILEGES ON DATABASE $$database TO $$POSTGRES_USER;
+EOSQL
+}
+
+if [ -n \"$$POSTGRES_MULTIPLE_DATABASES\" ]; then
+  for db in $$(echo $$POSTGRES_MULTIPLE_DATABASES | tr \",\" \" \"); do
+    create_user_and_database $$db
+  done
+fi
+' > /docker-entrypoint-initdb.d/multiple-postgresql-databases.sh
+        chmod 755 /docker-entrypoint-initdb.d/multiple-postgresql-databases.sh
+        docker-entrypoint.sh postgres
+      "
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: bundle exec rails s -p 8000 -b '0.0.0.0'
+    volumes:
+      - .:/rails
+      - bundle_cache:/usr/local/bundle
+    environment:
+      RAILS_ENV: development
+      DATABASE_HOST: db
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: password
+      REDIS_URL: redis://redis:6379/1
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+
+  sidekiq:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: bundle exec sidekiq
+    volumes:
+      - .:/rails
+      - bundle_cache:/usr/local/bundle
+    environment:
+      RAILS_ENV: development
+      DATABASE_HOST: db
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: password
+      REDIS_URL: redis://redis:6379/1
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  bundle_cache:

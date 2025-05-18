@@ -66,7 +66,7 @@ cd api
 docker-compose up -d
 ```
 
-Приложение будет доступно по адресу http://localhost:3000
+Приложение будет доступно по адресу http://localhost:8000
 
 ### Локальная установка
 
@@ -113,7 +113,7 @@ docker-compose exec api bundle exec rake rswag:specs:swaggerize
 bundle exec rake rswag:specs:swaggerize
 ```
 
-2. Документация будет доступна по адресу: http://localhost:3000/api-docs
+2. Документация будет доступна по адресу: http://localhost:8000/api-docs
 
 ### Аутентификация
 
