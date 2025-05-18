@@ -1,6 +1,8 @@
 require 'rails_helper'
 
 RSpec.describe Booking, type: :model do
+  include BookingTestHelper
+
   describe 'associations' do
     it { should belong_to(:client) }
     it { should belong_to(:service_point) }
@@ -62,7 +64,11 @@ RSpec.describe Booking, type: :model do
       it 'validates that car belongs to client' do
         client1 = create(:client)
         client2 = create(:client)
-        car = create(:client_car, client: client1)
+        
+        # Создаем уникальный бренд и модель для избежания дублирования
+        brand = create(:car_brand, name: "Brand-#{Time.now.to_i}-#{SecureRandom.hex(4)}")
+        model = create(:car_model, brand: brand, name: "Model-#{Time.now.to_i}-#{SecureRandom.hex(4)}")
+        car = create(:client_car, client: client1, brand: brand, model: model)
         
         booking = build(:booking, client: client2, car: car)
         expect(booking).not_to be_valid
