@@ -1,0 +1,93 @@
+class ServicePoint < ApplicationRecord
+  # Связи
+  belongs_to :partner
+  belongs_to :city
+  belongs_to :status, class_name: 'ServicePointStatus', foreign_key: 'status_id'
+  has_many :photos, class_name: 'ServicePointPhoto', dependent: :destroy
+  has_many :service_point_amenities, dependent: :destroy
+  has_many :amenities, through: :service_point_amenities
+  has_many :manager_service_points, dependent: :destroy
+  has_many :managers, through: :manager_service_points
+  has_many :schedule_templates, dependent: :destroy
+  has_many :schedule_exceptions, dependent: :destroy
+  has_many :schedule_slots, dependent: :destroy
+  has_many :bookings, dependent: :restrict_with_error
+  has_many :reviews, dependent: :destroy
+  has_many :price_lists, dependent: :destroy
+  has_many :promotions, dependent: :destroy
+  has_many :client_favorite_points, dependent: :destroy
+  has_many :favorited_by_clients, through: :client_favorite_points, source: :client
+  
+  # Добавляем связь с услугами
+  has_many :service_point_services, dependent: :destroy
+  has_many :services, through: :service_point_services
+  
+  # Валидации
+  # Удаляем валидацию уникальности имени, чтобы разрешить одинаковые имена у разных партнеров/городов
+  validates :name, presence: true
+  validates :address, presence: true
+  validates :post_count, numericality: { greater_than: 0 }
+  validates :default_slot_duration, numericality: { greater_than: 0 }
+  
+  # Геолокация
+  validates :latitude, numericality: { greater_than_or_equal_to: -90, less_than_or_equal_to: 90 }, allow_nil: true
+  validates :longitude, numericality: { greater_than_or_equal_to: -180, less_than_or_equal_to: 180 }, allow_nil: true
+  
+  # Скоупы
+  scope :active, -> { joins(:status).where(service_point_statuses: { name: 'active' }) }
+  scope :by_city, ->(city_id) { where(city_id: city_id) }
+  scope :by_partner, ->(partner_id) { where(partner_id: partner_id) }
+  scope :with_amenities, ->(amenity_ids) { 
+    return none if amenity_ids.blank?
+    
+    # Convert to array if it's not already
+    amenity_ids = Array(amenity_ids)
+    
+    # Group service points by their ID and count how many of the specified amenities they have
+    joins(:service_point_amenities)
+      .where(service_point_amenities: { amenity_id: amenity_ids })
+      .group(:id)
+      .having("COUNT(DISTINCT service_point_amenities.amenity_id) = ?", amenity_ids.length)
+  }
+  scope :near, ->(latitude, longitude, distance_km = 10) {
+    # Примечание: это очень упрощенный расчет, в реальном проекте используйте PostGIS или геопространственные функции
+    where("
+      (6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) < ?",
+      latitude, longitude, latitude, distance_km)
+  }
+  
+  # Методы
+  def active?
+    status.name == 'active'
+  end
+  
+  def temporarily_closed?
+    status.name == 'temporarily_closed'
+  end
+  
+  def closed?
+    status.name == 'closed'
+  end
+  
+  def maintenance?
+    status.name == 'maintenance'
+  end
+  
+  def recalculate_metrics!
+    update(
+      total_clients_served: bookings.joins(:status).where(booking_statuses: { name: 'completed' }).count,
+      average_rating: reviews.average(:rating) || 0.0,
+      cancellation_rate: calculate_cancellation_rate
+    )
+  end
+  
+  private
+  
+  def calculate_cancellation_rate
+    total = bookings.count
+    return 0.0 if total.zero?
+    
+    cancelled = bookings.joins(:status).where(booking_statuses: { name: ['canceled_by_client', 'canceled_by_partner', 'no_show'] }).count
+    (cancelled.to_f / total) * 100
+  end
+end

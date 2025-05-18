@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+
+# Enable jemalloc для снижения использования памяти (если доступен)
+if [ -z "${LD_PRELOAD+x}" ]; then
+    JEMALLOC_PATH=$(find /usr/lib -name libjemalloc.so.2 -print -quit)
+    if [ -n "$JEMALLOC_PATH" ]; then
+        LD_PRELOAD=$JEMALLOC_PATH
+        export LD_PRELOAD
+    fi
+fi
+
+# Проверка, доступна ли база данных
+until pg_isready -h $DATABASE_HOST -U $DATABASE_USERNAME; do
+  echo "Waiting for PostgreSQL to be ready..."
+  sleep 2
+done
+
+# Если это Rails или Sidekiq, выполнить предварительную настройку
+if [ "${1}" == "rails" ] || [ "${1}" == "bundle" ] || [ "${1}" == "sidekiq" ]; then
+  # Если база данных не существует или требуются миграции
+  if ! bundle exec rails db:version &> /dev/null; then
+    echo "Database does not exist, creating and running migrations..."
+    bundle exec rails db:create
+    bundle exec rails db:migrate
+    bundle exec rails db:seed
+  elif [ -n "$(bundle exec rails db:migrate:status | grep down)" ]; then
+    echo "Running pending migrations..."
+    bundle exec rails db:migrate
+  fi
+  
+  # Очистка временных файлов
+  rm -f tmp/pids/server.pid
+fi
+
+exec "${@}"

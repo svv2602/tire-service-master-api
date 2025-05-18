@@ -1,0 +1,18 @@
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/websocket-driver-0.7.7/ext/websocket-driver
+/usr/bin/ruby3.3 -I/usr/lib/ruby/vendor_ruby extconf.rb
+creating Makefile
+
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/websocket-driver-0.7.7/ext/websocket-driver
+make DESTDIR\= sitearchdir\=./.gem.20250516-7142-s4djaa sitelibdir\=./.gem.20250516-7142-s4djaa clean
+
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/websocket-driver-0.7.7/ext/websocket-driver
+make DESTDIR\= sitearchdir\=./.gem.20250516-7142-s4djaa sitelibdir\=./.gem.20250516-7142-s4djaa
+compiling websocket_mask.c
+linking shared-object websocket_mask.so
+
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/websocket-driver-0.7.7/ext/websocket-driver
+make DESTDIR\= sitearchdir\=./.gem.20250516-7142-s4djaa sitelibdir\=./.gem.20250516-7142-s4djaa install
+/usr/bin/install -c -m 0755 websocket_mask.so ./.gem.20250516-7142-s4djaa
+
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/websocket-driver-0.7.7/ext/websocket-driver
+make DESTDIR\= sitearchdir\=./.gem.20250516-7142-s4djaa sitelibdir\=./.gem.20250516-7142-s4djaa clean

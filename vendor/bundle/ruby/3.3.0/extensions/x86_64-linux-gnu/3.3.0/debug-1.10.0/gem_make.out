@@ -1,0 +1,19 @@
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/debug-1.10.0/ext/debug
+/usr/bin/ruby3.3 -I/usr/lib/ruby/vendor_ruby extconf.rb
+creating Makefile
+
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/debug-1.10.0/ext/debug
+make DESTDIR\= sitearchdir\=./.gem.20250516-12480-974sjg sitelibdir\=./.gem.20250516-12480-974sjg clean
+
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/debug-1.10.0/ext/debug
+make DESTDIR\= sitearchdir\=./.gem.20250516-12480-974sjg sitelibdir\=./.gem.20250516-12480-974sjg
+compiling debug.c
+compiling iseq_collector.c
+linking shared-object debug/debug.so
+
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/debug-1.10.0/ext/debug
+make DESTDIR\= sitearchdir\=./.gem.20250516-12480-974sjg sitelibdir\=./.gem.20250516-12480-974sjg install
+/usr/bin/install -c -m 0755 debug.so ./.gem.20250516-12480-974sjg/debug
+
+current directory: /home/snisar/mobi_tz/api/vendor/bundle/ruby/3.3.0/gems/debug-1.10.0/ext/debug
+make DESTDIR\= sitearchdir\=./.gem.20250516-12480-974sjg sitelibdir\=./.gem.20250516-12480-974sjg clean
