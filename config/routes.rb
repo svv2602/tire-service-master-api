@@ -100,6 +100,9 @@ Rails.application.routes.draw do
       
       # Системные логи (только для администраторов)
       resources :system_logs, only: [:index, :show]
+      
+      # Добавляем health check эндпоинт
+      get 'health', to: 'health#index'
     end
   end
 end
