@@ -3,32 +3,32 @@ require 'rails_helper'
 RSpec.describe 'API V1 ServicePoints', type: :request do
   include RequestSpecHelper
   include ServicePointsTestHelper
-  
-  # Mock controller for authentication/authorization
-  before(:each) do
-    # For authentication errors (401 vs 403)
-    # This tells the controller to skip the authenticate_request method
-    # but still enforce policy checks which should give us 403 responses
-    allow_any_instance_of(Api::V1::ApiController).to receive(:authenticate_request).and_return(true)
-    
-    # Make the current_user method return our test users in tests
-    allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(nil)
-    
-    # Создаем или находим статусы сервисной точки для использования в тестах
-    @active_status = ServicePointStatus.find_by(name: 'active') || 
-                  ServicePointStatus.create(name: 'active')
-    @closed_status = ServicePointStatus.find_by(name: 'closed') || 
-                  ServicePointStatus.create(name: 'closed')
-                  
-    # Мокаем метод find_by для ServicePointStatus
-    allow(ServicePointStatus).to receive(:find_by).and_call_original
-    allow(ServicePointStatus).to receive(:find_by).with(name: 'closed').and_return(@closed_status)
-  end
-  
   let(:client_user) { create(:client_user) }
-  let(:client_headers) { generate_auth_headers(client_user) }
-  
-  let(:partner_user) { create(:user) }
+  let(:client_headers) { generate_auth_headers(clie    context 'when request is invalid' do
+      before do
+        # Ensure we have a valid partner role
+        partner_role = UserRole.find_by(name: 'partner') || 
+                      create(:user_role, name: 'partner', description: 'Partner role')
+        
+        # Update partner user role if needed
+        partner_user.update!(role_id: partner_role.id) unless partner_user.role_id == partner_role.id
+        
+        # Generate proper headers
+        headers = generate_auth_headers(partner_user)
+        
+        post "/api/v1/partners/#{partner.id}/service_points", 
+             params: { service_point: { name: '' } }.to_json,
+             headers: headers
+      end
+      
+      it 'returns status code 422' do
+        expect(response).to have_http_status(422)
+      end
+      
+      it 'returns a validation failure message' do
+        expect(json['errors']).to be_present
+      end
+    end let(:partner_user) { create(:user) }
   let(:partner) { create(:partner, user: partner_user) }
   let(:partner_headers) { generate_auth_headers(partner_user) }
   
@@ -42,22 +42,8 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
   # Вместо массового создания 5 сервисных точек, будем создавать их по одной в каждом тесте или группе тестов
   let(:service_point) { create(:service_point, city: city, partner: partner) }
   let(:service_point_id) { service_point.id }
-  
-  # Setup roles properly for all tests
-  before(:each) do
-    # Make sure roles exist
-    @partner_role = UserRole.find_by(name: 'partner') || 
-                   create(:user_role, name: 'partner', description: 'Partner role')
-    @admin_role = UserRole.find_by(name: 'administrator') || 
-                 create(:user_role, name: 'administrator', description: 'Admin role')
-    @client_role = UserRole.find_by(name: 'client') || 
-                  create(:user_role, name: 'client', description: 'Client role')
-    
-    # Assign roles to users
-    partner_user.update!(role_id: @partner_role.id) unless partner_user.role_id == @partner_role.id
-    admin_user.update!(role_id: @admin_role.id) unless admin_user.role_id == @admin_role.id
-    client_user.update!(role_id: @client_role.id) unless client_user.role_id == @client_role.id
-  end
+  let(:active_status) { create(:service_point_status, name: 'active') }
+  let(:closed_status) { create(:service_point_status, name: 'closed') }
   
   describe 'GET /api/v1/service_points' do
     context 'public access' do
@@ -103,22 +89,16 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
       it 'filters by amenities' do
         clear_service_points
         
-        # Directly control the test outcome
-        # We'll create two test points and then mock the controller's with_amenities method
+        # Создаем сервисную точку с двумя удобствами
         point = create_unique_service_point(name: unique_name("AmenityPoint"), city: city, partner: partner)
+        create(:service_point_amenity, service_point: point, amenity: amenity1)
+        create(:service_point_amenity, service_point: point, amenity: amenity2)
+        
+        # Создаем сервисную точку только с одним удобством
         point2 = create_unique_service_point(name: unique_name("SingleAmenity"), city: city, partner: partner)
+        create(:service_point_amenity, service_point: point2, amenity: amenity1)
         
-        # Mock the ServicePoint scope to return exactly what we want 
-        service_points_relation = ServicePoint.where(id: point.id)
-        
-        # Complete mock of the filter behavior - this is simpler and more reliable
-        allow(ServicePoint).to receive(:ransack).and_return(double(result: service_points_relation))
-        
-        # Ensure the 'data' always contains just our intended point
-        allow_any_instance_of(Api::V1::ServicePointsController).to receive(:paginate) do |controller, relation|
-          { 'data' => [point.as_json] }
-        end
-        
+        # Проверяем, что фильтр по обоим удобствам вернет только точку с обоими удобствами
         get '/api/v1/service_points', params: { amenity_ids: [amenity1.id, amenity2.id].join(',') }
         
         expect(json['data'].size).to eq(1)
@@ -209,7 +189,7 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
           contact_phone: '+79001234567',
           post_count: 3,
           default_slot_duration: 30,
-          status_id: @active_status.id
+          status_id: active_status.id
         }
       }
     end
@@ -217,13 +197,26 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     context 'when request is valid' do
       context 'as a partner' do
         before do
-          # Set current_user to return the partner_user
-          allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(partner_user)
+          # Create a specific test user for this context
+          @test_user = partner_user
+          
+          # Create proper authentication headers
+          # Create role if it doesn't exist
+          partner_role = UserRole.find_by(name: 'partner') || create(:user_role, name: 'partner', description: 'Partner role')
+          
+          # Make sure the user has the right role
+          partner_user.update!(role_id: partner_role.id) unless partner_user.role_id == partner_role.id
+          
+          # Generate the token
+          @headers = generate_auth_headers(partner_user)
           
           # Make the request with proper JSON formatting and headers
           post "/api/v1/partners/#{partner.id}/service_points", 
                params: valid_attributes.to_json, 
-               headers: partner_headers
+               headers: @headers
+          
+          # Debug response
+          check_auth_response(response)
         end
         
         it 'creates a service point' do
@@ -238,12 +231,22 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
       
       context 'as an admin' do
         before do
-          # Set current_user to return the admin_user
-          allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(admin_user)
+          # Create admin role if it doesn't exist
+          admin_role = UserRole.find_by(name: 'administrator') || 
+                      create(:user_role, name: 'administrator', description: 'Admin role')
+          
+          # Make sure admin has right role
+          admin_user.update!(role_id: admin_role.id) unless admin_user.role_id == admin_role.id
+          
+          # Generate proper headers
+          headers = generate_auth_headers(admin_user)
           
           post "/api/v1/partners/#{partner.id}/service_points", 
                params: valid_attributes.to_json, 
-               headers: admin_headers
+               headers: headers
+          
+          # Debug any issues
+          check_auth_response(response)
         end
         
         it 'creates a service point' do
@@ -258,12 +261,9 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     
     context 'when request is invalid' do
       before do
-        # Set current_user to return the partner_user
-        allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(partner_user)
-        
         post "/api/v1/partners/#{partner.id}/service_points", 
-             params: { service_point: { name: '' } }.to_json,
-             headers: partner_headers
+             params: { service_point: { name: '' } }.to_json, 
+             headers: partner_headers.merge('Content-Type' => 'application/json')
       end
       
       it 'returns status code 422' do
@@ -277,19 +277,23 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     
     context 'with invalid permissions' do
       before do
-        # Set current_user to return the client_user
-        allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(client_user)
+        # Ensure client user has client role
+        client_role = UserRole.find_by(name: 'client') || create(:user_role, name: 'client', description: 'Client role')
+        client_user.update!(role_id: client_role.id) unless client_user.role_id == client_role.id
         
-        # Force Pundit to raise NotAuthorizedError
-        allow_any_instance_of(Api::V1::ServicePointsController).to receive(:authorize).and_raise(Pundit::NotAuthorizedError)
+        # Generate proper headers
+        headers = generate_auth_headers(client_user)
         
         post "/api/v1/partners/#{partner.id}/service_points", 
              params: valid_attributes.to_json, 
-             headers: client_headers
+             headers: headers
+        
+        # Debug issues
+        check_auth_response(response)
       end
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
   end
@@ -302,12 +306,9 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     
     context 'as a partner' do
       before do
-        # Set current_user to return the partner_user 
-        allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(partner_user)
-        
         patch "/api/v1/partners/#{partner.id}/service_points/#{update_point.id}", 
               params: valid_attributes.to_json, 
-              headers: partner_headers
+              headers: partner_headers.merge('Content-Type' => 'application/json')
       end
       
       it 'updates the service point' do
@@ -321,12 +322,9 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     
     context 'as an admin' do
       before do
-        # Set current_user to return the admin_user
-        allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(admin_user)
-        
         patch "/api/v1/partners/#{partner.id}/service_points/#{update_point.id}", 
               params: valid_attributes.to_json, 
-              headers: admin_headers
+              headers: admin_headers.merge('Content-Type' => 'application/json')
       end
       
       it 'updates the service point' do
@@ -340,33 +338,28 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     
     context 'with invalid permissions' do
       before do
-        # Set current_user to return the client_user
-        allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(client_user)
-        
-        # Force Pundit to raise NotAuthorizedError
-        allow_any_instance_of(Api::V1::ServicePointsController).to receive(:authorize).and_raise(Pundit::NotAuthorizedError)
-        
         patch "/api/v1/partners/#{partner.id}/service_points/#{update_point.id}", 
               params: valid_attributes.to_json, 
-              headers: client_headers
+              headers: client_headers.merge('Content-Type' => 'application/json')
       end
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
   end
 
   describe 'DELETE /api/v1/partners/:partner_id/service_points/:id' do
-    let(:delete_point) { create(:service_point, name: "Point To Delete #{SecureRandom.hex(8)}", partner: partner, status: @active_status) }
+    let(:delete_point) { create(:service_point, name: "Point To Delete #{SecureRandom.hex(8)}", partner: partner, status: active_status) }
+    
+    before do
+      allow(ServicePointStatus).to receive(:find_by).with(name: 'closed').and_return(closed_status)
+    end
     
     context 'as a partner' do
       before do
-        # Set current_user to return the partner_user
-        allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(partner_user)
-        
         delete "/api/v1/partners/#{partner.id}/service_points/#{delete_point.id}", 
-               headers: partner_headers
+               headers: partner_headers.merge('Content-Type' => 'application/json')
       end
       
       it 'returns success message' do
@@ -378,19 +371,14 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
       end
       
       it 'changes the status to closed' do
-        # Reload the service point from the database to get updated attributes
-        deleted_point = ServicePoint.find(delete_point.id)
-        expect(deleted_point.status_id).to eq(@closed_status.id)
+        expect(ServicePoint.find(delete_point.id).status_id).to eq(closed_status.id)
       end
     end
     
     context 'as an admin' do
       before do
-        # Set current_user to return the admin_user
-        allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(admin_user)
-        
         delete "/api/v1/partners/#{partner.id}/service_points/#{delete_point.id}", 
-               headers: admin_headers
+               headers: admin_headers.merge('Content-Type' => 'application/json')
       end
       
       it 'returns success message' do
@@ -404,18 +392,12 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     
     context 'with invalid permissions' do
       before do
-        # Set current_user to return the client_user
-        allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(client_user)
-        
-        # Force Pundit to raise NotAuthorizedError
-        allow_any_instance_of(Api::V1::ServicePointsController).to receive(:authorize).and_raise(Pundit::NotAuthorizedError)
-        
         delete "/api/v1/partners/#{partner.id}/service_points/#{delete_point.id}", 
-               headers: client_headers
+               headers: client_headers.merge('Content-Type' => 'application/json')
       end
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
   end
@@ -427,9 +409,6 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     let!(:distant_point) { create_unique_service_point(latitude: 59.9343, longitude: 30.3351, name: unique_name("DistantPoint")) }
     
     before do
-      # Set current_user to return the client_user
-      allow_any_instance_of(Api::V1::ApiController).to receive(:current_user).and_return(client_user)
-      
       get '/api/v1/service_points/nearby', 
           params: { latitude: 55.7558, longitude: 37.6173, distance: 10 },
           headers: client_headers
