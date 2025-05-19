@@ -2,7 +2,12 @@ module Api
   module V1
     class UsersController < ApiController
       before_action :set_user, only: [:show, :update, :destroy]
-      before_action :authorize_admin, except: [:show, :update]
+      before_action :authorize_admin, except: [:show, :update, :me]
+      
+      # GET /api/v1/users/me
+      def me
+        render json: current_user
+      end
       
       # GET /api/v1/users
       def index

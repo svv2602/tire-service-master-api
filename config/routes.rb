@@ -18,6 +18,9 @@ Rails.application.routes.draw do
       post 'authenticate', to: 'auth#login'
       post 'register', to: 'clients#register'
       
+      # Профиль текущего пользователя
+      get 'users/me', to: 'users#me'
+      
       # Пользователи
       resources :users, only: [:index, :show, :create, :update, :destroy]
       
