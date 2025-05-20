@@ -42,6 +42,11 @@ Rails.application.routes.draw do
         collection do
           post 'create_test', to: 'partners#create_test'
         end
+        
+        # Активация/деактивация партнера
+        member do
+          patch 'toggle_active', to: 'partners#toggle_active'
+        end
       end
       
       # Менеджеры

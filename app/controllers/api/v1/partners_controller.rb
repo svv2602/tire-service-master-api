@@ -1,8 +1,8 @@
 module Api
   module V1
     class PartnersController < ApiController
-      before_action :set_partner, only: [:show, :update, :destroy]
-      before_action :authorize_admin, except: [:index, :show, :create_test]
+      before_action :set_partner, only: [:show, :update, :destroy, :toggle_active]
+      before_action :authorize_admin, except: [:index, :show, :create_test, :toggle_active]
       skip_before_action :authenticate_request, only: [:index, :create_test]
       
       # GET /api/v1/partners
@@ -184,6 +184,53 @@ module Api
           error: e.message,
           message: "Произошла ошибка при обновлении партнера." 
         }, status: :unprocessable_entity
+      end
+      
+      # PATCH /api/v1/partners/:id/toggle_active
+      def toggle_active
+        # Проверяем права доступа (только админ или сам партнер)
+        unless current_user && (current_user.admin? || current_user.id == @partner.user_id)
+          render json: { 
+            error: 'У вас нет прав для выполнения этого действия',
+            message: 'Для выполнения этого действия требуются права администратора или владельца аккаунта.'
+          }, status: :unauthorized
+          return
+        end
+        
+        # Параметр active можно передать явно, иначе инвертируем текущий статус
+        new_active_status = params[:active].nil? ? !@partner.is_active : ActiveRecord::Type::Boolean.new.cast(params[:active])
+        
+        # Получаем количество сервисных точек и менеджеров, которые будут затронуты
+        service_points_count = @partner.service_points.count
+        managers_count = @partner.managers.count
+        
+        # Добавляем логгирование для отладки
+        Rails.logger.info("Changing partner status. Partner ID: #{@partner.id}, Current status: #{@partner.is_active}, New status: #{new_active_status}")
+        
+        # Вызываем метод изменения активности
+        if @partner.toggle_active(new_active_status)
+          status_text = new_active_status ? "активирован" : "деактивирован"
+          
+          # Собираем информацию о выполненных изменениях для ответа
+          changes = {
+            partner_status: status_text,
+            affected_service_points: service_points_count,
+            affected_managers: managers_count
+          }
+          
+          render json: {
+            success: true,
+            message: "Партнер успешно #{status_text}. Затронуто #{service_points_count} сервисных точек и #{managers_count} менеджеров.",
+            partner: @partner.as_json(include: { user: { only: [:id, :email, :phone, :first_name, :last_name, :role_id] } }),
+            changes: changes
+          }
+        else
+          render json: { 
+            success: false,
+            error: "Не удалось изменить статус партнера",
+            message: "Произошла ошибка при обновлении статуса партнера. Пожалуйста, попробуйте еще раз позже."
+          }, status: :unprocessable_entity
+        end
       end
       
       # DELETE /api/v1/partners/:id
