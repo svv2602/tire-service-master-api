@@ -3,7 +3,7 @@ require 'pp'  # Add pretty print for debugging
 module Api
   module V1
     class ClientsController < ApiController
-      skip_before_action :authenticate_request, only: [:register, :social_auth]
+      skip_before_action :authenticate_request, only: [:register, :social_auth, :create_test]
       before_action :set_client, only: [:show, :update, :destroy]
       
       # GET /api/v1/clients
@@ -150,6 +150,72 @@ module Api
         render json: { errors: e.record.errors }, status: :unprocessable_entity
       rescue => e
         render json: { error: e.message }, status: :unprocessable_entity
+      end
+      
+      # POST /api/v1/clients/create_test
+      def create_test
+        # Проверяем, что мы в режиме разработки или тестирования
+        unless Rails.env.development? || Rails.env.test?
+          render json: { error: "This endpoint is only available in development or test environment" }, status: :forbidden
+          return
+        end
+        
+        # Создаем тестового клиента
+        ActiveRecord::Base.transaction do
+          # Создаем пользователя
+          @user = User.create!(
+            email: "test_client_#{Time.now.to_i}@example.com",
+            password: 'password',
+            password_confirmation: 'password',
+            first_name: 'Тест',
+            last_name: 'Клиент',
+            phone: "+38067#{Random.rand(1000000..9999999)}",
+            role: UserRole.find_by(name: 'client')
+          )
+          
+          # Создаем клиента
+          @client = Client.create!(
+            user_id: @user.id,
+            preferred_notification_method: 'push',
+            marketing_consent: true
+          )
+          
+          # Проверяем наличие необходимых объектов для создания автомобиля
+          car_brand = CarBrand.first
+          car_model = CarModel.first
+          car_type = CarType.first
+          
+          # Создаем автомобиль, если есть необходимые объекты
+          if car_brand && car_model && car_type
+            ClientCar.create!(
+              client_id: @client.id,
+              brand_id: car_brand.id,
+              model_id: car_model.id,
+              car_type_id: car_type.id,
+              year: 2020,
+              is_primary: true
+            )
+          end
+        end
+        
+        token = Auth::JsonWebToken.encode(user_id: @user.id)
+        render json: { 
+          auth_token: token,
+          message: 'Test client created successfully',
+          client: {
+            id: @client.id,
+            user_id: @user.id,
+            email: @user.email,
+            first_name: @user.first_name,
+            last_name: @user.last_name,
+            phone: @user.phone
+          }
+        }, status: :created
+        
+      rescue ActiveRecord::RecordInvalid => e
+        render json: { message: 'Validation failed', errors: e.record.errors }, status: :unprocessable_entity
+      rescue => e
+        render json: { message: "Error: #{e.message}" }, status: :unprocessable_entity
       end
       
       # PUT /api/v1/clients/:id

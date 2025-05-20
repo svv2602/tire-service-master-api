@@ -30,9 +30,18 @@ Rails.application.routes.draw do
       # Партнеры
       resources :partners, only: [:index, :show, :create, :update, :destroy] do
         resources :service_points, only: [:index, :show, :create, :update, :destroy]
-        resources :managers, only: [:index, :show, :create, :update, :destroy]
+        resources :managers, only: [:index, :show, :create, :update, :destroy] do
+          collection do
+            post 'create_test', to: 'managers#create_test'
+          end
+        end
         resources :price_lists, only: [:index, :show, :create, :update, :destroy]
         resources :promotions, only: [:index, :show, :create, :update, :destroy]
+        
+        # Создание тестовых данных для партнера
+        collection do
+          post 'create_test', to: 'partners#create_test'
+        end
       end
       
       # Менеджеры
@@ -49,6 +58,15 @@ Rails.application.routes.draw do
         resources :reviews, only: [:index, :show]
         resources :bookings, only: [:index, :show]
         resources :photos, controller: 'service_point_photos'
+        resources :services, only: [:index, :create, :destroy], controller: 'service_point_services'
+        
+        # Добавляем маршруты для управления расписанием
+        member do
+          post 'generate_schedule', to: 'service_points#generate_schedule'
+          get 'available_slots', to: 'service_points#available_slots'
+          get 'occupancy', to: 'service_points#occupancy'
+          get 'weekly_occupancy', to: 'service_points#weekly_occupancy'
+        end
         
         collection do
           get 'nearby', to: 'service_points#nearby'
@@ -61,6 +79,11 @@ Rails.application.routes.draw do
         resources :bookings, only: [:index, :show, :create, :update, :destroy]
         resources :favorite_points, only: [:index, :create, :destroy]
         resources :reviews, only: [:index, :show, :create, :update, :destroy]
+        
+        # Создание тестового клиента
+        collection do
+          post 'create_test', to: 'clients#create_test'
+        end
       end
       
       # Регистрация клиентов
@@ -94,12 +117,23 @@ Rails.application.routes.draw do
       # Расписание
       get 'schedule/:service_point_id/:date', to: 'schedule#day', as: 'schedule_day'
       get 'schedule/:service_point_id/:from_date/:to_date', to: 'schedule#period', as: 'schedule_period'
+      post 'schedule/generate_for_date/:service_point_id/:date', to: 'schedule#generate_for_date', as: 'generate_schedule_for_date'
+      post 'schedule/generate_for_period/:service_point_id/:from_date/:to_date', to: 'schedule#generate_for_period', as: 'generate_schedule_for_period'
       
       # Уведомления
       resources :notifications, only: [:index, :show, :update]
       
       # Системные логи (только для администраторов)
       resources :system_logs, only: [:index, :show]
+      
+      # Тестовые данные для разработки
+      namespace :tests do
+        get 'generate_data', to: 'data_generator#generate'
+        post 'create_test_client', to: 'data_generator#create_test_client'
+        post 'create_test_partner', to: 'data_generator#create_test_partner'
+        post 'create_test_service_point', to: 'data_generator#create_test_service_point'
+        post 'create_test_booking', to: 'data_generator#create_test_booking'
+      end
       
       # Добавляем health check эндпоинт
       get 'health', to: 'health#index'

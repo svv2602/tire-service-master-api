@@ -81,6 +81,94 @@ class ServicePoint < ApplicationRecord
     )
   end
   
+  # Новые методы для работы с расписанием
+  
+  # Генерирует слоты расписания на указанную дату
+  def generate_schedule_for_date(date)
+    ScheduleManager.generate_slots_for_date(id, date)
+  end
+  
+  # Генерирует слоты расписания на указанный период
+  def generate_schedule_for_period(start_date, end_date)
+    ScheduleManager.generate_slots_for_period(id, start_date, end_date)
+  end
+  
+  # Получает доступные слоты расписания на указанную дату
+  def available_slots_for_date(date)
+    schedule_slots.where(slot_date: date, is_available: true)
+                  .left_joins(:bookings)
+                  .where(bookings: { id: nil })
+                  .order(start_time: :asc)
+  end
+  
+  # Находит ближайший свободный слот для бронирования
+  def find_next_available_slot(date = Date.current, preferred_time = nil)
+    ScheduleManager.find_next_available_slot(id, date, preferred_time)
+  end
+  
+  # Проверяет, доступно ли указанное время для бронирования
+  def is_time_available?(date, start_time, end_time)
+    ScheduleManager.is_time_available?(id, date, start_time, end_time)
+  end
+  
+  # Получает загруженность на указанную дату (процент занятых слотов)
+  def occupancy_for_date(date)
+    total_slots = schedule_slots.where(slot_date: date).count
+    return 0 if total_slots.zero?
+    
+    booked_slots = schedule_slots.where(slot_date: date)
+                                 .joins(:bookings)
+                                 .where.not(bookings: { id: nil })
+                                 .count
+    
+    (booked_slots.to_f / total_slots) * 100
+  end
+  
+  # Получает рейтинг загруженности по дням недели (среднее значение за последние 4 недели)
+  def weekly_occupancy
+    result = {}
+    
+    # Получаем даты последних 4 недель
+    end_date = Date.current
+    start_date = end_date - 4.weeks
+    
+    # Группируем слоты по дню недели и вычисляем средний процент занятости
+    (start_date..end_date).group_by(&:wday).each do |wday, dates|
+      occupancy_sum = dates.sum { |date| occupancy_for_date(date) }
+      result[wday] = (occupancy_sum / dates.count).round(2)
+    end
+    
+    result
+  end
+  
+  # Получает идентификаторы услуг, доступных в этой точке
+  def available_service_ids
+    service_point_services.pluck(:service_id)
+  end
+  
+  # Проверяет, доступна ли указанная услуга в этой точке
+  def service_available?(service_id)
+    service_point_services.exists?(service_id: service_id)
+  end
+  
+  # Получает цену указанной услуги в этой точке
+  def price_for_service(service_id)
+    service = Service.find(service_id)
+    service.current_price_for_service_point(id) || service.base_price
+  end
+  
+  # Добавляет услугу в список доступных в этой точке
+  def add_service(service_id)
+    return if service_available?(service_id)
+    
+    service_point_services.create(service_id: service_id)
+  end
+  
+  # Удаляет услугу из списка доступных в этой точке
+  def remove_service(service_id)
+    service_point_services.find_by(service_id: service_id)&.destroy
+  end
+  
   private
   
   def calculate_cancellation_rate

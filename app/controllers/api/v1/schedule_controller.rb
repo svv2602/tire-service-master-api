@@ -2,14 +2,25 @@ module Api
   module V1
     class ScheduleController < ApiController
       skip_before_action :authenticate_request, only: [:day, :period]
+      before_action :set_service_point
+      before_action :authorize_admin_or_partner, only: [:generate_for_date, :generate_for_period]
       
       # GET /api/v1/schedule/:service_point_id/:date
       def day
-        @service_point = ServicePoint.find(params[:service_point_id])
         date = Date.parse(params[:date]) rescue Date.current
         
-        # Получаем доступные слоты на выбранную дату
-        slots = get_available_slots(@service_point, date)
+        # Используем метод из ServicePoint
+        slots = @service_point.available_slots_for_date(date).map do |slot|
+          {
+            id: slot.id,
+            date: slot.slot_date.strftime('%Y-%m-%d'),
+            start_time: slot.start_time.strftime('%H:%M'),
+            end_time: slot.end_time.strftime('%H:%M'),
+            duration_minutes: slot.duration_in_minutes,
+            post_number: slot.post_number,
+            is_available: slot.is_available && !slot.booked?
+          }
+        end
         
         render json: {
           service_point_id: @service_point.id,
@@ -20,8 +31,6 @@ module Api
       
       # GET /api/v1/schedule/:service_point_id/:from_date/:to_date
       def period
-        @service_point = ServicePoint.find(params[:service_point_id])
-        
         from_date = Date.parse(params[:from_date]) rescue Date.current
         to_date = Date.parse(params[:to_date]) rescue (Date.current + 1.month)
         
@@ -33,37 +42,66 @@ module Api
         
         # Для каждого дня в диапазоне получаем расписание
         (from_date..to_date).each do |date|
-          # Получаем шаблон расписания на этот день недели
-          template = @service_point.schedule_templates.find_by(weekday: date.wday)
+          # Используем метод generate_schedule_for_date, чтобы убедиться, что слоты созданы
+          @service_point.generate_schedule_for_date(date)
           
-          # Если шаблон существует и день рабочий
-          if template && template.is_working_day
-            # Проверяем нет ли исключения в расписании на эту дату
-            exception = @service_point.schedule_exceptions.find_by(exception_date: date)
-            
-            # Если есть исключение и это выходной, пропускаем
-            next if exception && !exception.is_working_day
-            
+          # Получаем информацию о дне недели
+          weekday = Weekday.find_by(day_number: date.wday)
+          
+          # Получаем шаблон расписания на этот день недели
+          template = @service_point.schedule_templates.find_by(weekday_id: weekday.id)
+          
+          # Проверяем, нет ли исключения в расписании на эту дату
+          exception = @service_point.schedule_exceptions.find_by(exception_date: date)
+          
+          # Определяем, является ли день рабочим
+          is_working_day = if exception
+                           exception.is_working_day
+                         elsif template
+                           template.is_working_day
+                         else
+                           false
+                         end
+          
+          # Если день рабочий, получаем информацию о слотах
+          if is_working_day
             # Получаем доступные слоты
-            slots = get_available_slots(@service_point, date)
+            available_slots = @service_point.available_slots_for_date(date)
+            
+            # Определяем время работы
+            start_time = if exception && exception.is_working_day
+                         exception.start_time
+                       elsif template
+                         template.start_time
+                       else
+                         nil
+                       end
+            
+            end_time = if exception && exception.is_working_day
+                       exception.end_time
+                     elsif template
+                       template.end_time
+                     else
+                       nil
+                     end
             
             # Добавляем информацию о дне в результат
             days_schedule << {
-              date: date,
-              weekday: date.strftime('%A'),
+              date: date.strftime('%Y-%m-%d'),
+              weekday: weekday.name,
               is_working_day: true,
               working_hours: {
-                open: template.open_time,
-                close: template.close_time
+                start: start_time&.strftime('%H:%M'),
+                end: end_time&.strftime('%H:%M')
               },
-              available_slots_count: slots.count,
-              is_fully_booked: slots.empty?
+              available_slots_count: available_slots.count,
+              is_fully_booked: available_slots.empty?
             }
           else
             # День нерабочий
             days_schedule << {
-              date: date,
-              weekday: date.strftime('%A'),
+              date: date.strftime('%Y-%m-%d'),
+              weekday: weekday.name,
               is_working_day: false,
               available_slots_count: 0,
               is_fully_booked: true
@@ -73,88 +111,73 @@ module Api
         
         render json: {
           service_point_id: @service_point.id,
-          from_date: from_date,
-          to_date: to_date,
+          from_date: from_date.strftime('%Y-%m-%d'),
+          to_date: to_date.strftime('%Y-%m-%d'),
           days: days_schedule
+        }
+      end
+      
+      # POST /api/v1/schedule/generate_for_date/:service_point_id/:date
+      def generate_for_date
+        date = Date.parse(params[:date]) rescue Date.current
+        
+        # Генерируем слоты используя метод из ServicePoint
+        @service_point.generate_schedule_for_date(date)
+        
+        # Получаем созданные слоты
+        slots = @service_point.schedule_slots.where(slot_date: date).order(start_time: :asc).map do |slot|
+          {
+            id: slot.id,
+            date: slot.slot_date.strftime('%Y-%m-%d'),
+            start_time: slot.start_time.strftime('%H:%M'),
+            end_time: slot.end_time.strftime('%H:%M'),
+            duration_minutes: slot.duration_in_minutes,
+            post_number: slot.post_number,
+            is_available: slot.is_available && !slot.booked?
+          }
+        end
+        
+        render json: {
+          message: "Schedule generated successfully",
+          service_point_id: @service_point.id,
+          date: date.strftime('%Y-%m-%d'),
+          slots_count: slots.count,
+          slots: slots
+        }
+      end
+      
+      # POST /api/v1/schedule/generate_for_period/:service_point_id/:from_date/:to_date
+      def generate_for_period
+        from_date = Date.parse(params[:from_date]) rescue Date.current
+        to_date = Date.parse(params[:to_date]) rescue (Date.current + 1.month)
+        
+        # Ограничиваем период для API
+        max_days = 31
+        to_date = from_date + max_days.days if (to_date - from_date).to_i > max_days
+        
+        # Генерируем слоты используя метод из ServicePoint
+        @service_point.generate_schedule_for_period(from_date, to_date)
+        
+        render json: {
+          message: "Schedule generated successfully",
+          service_point_id: @service_point.id,
+          from_date: from_date.strftime('%Y-%m-%d'),
+          to_date: to_date.strftime('%Y-%m-%d'),
+          days_count: (to_date - from_date).to_i + 1
         }
       end
       
       private
       
-      def get_available_slots(service_point, date)
-        # Получаем шаблон расписания для дня недели
-        weekday = date.wday
-        template = service_point.schedule_templates.find_by(weekday: weekday)
-        
-        # Если нет шаблона или день нерабочий, возвращаем пустой массив
-        return [] if template.nil? || !template.is_working_day
-        
-        # Проверяем, нет ли исключения на эту дату
-        exception = service_point.schedule_exceptions.find_by(exception_date: date)
-        
-        # Если есть исключение и день нерабочий, возвращаем пустой массив
-        return [] if exception && !exception.is_working_day
-        
-        # Определяем время начала и окончания работы
-        open_time = exception&.open_time || template.open_time
-        close_time = exception&.close_time || template.close_time
-        
-        # Получаем существующие слоты
-        existing_slots = service_point.schedule_slots
-                               .where(date: date)
-                               .order(start_time: :asc)
-        
-        # Если слоты уже созданы в системе, возвращаем свободные
-        unless existing_slots.empty?
-          return existing_slots.where(status: 'available').map do |slot|
-            {
-              id: slot.id,
-              start_time: slot.start_time.strftime('%H:%M'),
-              end_time: slot.end_time.strftime('%H:%M'),
-              duration_minutes: ((slot.end_time - slot.start_time) / 60).to_i,
-              status: slot.status
-            }
-          end
+      def set_service_point
+        @service_point = ServicePoint.find(params[:service_point_id])
+      end
+      
+      def authorize_admin_or_partner
+        unless current_user && (current_user.admin? || 
+                (current_user.role.name == 'operator' && @service_point.partner.user_id == current_user.id))
+          render json: { error: 'Unauthorized' }, status: :unauthorized
         end
-        
-        # Если слотов на эту дату нет в системе, генерируем их на основе шаблона
-        duration_minutes = service_point.default_slot_duration
-        post_count = service_point.post_count
-        
-        # Преобразуем строки времени в объекты Time
-        day_start = Time.zone.parse("#{date} #{open_time}")
-        day_end = Time.zone.parse("#{date} #{close_time}")
-        
-        slots = []
-        current_time = day_start
-        
-        # Генерируем слоты с фиксированной длительностью
-        while current_time + duration_minutes.minutes <= day_end
-          slot_end = current_time + duration_minutes.minutes
-          
-          # Для каждого поста создаем отдельный слот
-          post_count.times do |post_number|
-            slots << {
-              # Присваиваем id только существующим слотам
-              start_time: current_time.strftime('%H:%M'),
-              end_time: slot_end.strftime('%H:%M'),
-              duration_minutes: duration_minutes,
-              status: 'available',
-              post_number: post_number + 1
-            }
-          end
-          
-          # Переходим к следующему временному слоту
-          current_time = slot_end
-        end
-        
-        # Фильтруем прошедшие слоты для текущего дня
-        if date == Date.current
-          current_time = Time.current
-          slots.reject! { |slot| Time.zone.parse("#{date} #{slot[:end_time]}") < current_time }
-        end
-        
-        slots
       end
     end
   end
