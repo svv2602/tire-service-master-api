@@ -54,24 +54,23 @@ class Partner < ApplicationRecord
       if change_user_roles && user.present?
         if !new_status
           # При деактивации меняем роль пользователя партнера на "client"
-          user.update!(role_id: client_role.id)
+          user.update!(role_id: client_role.id) if client_role.present?
           
           # Меняем роли всех менеджеров партнера на "client"
           managers.includes(:user).each do |manager|
-            if manager.user.present?
-              # Создаем клиента для этого пользователя, если его еще нет
-              unless manager.user.client.present?
-                Client.create!(
-                  user_id: manager.user.id,
-                  preferred_notification_method: 'email'
-                )
-              end
-              manager.user.update!(role_id: client_role.id)
+            next unless manager.present? && manager.user.present?
+            # Создаем клиента для этого пользователя, если его еще нет
+            unless Client.exists?(user_id: manager.user.id)
+              Client.create!(
+                user_id: manager.user.id,
+                preferred_notification_method: 'email'
+              )
             end
+            manager.user.update!(role_id: client_role.id) if client_role.present?
           end
         else
           # При активации восстанавливаем роль партнера у владельца
-          user.update!(role_id: partner_role.id)
+          user.update!(role_id: partner_role.id) if partner_role.present?
           
           # Роли менеджеров не восстанавливаем автоматически, это должно быть сделано вручную
         end
