@@ -8,7 +8,9 @@
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
   allow do
     # Allow specific origins for better security
-    origins 'localhost:3000', '127.0.0.1:3000', '192.168.9.109:3000'
+    origins 'localhost:3000', '127.0.0.1:3000', '192.168.9.109:3000',
+            'localhost:5173', '127.0.0.1:5173', '192.168.9.109:5173',
+            'localhost:8080', '127.0.0.1:8080', '192.168.9.109:8080'
 
     resource "*",
       headers: :any,

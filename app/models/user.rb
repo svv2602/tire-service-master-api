@@ -18,14 +18,14 @@ class User < ApplicationRecord
   # Скоупы
   scope :active, -> { where(is_active: true) }
   scope :with_role, ->(role_name) { joins(:role).where(user_roles: { name: role_name }) }
-  scope :admins, -> { with_role('administrator') }
+  scope :admins, -> { with_role('admin') }
   scope :partners, -> { with_role('partner') }
   scope :managers, -> { with_role('manager') }
   scope :clients, -> { with_role('client') }
   
   # Методы
   def admin?
-    role.name == 'administrator'
+    role.name == 'admin'
   end
   
   def partner?

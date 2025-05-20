@@ -1,6 +1,9 @@
 module Api
   module V1
     class AuthController < ApplicationController
+      # Пропускаем проверку токена для эндпоинта логина
+      skip_before_action :authenticate_request, only: [:login]
+      
       # POST /api/v1/auth/login
       # POST /api/v1/authenticate
       def login

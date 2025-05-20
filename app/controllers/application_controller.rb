@@ -9,6 +9,7 @@ class ApplicationController < ActionController::API
   rescue_from Pundit::NotAuthorizedError, with: :unauthorized
   
   # Аутентификация и авторизация
+  before_action :authenticate_request
   attr_reader :current_user
   
   protected
