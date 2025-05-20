@@ -14,7 +14,7 @@ module Api
         
         # Поиск по названию
         if params[:query].present?
-          @car_brands = @car_brands.where("name LIKE ?", "%#{params[:query]}%")
+          @car_brands = @car_brands.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
         end
         
         # Сортировка

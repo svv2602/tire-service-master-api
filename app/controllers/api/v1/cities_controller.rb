@@ -17,7 +17,7 @@ module Api
         
         # Поиск по названию
         if params[:query].present?
-          @cities = @cities.where("name LIKE ?", "%#{params[:query]}%")
+          @cities = @cities.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
         end
         
         # Сортировка
