@@ -2,7 +2,9 @@ class ScheduleManager
   # Генерирует слоты расписания на указанную дату для указанной сервисной точки
   def self.generate_slots_for_date(service_point_id, date)
     service_point = ServicePoint.find(service_point_id)
-    weekday = Weekday.find_by(day_number: date.wday)
+    # Преобразуем wday (0-воскресенье, 1-6 пн-сб) в sort_order (1-7 пн-вс)
+    sort_order = date.wday == 0 ? 7 : date.wday
+    weekday = Weekday.find_by(sort_order: sort_order)
     
     # Проверяем, если на указанную дату есть исключение из расписания
     exception = ScheduleException.find_by(service_point_id: service_point_id, exception_date: date)
@@ -63,8 +65,8 @@ class ScheduleManager
     delete_unused_slots(service_point.id, date)
     
     # Определяем время начала и окончания рабочего дня
-    start_time = template.start_time
-    end_time = template.end_time
+    start_time = template.opening_time
+    end_time = template.closing_time
     
     # Определяем продолжительность слота
     slot_duration = service_point.default_slot_duration

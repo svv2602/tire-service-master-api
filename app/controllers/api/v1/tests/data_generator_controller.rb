@@ -287,20 +287,21 @@ module Api
             weekdays = []
             day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             day_names.each_with_index do |name, index|
-              weekdays << Weekday.create!(name: name, day_number: index == 6 ? 0 : index + 1)
+              weekdays << Weekday.create!(name: name, short_name: name[0,3], sort_order: index + 1)
             end
           end
           
           # Для будних дней - с 9:00 до 18:00
           weekdays.each do |weekday|
-            is_working = weekday.day_number != 0 && weekday.day_number != 6 # Не работаем в воскресенье (0) и субботу (6)
+            # Не работаем в воскресенье (sort_order 7) и субботу (sort_order 6)
+            is_working = weekday.sort_order != 7 && weekday.sort_order != 6
             
             ScheduleTemplate.create!(
               service_point_id: service_point.id,
               weekday_id: weekday.id,
               is_working_day: is_working,
-              start_time: "09:00:00",
-              end_time: "18:00:00"
+              opening_time: "09:00:00",
+              closing_time: "18:00:00"
             )
           end
           
@@ -339,7 +340,7 @@ module Api
         def create_test_booking_internal(client_id, service_point_id)
           # Находим клиента и его автомобиль
           client = Client.find(client_id)
-          client_car = client.client_cars.first
+          client_car = client.cars.first
           
           # Если у клиента нет автомобиля, создаем его
           unless client_car
