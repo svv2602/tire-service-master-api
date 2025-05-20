@@ -5,11 +5,11 @@ services:
     image: postgres:15
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
     environment:
       POSTGRES_PASSWORD: password
       POSTGRES_USER: postgres
       POSTGRES_DB: tvoya_shina_development
-      POSTGRES_MULTIPLE_DATABASES: "tvoya_shina_test"
     ports:
       - "5432:5432"
     healthcheck:
@@ -17,31 +17,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    command: >
-      bash -c "
-        echo '\
-#!/bin/bash
-set -e
-set -u
-
-function create_user_and_database() {
-  local database=$$1
-  echo \"Creating database $$database\"
-  psql -v ON_ERROR_STOP=1 --username \"$$POSTGRES_USER\" <<-EOSQL
-    CREATE DATABASE $$database;
-    GRANT ALL PRIVILEGES ON DATABASE $$database TO $$POSTGRES_USER;
-EOSQL
-}
-
-if [ -n \"$$POSTGRES_MULTIPLE_DATABASES\" ]; then
-  for db in $$(echo $$POSTGRES_MULTIPLE_DATABASES | tr \",\" \" \"); do
-    create_user_and_database $$db
-  done
-fi
-' > /docker-entrypoint-initdb.d/multiple-postgresql-databases.sh
-        chmod 755 /docker-entrypoint-initdb.d/multiple-postgresql-databases.sh
-        docker-entrypoint.sh postgres
-      "
 
   redis:
     image: redis:7-alpine
@@ -80,6 +55,9 @@ fi
         condition: service_healthy
     stdin_open: true
     tty: true
+    labels:
+      - "com.example.description=Rails API service for Tvoya Shina application"
+      - "com.example.commit=Fix model validations and controller tests"
 
   sidekiq:
     build:
