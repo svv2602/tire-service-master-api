@@ -26,9 +26,10 @@ module Api
           @service_points = @service_points.with_amenities(amenity_ids)
         end
         
-        # Поиск по названию или адресу
+        # Поиск по названию или адресу (регистронезависимый)
         if params[:query].present?
-          @service_points = @service_points.where("service_points.name LIKE ? OR service_points.address LIKE ?", 
+          # Используем LOWER для сравнения без учета регистра как для полей базы данных, так и для поискового запроса
+          @service_points = @service_points.where("LOWER(service_points.name) LIKE LOWER(?) OR LOWER(service_points.address) LIKE LOWER(?)", 
                                               "%#{params[:query]}%", "%#{params[:query]}%")
         end
         
@@ -113,6 +114,39 @@ module Api
           :name, :description, :address, :city_id, :latitude, :longitude, 
           :contact_phone, :post_count, :default_slot_duration, :status_id
         )
+      end
+      
+      # Метод пагинации с подключением связанных данных о городах и регионах
+      # Этот метод реализует пагинацию коллекции и включает данные о городах и регионах в ответ
+      # @param collection [ActiveRecord::Relation] коллекция объектов для пагинации
+      # @return [Hash] хэш с данными и информацией о пагинации
+      def paginate(collection)
+        page = (params[:page] || 1).to_i
+        per_page = (params[:per_page] || 25).to_i
+        offset = (page - 1) * per_page
+        
+        total_count = collection.count
+        # Загружаем связанные данные о городах и регионах для избежания N+1 запросов
+        paginated_collection = collection.includes(city: :region).offset(offset).limit(per_page)
+        
+        {
+          data: paginated_collection.as_json(
+            include: { 
+              partner: { only: [:id, :company_name] },
+              # Включаем данные о городе и вложенные данные о регионе
+              city: { 
+                only: [:id, :name], 
+                include: { region: { only: [:id, :name] } } 
+              }
+            }
+          ),
+          pagination: {
+            total_count: total_count,
+            total_pages: (total_count.to_f / per_page).ceil,
+            current_page: page,
+            per_page: per_page
+          }
+        }
       end
     end
   end
