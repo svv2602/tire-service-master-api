@@ -26,17 +26,26 @@ begin
     {
       email: 'admin@example.com',
       password: 'admin123',
-      is_active: true
+      is_active: true,
+      first_name: 'Тест',
+      last_name: 'Адмін',
+      phone: '+380671110000'
     },
     {
       email: 'admin@test.com',  # Простой email для тестирования
       password: 'admin',
-      is_active: true
+      is_active: true,
+      first_name: 'Простой',
+      last_name: 'Админ',
+      phone: '+380672220000'
     },
     {
       email: 'test@test.com',  # Простой email для тестирования
       password: 'test',
-      is_active: true
+      is_active: true,
+      first_name: 'Тестовый',
+      last_name: 'Пользователь',
+      phone: '+380673330000'
     }
   ]
 
@@ -48,7 +57,10 @@ begin
       puts "  Updating test user: #{user_data[:email]}"
       user.update!(
         password: user_data[:password],
-        is_active: true
+        is_active: true,
+        first_name: user_data[:first_name],
+        last_name: user_data[:last_name],
+        phone: user_data[:phone]
       )
     else
       puts "  Creating test user: #{user_data[:email]}"
@@ -58,7 +70,10 @@ begin
         role_id: admin_role.id,
         is_active: true,
         email_verified: true,
-        phone_verified: true
+        phone_verified: true,
+        first_name: user_data[:first_name],
+        last_name: user_data[:last_name],
+        phone: user_data[:phone]
       )
     
       # Создаем запись администратора
