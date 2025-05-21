@@ -78,6 +78,9 @@ Rails.application.routes.draw do
         end
       end
       
+      # Добавляем маршрут для получения статусов сервисных точек
+      get 'service_point_statuses', to: 'service_points#statuses'
+      
       # Клиенты
       resources :clients, only: [:index, :show, :create, :update, :destroy] do
         resources :cars, only: [:index, :show, :create, :update, :destroy]
@@ -102,12 +105,15 @@ Rails.application.routes.draw do
       resources :car_models
       resources :car_types, only: [:index, :show]
       resources :tire_types, only: [:index, :show]
-      resources :service_categories, only: [:index, :show]
-      resources :services, only: [:index, :show]
+      resources :service_categories, only: [:index, :show, :create, :update, :destroy]
+      resources :services, only: [:index, :show, :create, :update, :destroy]
       resources :booking_statuses, only: [:index, :show]
       resources :payment_statuses, only: [:index, :show]
       resources :cancellation_reasons, only: [:index, :show]
       resources :amenities, only: [:index, :show]
+      
+      # Статусы сервисных точек
+      get 'service_point_statuses', to: 'service_points#statuses'
       
       # Бронирования
       resources :bookings, only: [:show] do

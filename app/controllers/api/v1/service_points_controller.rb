@@ -1,7 +1,7 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses]
       before_action :set_service_point, only: [:show, :update, :destroy]
       
       # GET /api/v1/service_points
@@ -101,6 +101,12 @@ module Api
         @service_points = ServicePoint.active.near(latitude, longitude, distance)
         
         render json: paginate(@service_points)
+      end
+      
+      # GET /api/v1/service_point_statuses
+      def statuses
+        @statuses = ServicePointStatus.all.order(:sort_order)
+        render json: @statuses
       end
       
       private
