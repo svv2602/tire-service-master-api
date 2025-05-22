@@ -12,6 +12,9 @@ Rails.application.routes.draw do
   # API Routes
   namespace :api do
     namespace :v1 do
+      # Health check endpoint
+      get 'health', to: 'health#index'
+      
       # Аутентификация
       post 'auth/login', to: 'auth#login'
       # Routes for authentication spec tests
