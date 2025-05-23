@@ -29,7 +29,8 @@ begin
       is_active: true,
       first_name: 'Тест',
       last_name: 'Адмін',
-      phone: '+380671110000'
+      phone: '+380671110000',
+      role: admin_role
     },
     {
       email: 'admin@test.com',  # Простой email для тестирования
@@ -37,7 +38,8 @@ begin
       is_active: true,
       first_name: 'Простой',
       last_name: 'Админ',
-      phone: '+380672220000'
+      phone: '+380672220000',
+      role: admin_role
     },
     {
       email: 'test@test.com',  # Простой email для тестирования
@@ -45,7 +47,8 @@ begin
       is_active: true,
       first_name: 'Тестовый',
       last_name: 'Пользователь',
-      phone: '+380673330000'
+      phone: '+380673330000',
+      role: admin_role
     }
   ]
 
@@ -60,14 +63,15 @@ begin
         is_active: true,
         first_name: user_data[:first_name],
         last_name: user_data[:last_name],
-        phone: user_data[:phone]
+        phone: user_data[:phone],
+        role: user_data[:role]
       )
     else
       puts "  Creating test user: #{user_data[:email]}"
       user = User.create!(
         email: user_data[:email],
         password: user_data[:password],
-        role_id: admin_role.id,
+        role: user_data[:role],
         is_active: true,
         email_verified: true,
         phone_verified: true,

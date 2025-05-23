@@ -17,6 +17,8 @@ Rails.application.routes.draw do
       
       # Аутентификация
       post 'auth/login', to: 'auth#login'
+      post 'auth/refresh', to: 'auth#refresh'
+      post 'auth/logout', to: 'auth#logout'
       # Routes for authentication spec tests
       post 'authenticate', to: 'auth#login'
       post 'register', to: 'clients#register'

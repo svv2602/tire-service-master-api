@@ -263,3 +263,55 @@ GET /api/v1/amenities - получение списка дополнительн
 - Скорых записях
 - Промо-акциях
 - Системных сообщениях
+
+## Настройка окружения
+
+### Переменные окружения
+
+Для работы API необходимо настроить следующие переменные окружения:
+
+| Переменная | Описание | Пример значения |
+|------------|----------|-----------------|
+| JWT_SECRET_KEY | Секретный ключ для подписи JWT токенов. Должен быть достаточно длинным и случайным. | `openssl rand -hex 32` |
+| RAILS_ENV | Окружение Rails | `development`, `production` |
+| DATABASE_URL | URL подключения к базе данных | `postgresql://user:pass@localhost/dbname` |
+
+### Настройка JWT
+
+В production окружении рекомендуется:
+1. Использовать надежный секретный ключ (минимум 256 бит)
+2. Хранить ключ в защищенном месте (например, HashiCorp Vault или AWS Secrets Manager)
+3. Регулярно ротировать ключ
+
+Пример генерации безопасного ключа:
+```bash
+# Генерация случайного ключа длиной 256 бит (32 байта)
+openssl rand -hex 32
+
+# Или с использованием Ruby
+ruby -e "require 'securerandom'; puts SecureRandom.hex(32)"
+```
+
+## Аутентификация
+
+API использует JWT (JSON Web Tokens) для аутентификации. Токен необходимо передавать в заголовке `Authorization`:
+
+```
+Authorization: Bearer <token>
+```
+
+### Получение токена
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com", "password":"password123"}'
+```
+
+### Использование токена
+
+```bash
+curl -X GET http://localhost:8000/api/v1/users/me \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Accept: application/json"
+```

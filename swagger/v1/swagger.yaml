@@ -1,40 +1,195 @@
 ---
 openapi: 3.0.1
 info:
-  title: API V1
+  title: Tire Service Master API
   version: v1
 paths:
   "/api/v1/auth/login":
     post:
-      summary: Authenticates user and returns JWT token
+      summary: Аутентификация пользователя
       tags:
-      - Authentication
+      - Аутентификация
       parameters: []
-      responses:
-        '200':
-          description: authentication successful
-        '401':
-          description: Invalid credentials
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
               properties:
-                auth:
-                  type: object
-                  properties:
-                    email:
-                      type: string
-                      example: user@example.com
-                    password:
-                      type: string
-                      example: password
-                  required:
-                  - email
-                  - password
-              required:
-              - auth
+                email:
+                  type: string
+                  example: user@example.com
+                password:
+                  type: string
+                  example: password123
+      responses:
+        '200':
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth_token:
+                    type: string
+                    description: Access токен для авторизации запросов
+                  token:
+                    type: string
+                    description: То же, что и auth_token (для обратной совместимости)
+                  refresh_token:
+                    type: string
+                    description: Токен для обновления access токена
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                    description: Время жизни access токена в секундах
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      role:
+                        type: string
+                  message:
+                    type: string
+                    example: Login successful
+        '401':
+          description: Неверные учетные данные
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Invalid credentials
+  "/api/v1/auth/refresh":
+    post:
+      summary: Обновление access токена
+      tags:
+      - Аутентификация
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  description: Refresh токен, полученный при аутентификации
+      responses:
+        '200':
+          description: Токен успешно обновлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth_token:
+                    type: string
+                    description: Новый access токен
+                  token:
+                    type: string
+                    description: То же, что и auth_token (для обратной совместимости)
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                    description: Время жизни нового access токена в секундах
+                  message:
+                    type: string
+                    example: Token refreshed successfully
+        '401':
+          description: Ошибка обновления токена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Refresh token has expired
+  "/api/v1/auth/logout":
+    post:
+      summary: Выход из системы (отзыв refresh токена)
+      tags:
+      - Аутентификация
+      parameters:
+        - in: header
+          name: X-Refresh-Token
+          schema:
+            type: string
+          description: Refresh токен для отзыва
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  description: Refresh токен для отзыва (альтернатива передаче в заголовке)
+      responses:
+        '200':
+          description: Успешный выход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Successfully logged out
+        '400':
+          description: Ошибка при выходе
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Refresh token is required
+  "/api/v1/users/me":
+    get:
+      summary: Получение информации о текущем пользователе
+      tags:
+      - Пользователи
+      security:
+        - Bearer: []
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  email:
+                    type: string
+                  role:
+                    type: string
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Unauthorized
   "/api/v1/clients/register":
     post:
       summary: Регистрирует нового клиента
@@ -1791,3 +1946,11 @@ servers:
   variables:
     defaultHost:
       default: www.example.com
+
+components:
+  securitySchemes:
+    Bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'JWT токен авторизации. Пример: Bearer eyJhbGciOiJIUzI1NiJ9...'

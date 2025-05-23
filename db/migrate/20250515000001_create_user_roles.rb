@@ -12,7 +12,7 @@ class CreateUserRoles < ActiveRecord::Migration[8.0]
       dir.up do
         execute <<-SQL
           INSERT INTO user_roles (name, description, is_active, created_at, updated_at) VALUES
-          ('administrator', 'Administrators of the system', true, NOW(), NOW()),
+          ('admin', 'Administrators of the system', true, NOW(), NOW()),
           ('partner', 'Business owners providing tire services', true, NOW(), NOW()),
           ('manager', 'Employees of the partners managing service points', true, NOW(), NOW()),
           ('client', 'End users booking tire services', true, NOW(), NOW());

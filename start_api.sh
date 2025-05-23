@@ -1,22 +1,14 @@
 #!/bin/bash
 
-# Устанавливаем переменные окружения
-export RAILS_ENV=development
-export PORT=8000
+# Переходим в директорию API
+cd /home/snisar/mobi_tz/tire-service-master-api
 
-# Удаляем файл сервера, если он существует
+# Проверяем наличие файла tmp/pids/server.pid
 if [ -f tmp/pids/server.pid ]; then
+  echo "Удаляем старый PID файл..."
   rm tmp/pids/server.pid
 fi
 
-# Обновляем гемы, если нужно
-bundle check || bundle install
-
-# Запускаем миграции, если нужно
-bundle exec rails db:migrate
-
-# Заполняем базу данных начальными данными
-bundle exec rails db:seed
-
-# Запускаем сервер API
-bundle exec rails server -p $PORT -b 0.0.0.0 
+# Запускаем Rails сервер на порту 8000
+echo "Запускаем Rails API на порту 8000..."
+bundle exec rails server -p 8000 
