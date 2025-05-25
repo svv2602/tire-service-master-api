@@ -6,15 +6,15 @@ RSpec.describe 'Service Point Auth Test', type: :request do
   
   # Create roles first to ensure proper role assignment
   let!(:client_role) do
-    UserRole.find_by(name: 'client') || create(:user_role, name: 'client', description: 'Client role')
+    UserRole.find_or_create_by(name: 'client') { |role| role.description = 'Client role for users who book services' }
   end
   
   let!(:partner_role) do
-    UserRole.find_by(name: 'partner') || create(:user_role, name: 'partner', description: 'Partner role')
+    UserRole.find_or_create_by(name: 'partner') { |role| role.description = 'Partner role for business owners' }
   end
   
   let!(:admin_role) do
-    UserRole.find_by(name: 'administrator') || create(:user_role, name: 'administrator', description: 'Admin role')
+    UserRole.find_or_create_by(name: 'admin') { |role| role.description = 'Administrator role with full access' }
   end
   
   # Create users with proper roles
@@ -108,8 +108,8 @@ RSpec.describe 'Service Point Auth Test', type: :request do
            params: valid_attributes.to_json, 
            headers: headers
       
-      # Verify the result - API использует 401 вместо 403 для отказа в доступе
-      expect(response).to have_http_status(401)
+      # Verify the result - API использует 403 для отказа в доступе
+      expect(response).to have_http_status(403)
     end
   end
 end

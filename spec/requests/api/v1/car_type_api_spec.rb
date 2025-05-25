@@ -20,10 +20,7 @@ RSpec.describe "Car Type API", type: :request do
   
   let(:auth_token) do
     user = client.user
-    JWT.encode(
-      { user_id: user.id, exp: 24.hours.from_now.to_i },
-      Rails.application.credentials.secret_key_base
-    )
+    Auth::JsonWebToken.encode_access_token(user_id: user.id)
   end
   
   it "returns the list of car types" do

@@ -4,9 +4,9 @@ RSpec.describe 'API V1 Clients', type: :request do
   include ServicePointsTestHelper
   
   # Создаем роли один раз перед всеми тестами
-  let!(:client_role) { create(:user_role, :client) }
-  let!(:admin_role) { create(:user_role, :admin) } # Роль administrator
-  let!(:partner_role) { create(:user_role, :partner) }
+  let!(:client_role) { UserRole.find_or_create_by(name: 'client') { |role| role.description = 'Client role for users who book services' } }
+  let!(:admin_role) { UserRole.find_or_create_by(name: 'admin') { |role| role.description = 'Administrator role with full access' } }
+  let!(:partner_role) { UserRole.find_or_create_by(name: 'partner') { |role| role.description = 'Partner role for business owners' } }
   
   # Пользователи с правильными ролями
   let(:client_user) { create(:user, role: client_role) }

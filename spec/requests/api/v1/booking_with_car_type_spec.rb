@@ -49,14 +49,12 @@ RSpec.describe "BookingWithCarType", type: :request do
            is_available: true)
   end
   
-  it "creates a booking with a car type" do
-    # Создаем токен для аутентификации
+  let(:auth_token) do
     user = client.user
-    token = JWT.encode(
-      { user_id: user.id, exp: 24.hours.from_now.to_i },
-      Rails.application.credentials.secret_key_base
-    )
-    
+    Auth::JsonWebToken.encode_access_token(user_id: user.id)
+  end
+  
+  it "creates a booking with a car type" do
     # Проверяем наличие статусов до запроса
     expect(BookingStatus.exists?(@pending_status.id)).to be true
     expect(PaymentStatus.exists?(@payment_pending.id)).to be true
@@ -79,8 +77,12 @@ RSpec.describe "BookingWithCarType", type: :request do
     
     # Отправляем запрос на создание бронирования
     post "/api/v1/clients/#{client.id}/bookings",
-         params: booking_params,
-         headers: { 'Authorization': "Bearer #{token}" }
+         params: booking_params.to_json,
+         headers: { 
+           'Authorization': "Bearer #{auth_token}",
+           'Content-Type': 'application/json',
+           'Accept': 'application/json'
+         }
     
     # Выводим информацию о запросе и ответе
     puts "Request params: #{booking_params.inspect}"

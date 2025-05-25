@@ -4,7 +4,7 @@ RSpec.describe "API V1 Users", type: :request do
   include RequestSpecHelper
   
   # Тестовые данные
-  let(:admin_role) { create(:user_role, name: 'admin', description: 'Administrator') }
+  let(:admin_role) { UserRole.find_or_create_by(name: 'admin') { |role| role.description = 'Administrator role with full access' } }
   let(:admin_user) { create(:user, role: admin_role) }
   let(:admin_headers) { authenticate_user(admin_user) }
   

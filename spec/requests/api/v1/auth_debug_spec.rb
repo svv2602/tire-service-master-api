@@ -7,8 +7,8 @@ RSpec.describe 'Auth Debugging', type: :request do
   describe 'Debug authentication' do
     it 'creates users with roles and authenticates' do
       # 1. Create roles
-      admin_role = create(:user_role, name: 'admin', description: 'Admin role')
-      partner_role = create(:user_role, name: 'partner', description: 'Partner role')
+      admin_role = UserRole.find_or_create_by(name: 'admin') { |role| role.description = 'Administrator role with full access' }
+      partner_role = UserRole.find_or_create_by(name: 'partner') { |role| role.description = 'Partner role for business owners' }
       
       puts "Created admin role: #{admin_role.inspect}"
       puts "Created partner role: #{partner_role.inspect}"

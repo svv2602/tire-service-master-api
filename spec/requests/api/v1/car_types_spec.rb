@@ -41,10 +41,7 @@ RSpec.describe "API Car Types", type: :request do
   let!(:service_point) { create(:service_point) }
   
   let!(:token) do
-    JWT.encode(
-      { user_id: user.id, exp: 24.hours.from_now.to_i },
-      Rails.application.credentials.secret_key_base
-    )
+    Auth::JsonWebToken.encode_access_token(user_id: user.id)
   end
   
   let!(:slot) do 
