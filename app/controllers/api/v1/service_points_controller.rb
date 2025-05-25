@@ -131,7 +131,10 @@ module Api
         per_page = (params[:per_page] || 25).to_i
         offset = (page - 1) * per_page
         
-        total_count = collection.count
+        # Исправляем проблему с count, который может возвращать хэш при группировке
+        total_count = collection.is_a?(ActiveRecord::Relation) ? collection.count(:all) : collection.count
+        total_count = total_count.is_a?(Hash) ? total_count.values.sum : total_count
+        
         # Загружаем связанные данные о городах и регионах для избежания N+1 запросов
         paginated_collection = collection.includes(city: :region).offset(offset).limit(per_page)
         
