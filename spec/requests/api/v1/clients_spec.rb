@@ -79,8 +79,8 @@ RSpec.describe 'API V1 Clients', type: :request do
     context 'as client' do
       before { get '/api/v1/clients', headers: client_headers }
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
     
@@ -136,8 +136,8 @@ RSpec.describe 'API V1 Clients', type: :request do
       
       before { get "/api/v1/clients/#{client.id}", headers: another_client_headers }
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
     
@@ -222,8 +222,8 @@ RSpec.describe 'API V1 Clients', type: :request do
     context 'as client' do
       before { post '/api/v1/clients', params: valid_attributes.to_json, headers: client_headers.merge({'Content-Type' => 'application/json'}) }
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
   end
@@ -417,8 +417,8 @@ RSpec.describe 'API V1 Clients', type: :request do
         put "/api/v1/clients/#{client.id}", params: update_attributes.to_json, headers: another_client_headers.merge({'Content-Type' => 'application/json'})
       end
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
     
@@ -489,8 +489,8 @@ RSpec.describe 'API V1 Clients', type: :request do
         delete "/api/v1/clients/#{client.id}", headers: another_client_headers
       end
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
   end
