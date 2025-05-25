@@ -10,7 +10,7 @@ RSpec.describe 'Service Point API Authentication', type: :request do
   end
   
   let!(:admin_role) do
-    UserRole.find_by(name: 'administrator') || create(:user_role, name: 'administrator', description: 'Admin role')
+    UserRole.find_by(name: 'admin') || create(:user_role, name: 'admin', description: 'Admin role')
   end
   
   # Create users with proper roles

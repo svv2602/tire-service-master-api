@@ -13,7 +13,7 @@ module RequestSpecHelper
 
   # Helper method to authenticate users in tests
   def authenticate_user(user)
-    token = token_generator(user.id)
+    token = generate_token(user.id)
     { 'Authorization' => "Bearer #{token}", 'Content-Type' => 'application/json', 'Accept' => 'application/json' }
   end
   
@@ -25,7 +25,7 @@ module RequestSpecHelper
   private
 
   # Generate JWT token for test users
-  def token_generator(user_id)
-    Auth::JsonWebToken.encode(user_id: user_id)
+  def generate_token(user_id)
+    Auth::JsonWebToken.encode_access_token(user_id: user_id)
   end
 end

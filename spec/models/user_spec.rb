@@ -50,14 +50,14 @@ RSpec.describe User, type: :model do
   end
 
   describe '#admin?' do
-    let(:admin_role) { create(:user_role, name: 'administrator') }
+    let(:admin_role) { create(:user_role, name: 'admin') }
     
-    it 'returns true when user role is administrator' do
+    it 'returns true when user role is admin' do
       user = create(:user, role: admin_role)
       expect(user.admin?).to be true
     end
     
-    it 'returns false when user role is not administrator' do
+    it 'returns false when user role is not admin' do
       client_role = create(:user_role, name: 'client')
       user = create(:user, role: client_role)
       expect(user.admin?).to be false

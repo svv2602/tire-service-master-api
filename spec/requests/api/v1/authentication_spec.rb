@@ -98,12 +98,12 @@ RSpec.describe 'API V1 Authentication', type: :request do
     include ServicePointsTestHelper
     
     let!(:admin_role) do
-      UserRole.find_by(name: 'administrator') ||
-      create(:user_role, name: 'administrator', description: 'Administrator role with full access')
+      UserRole.find_by(name: 'admin') ||
+      create(:user_role, name: 'admin', description: 'Administrator role with full access')
     end
     
     let!(:user) { create(:user, email: 'auth_test@example.com', password: 'password123', role: admin_role) }
-    let(:token) { Auth::JsonWebToken.encode(user_id: user.id) }
+    let(:token) { Auth::JsonWebToken.encode_access_token(user_id: user.id) }
     let(:headers) { { 'Authorization' => "Bearer #{token}", 'Content-Type' => 'application/json' } }
     
     it 'allows access to protected routes with valid token' do

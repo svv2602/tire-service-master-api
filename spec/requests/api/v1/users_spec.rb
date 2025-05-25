@@ -4,7 +4,7 @@ RSpec.describe "API V1 Users", type: :request do
   include RequestSpecHelper
   
   # Тестовые данные
-  let(:admin_role) { create(:user_role, name: 'administrator', description: 'Administrator') }
+  let(:admin_role) { create(:user_role, name: 'admin', description: 'Administrator') }
   let(:admin_user) { create(:user, role: admin_role) }
   let(:admin_headers) { authenticate_user(admin_user) }
   
@@ -23,7 +23,7 @@ RSpec.describe "API V1 Users", type: :request do
         expect(json).not_to be_empty
         expect(json['id']).to eq(admin_user.id)
         expect(json['email']).to eq(admin_user.email)
-        expect(json['role']).to eq('administrator')
+        expect(json['role']).to eq('admin')
       end
     end
     

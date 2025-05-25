@@ -26,7 +26,7 @@ RSpec.describe 'Authentication Test', type: :request do
       client
       
       # Generate token
-      token = Auth::JsonWebToken.encode(user_id: client_user.id)
+      token = Auth::JsonWebToken.encode_access_token(user_id: client_user.id)
       
       # Make request with auth header
       headers = { 'Authorization' => "Bearer #{token}" }

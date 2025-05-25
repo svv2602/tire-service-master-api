@@ -1,4 +1,3 @@
-
 require 'rails_helper'
 
 RSpec.describe 'Auth Debugging', type: :request do
@@ -8,7 +7,7 @@ RSpec.describe 'Auth Debugging', type: :request do
   describe 'Debug authentication' do
     it 'creates users with roles and authenticates' do
       # 1. Create roles
-      admin_role = create(:user_role, name: 'administrator', description: 'Admin role')
+      admin_role = create(:user_role, name: 'admin', description: 'Admin role')
       partner_role = create(:user_role, name: 'partner', description: 'Partner role')
       
       puts "Created admin role: #{admin_role.inspect}"
@@ -35,11 +34,11 @@ RSpec.describe 'Auth Debugging', type: :request do
       puts "Created partner: #{partner.inspect}"
       
       # 4. Create auth token for admin
-      admin_token = Auth::JsonWebToken.encode(user_id: admin_user.id)
+      admin_token = Auth::JsonWebToken.encode_access_token(user_id: admin_user.id)
       puts "Admin token: #{admin_token}"
       
       # 5. Create auth token for partner
-      partner_token = Auth::JsonWebToken.encode(user_id: partner_user.id)
+      partner_token = Auth::JsonWebToken.encode_access_token(user_id: partner_user.id)
       puts "Partner token: #{partner_token}"
       
       # 6. Try to make authenticated request with admin token

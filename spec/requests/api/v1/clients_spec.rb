@@ -25,7 +25,7 @@ RSpec.describe 'API V1 Clients', type: :request do
   before(:each) do
     # Проверка ролей
     expect(client_user.role.name).to eq('client')
-    expect(admin_user.role.name).to eq('administrator')
+    expect(admin_user.role.name).to eq('admin')
     expect(partner_user.role.name).to eq('partner')
   end
   
@@ -175,7 +175,7 @@ RSpec.describe 'API V1 Clients', type: :request do
     context 'as admin' do
       before do
         # Убеждаемся, что пользователь имеет правильную роль
-        expect(admin_user.role.name).to eq('administrator')
+        expect(admin_user.role.name).to eq('admin')
         
         post '/api/v1/clients', params: valid_attributes.to_json, headers: admin_headers.merge({'Content-Type' => 'application/json'})
       end
@@ -198,7 +198,7 @@ RSpec.describe 'API V1 Clients', type: :request do
     context 'with invalid parameters' do
       before do
         # Убеждаемся, что пользователь имеет правильную роль
-        expect(admin_user.role.name).to eq('administrator')
+        expect(admin_user.role.name).to eq('admin')
         
         post '/api/v1/clients', params: {
           user: { email: 'invalid', password: 'short' }
@@ -377,7 +377,7 @@ RSpec.describe 'API V1 Clients', type: :request do
     context 'as admin' do
       before do
         # Убеждаемся, что пользователь имеет правильную роль
-        expect(admin_user.role.name).to eq('administrator')
+        expect(admin_user.role.name).to eq('admin')
         
         put "/api/v1/clients/#{client.id}", params: update_attributes.to_json, headers: admin_headers.merge({'Content-Type' => 'application/json'})
       end
@@ -425,7 +425,7 @@ RSpec.describe 'API V1 Clients', type: :request do
     context 'with invalid parameters' do
       before do
         # Убеждаемся, что пользователь имеет правильную роль
-        expect(admin_user.role.name).to eq('administrator')
+        expect(admin_user.role.name).to eq('admin')
         
         put "/api/v1/clients/#{client.id}", params: {
           user: { email: '' }
@@ -451,7 +451,7 @@ RSpec.describe 'API V1 Clients', type: :request do
     context 'as admin' do
       before do
         # Убеждаемся, что пользователь имеет правильную роль
-        expect(admin_user.role.name).to eq('administrator')
+        expect(admin_user.role.name).to eq('admin')
         
         delete "/api/v1/clients/#{client.id}", headers: admin_headers
       end

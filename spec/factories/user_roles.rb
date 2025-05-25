@@ -10,13 +10,13 @@ FactoryBot.define do
     end
     
     trait :admin do
-      name { 'administrator' }
+      name { 'admin' }
       description { 'Administrator role with full access' }
       
       # Инициализация с поиском существующей записи
       initialize_with do
-        UserRole.find_by(name: 'administrator') || 
-        UserRole.new(name: 'administrator', description: 'Administrator role with full access', is_active: true)
+        UserRole.find_by(name: 'admin') || 
+        UserRole.new(name: 'admin', description: 'Administrator role with full access', is_active: true)
       end
     end
     

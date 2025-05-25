@@ -8,7 +8,7 @@ class UserSerializer < ActiveModel::Serializer
 
   def profile
     case object.role.name
-    when 'administrator'
+    when 'admin'
       if object.administrator
         {
           position: object.administrator.position,

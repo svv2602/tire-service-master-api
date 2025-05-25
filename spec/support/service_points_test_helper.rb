@@ -6,7 +6,7 @@ module ServicePointsTestHelper
   
   # Enhanced method for creating authentication headers
   def generate_auth_headers(user)
-    token = Auth::JsonWebToken.encode(user_id: user.id)
+    token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
     { 
       'Authorization' => "Bearer #{token}", 
       'Content-Type' => 'application/json', 

@@ -9,8 +9,8 @@ RSpec.describe 'Service Points API', type: :request do
   let(:user) { create(:user, role_id: @partner_role.id) }
   let(:admin_user) { create(:user, role_id: @admin_role.id) }
   let(:partner) { create(:partner, user: user) }
-  let(:auth_token) { Auth::JsonWebToken.encode(user_id: user.id) }
-  let(:admin_auth_token) { Auth::JsonWebToken.encode(user_id: admin_user.id) }
+  let(:auth_token) { Auth::JsonWebToken.encode_access_token(user_id: user.id) }
+  let(:admin_auth_token) { Auth::JsonWebToken.encode_access_token(user_id: admin_user.id) }
 
   let(:Authorization) { "Bearer #{auth_token}" }
   let(:admin_Authorization) { "Bearer #{admin_auth_token}" }

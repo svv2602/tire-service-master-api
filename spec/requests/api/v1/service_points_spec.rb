@@ -3,32 +3,10 @@ require 'rails_helper'
 RSpec.describe 'API V1 ServicePoints', type: :request do
   include RequestSpecHelper
   include ServicePointsTestHelper
+  
   let(:client_user) { create(:client_user) }
-  let(:client_headers) { generate_auth_headers(clie    context 'when request is invalid' do
-      before do
-        # Ensure we have a valid partner role
-        partner_role = UserRole.find_by(name: 'partner') || 
-                      create(:user_role, name: 'partner', description: 'Partner role')
-        
-        # Update partner user role if needed
-        partner_user.update!(role_id: partner_role.id) unless partner_user.role_id == partner_role.id
-        
-        # Generate proper headers
-        headers = generate_auth_headers(partner_user)
-        
-        post "/api/v1/partners/#{partner.id}/service_points", 
-             params: { service_point: { name: '' } }.to_json,
-             headers: headers
-      end
-      
-      it 'returns status code 422' do
-        expect(response).to have_http_status(422)
-      end
-      
-      it 'returns a validation failure message' do
-        expect(json['errors']).to be_present
-      end
-    end let(:partner_user) { create(:user) }
+  let(:client_headers) { generate_auth_headers(client_user) }
+  let(:partner_user) { create(:user) }
   let(:partner) { create(:partner, user: partner_user) }
   let(:partner_headers) { generate_auth_headers(partner_user) }
   
@@ -231,9 +209,9 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
       
       context 'as an admin' do
         before do
-          # Create admin role if it doesn't exist
-          admin_role = UserRole.find_by(name: 'administrator') || 
-                      create(:user_role, name: 'administrator', description: 'Admin role')
+          # Создаем роль администратора, если она еще не существует
+          admin_role = UserRole.find_by(name: 'admin') ||
+            create(:user_role, name: 'admin', description: 'Admin role')
           
           # Make sure admin has right role
           admin_user.update!(role_id: admin_role.id) unless admin_user.role_id == admin_role.id
@@ -261,9 +239,19 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     
     context 'when request is invalid' do
       before do
+        # Ensure we have a valid partner role
+        partner_role = UserRole.find_by(name: 'partner') || 
+                      create(:user_role, name: 'partner', description: 'Partner role')
+        
+        # Update partner user role if needed
+        partner_user.update!(role_id: partner_role.id) unless partner_user.role_id == partner_role.id
+        
+        # Generate proper headers
+        headers = generate_auth_headers(partner_user)
+        
         post "/api/v1/partners/#{partner.id}/service_points", 
-             params: { service_point: { name: '' } }.to_json, 
-             headers: partner_headers.merge('Content-Type' => 'application/json')
+             params: { service_point: { name: '' } }.to_json,
+             headers: headers
       end
       
       it 'returns status code 422' do

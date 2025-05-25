@@ -83,3 +83,5 @@ group :development do
   gem "rubocop", require: false
   gem "rubocop-rails", require: false
 end
+
+gem "base64", "~> 0.2.0"

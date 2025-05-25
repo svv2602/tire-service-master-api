@@ -71,7 +71,8 @@ module Api
             @client = Client.create!(user: @user)
           end
           
-          token = Auth::JsonWebToken.encode(user_id: @user.id)
+          # Генерируем токен для нового пользователя
+          token = Auth::JsonWebToken.encode_access_token(user_id: @user.id)
           render json: { 
             auth_token: token,
             message: 'Account created successfully'
@@ -143,7 +144,8 @@ module Api
           end
         end
         
-        token = Auth::JsonWebToken.encode(user_id: user.id)
+        # Генерируем токен для пользователя
+        token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
         render json: { token: token, user: UserSerializer.new(user) }, status: :ok
         
       rescue ActiveRecord::RecordInvalid => e
@@ -198,7 +200,8 @@ module Api
           end
         end
         
-        token = Auth::JsonWebToken.encode(user_id: @user.id)
+        # Генерируем токен для пользователя
+        token = Auth::JsonWebToken.encode_access_token(user_id: @user.id)
         render json: { 
           auth_token: token,
           message: 'Test client created successfully',

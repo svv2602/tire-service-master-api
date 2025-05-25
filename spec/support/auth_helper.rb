@@ -1,4 +1,3 @@
-
 module AuthHelper
   def auth_token_for_user(user)
     Auth::JsonWebToken.encode(user_id: user.id)
@@ -7,6 +6,10 @@ module AuthHelper
   def auth_headers_for_user(user)
     token = auth_token_for_user(user)
     { 'Authorization' => "Bearer #{token}" }
+  end
+
+  def generate_token(user)
+    Auth::JsonWebToken.encode_access_token(user_id: user.id)
   end
 end
 

@@ -18,9 +18,9 @@ RSpec.describe 'Bookings API', type: :request, swagger: true do
   let(:client) { create(:client, user: client_user) }
   let(:partner) { create(:partner, user: partner_user) }
   
-  let(:client_auth_token) { Auth::JsonWebToken.encode(user_id: client_user.id) }
-  let(:partner_auth_token) { Auth::JsonWebToken.encode(user_id: partner_user.id) }
-  let(:admin_auth_token) { Auth::JsonWebToken.encode(user_id: admin_user.id) }
+  let(:client_auth_token) { Auth::JsonWebToken.encode_access_token(user_id: client_user.id) }
+  let(:partner_auth_token) { Auth::JsonWebToken.encode_access_token(user_id: partner_user.id) }
+  let(:admin_auth_token) { Auth::JsonWebToken.encode_access_token(user_id: admin_user.id) }
   
   let(:Authorization) { "Bearer #{client_auth_token}" }
   let(:partner_Authorization) { "Bearer #{partner_auth_token}" }

@@ -14,7 +14,7 @@ RSpec.describe ServicePointPolicy, type: :policy do
   
   subject { described_class }
 
-  let(:admin_role) { create(:user_role, name: 'administrator') }
+  let(:admin_role) { create(:user_role, name: 'admin') }
   let(:partner_role) { create(:user_role, name: 'partner') }
   let(:manager_role) { create(:user_role, name: 'manager') }
   let(:client_role) { create(:user_role, name: 'client') }

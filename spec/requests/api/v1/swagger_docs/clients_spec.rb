@@ -11,8 +11,8 @@ RSpec.describe 'Clients API', type: :request do
   let(:user) { create(:user, role_id: @admin_role.id) }
   let(:client_user) { create(:user, role_id: @client_role.id) }
   let(:client) { create(:client, user: client_user) }
-  let(:auth_token) { Auth::JsonWebToken.encode(user_id: user.id) }
-  let(:client_auth_token) { Auth::JsonWebToken.encode(user_id: client_user.id) }
+  let(:auth_token) { Auth::JsonWebToken.encode_access_token(user_id: user.id) }
+  let(:client_auth_token) { Auth::JsonWebToken.encode_access_token(user_id: client_user.id) }
   let(:invalid_token) { "invalid_token" }
   
   # This is needed to make the 'Authorization' header work in Swagger tests

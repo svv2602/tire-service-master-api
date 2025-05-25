@@ -14,7 +14,7 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
   end
   
   let!(:admin_role) do
-    UserRole.find_by(name: 'administrator') || create(:user_role, name: 'administrator', description: 'Admin role')
+    UserRole.find_by(name: 'admin') || create(:user_role, name: 'admin', description: 'Admin role')
   end
   
   let(:client_user) { create(:user, role_id: client_role.id) }
