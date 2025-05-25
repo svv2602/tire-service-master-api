@@ -6,8 +6,8 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
   
   let(:client_user) { create(:client_user) }
   let(:client_headers) { generate_auth_headers(client_user) }
-  let(:partner_user) { create(:user) }
-  let(:partner) { create(:partner, user: partner_user) }
+  let(:partner_user) { create(:partner_user) }
+  let(:partner) { partner_user.partner }
   let(:partner_headers) { generate_auth_headers(partner_user) }
   
   let(:admin_user) { create(:admin) }
