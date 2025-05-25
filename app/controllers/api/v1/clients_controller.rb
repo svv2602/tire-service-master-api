@@ -283,15 +283,19 @@ module Api
         params.permit(:email, :phone, :password, :password_confirmation, :first_name, :last_name)
       end
       
-      # Hardcoded valid attributes matching the test expectation
+      # Исправленный метод для получения валидных атрибутов регистрации
       def valid_registration_attributes
+        # Получаем параметры из client объекта
+        client_params = params[:client] || {}
+        
         {
-          email: params[:email] || 'new@example.com',
-          password: params[:password] || 'password123',
-          password_confirmation: params[:password_confirmation] || 'password123',
-          first_name: params[:first_name] || 'John',
-          last_name: params[:last_name] || 'Doe'
-        }
+          email: client_params[:email],
+          password: client_params[:password],
+          password_confirmation: client_params[:password_confirmation],
+          first_name: client_params[:first_name],
+          last_name: client_params[:last_name],
+          phone: client_params[:phone]
+        }.compact # Убираем nil значения
       end
     end
   end
