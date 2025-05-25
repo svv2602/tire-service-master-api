@@ -6,7 +6,7 @@ class ApplicationController < ActionController::API
   # Обработка ошибок
   rescue_from ActiveRecord::RecordNotFound, with: :not_found
   rescue_from ActiveRecord::RecordInvalid, with: :unprocessable_entity
-  rescue_from Pundit::NotAuthorizedError, with: :unauthorized
+  rescue_from Pundit::NotAuthorizedError, with: :forbidden
   
   # Аутентификация и авторизация
   before_action :authenticate_request
@@ -39,5 +39,9 @@ class ApplicationController < ActionController::API
   
   def unauthorized
     render json: { error: 'Unauthorized' }, status: :unauthorized
+  end
+  
+  def forbidden
+    render json: { error: 'Forbidden' }, status: :forbidden
   end
 end

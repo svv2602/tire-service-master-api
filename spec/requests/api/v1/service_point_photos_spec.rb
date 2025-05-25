@@ -175,8 +175,8 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
              headers: client_headers
       end
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
   end
@@ -228,8 +228,8 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
               headers: client_headers
       end
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
   end
@@ -276,8 +276,8 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
               headers: client_headers
       end
       
-      it 'returns status code 401' do
-        expect(response).to have_http_status(401)
+      it 'returns status code 403' do
+        expect(response).to have_http_status(403)
       end
     end
   end

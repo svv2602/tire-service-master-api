@@ -20,7 +20,7 @@ RSpec.describe User, type: :model do
   end
 
   describe '#client?' do
-    let(:client_role) { create(:user_role, name: 'client') }
+    let(:client_role) { UserRole.find_or_create_by(name: 'client') { |role| role.description = 'Client role for users who book services' } }
     
     it 'returns true when user role is client' do
       user = create(:user, role: client_role)
@@ -28,14 +28,14 @@ RSpec.describe User, type: :model do
     end
     
     it 'returns false when user role is not client' do
-      admin_role = create(:user_role, name: 'administrator')
+      admin_role = UserRole.find_or_create_by(name: 'administrator') { |role| role.description = 'Administrator role' }
       user = create(:user, role: admin_role)
       expect(user.client?).to be false
     end
   end
 
   describe '#manager?' do
-    let(:manager_role) { create(:user_role, name: 'manager') }
+    let(:manager_role) { UserRole.find_or_create_by(name: 'manager') { |role| role.description = 'Manager role for service point managers' } }
     
     it 'returns true when user role is manager' do
       user = create(:user, role: manager_role)
@@ -43,14 +43,14 @@ RSpec.describe User, type: :model do
     end
     
     it 'returns false when user role is not manager' do
-      admin_role = create(:user_role, name: 'administrator')
+      admin_role = UserRole.find_or_create_by(name: 'administrator') { |role| role.description = 'Administrator role' }
       user = create(:user, role: admin_role)
       expect(user.manager?).to be false
     end
   end
 
   describe '#admin?' do
-    let(:admin_role) { create(:user_role, name: 'admin') }
+    let(:admin_role) { UserRole.find_or_create_by(name: 'admin') { |role| role.description = 'Administrator role with full access' } }
     
     it 'returns true when user role is admin' do
       user = create(:user, role: admin_role)
@@ -58,7 +58,7 @@ RSpec.describe User, type: :model do
     end
     
     it 'returns false when user role is not admin' do
-      client_role = create(:user_role, name: 'client')
+      client_role = UserRole.find_or_create_by(name: 'client') { |role| role.description = 'Client role for users who book services' }
       user = create(:user, role: client_role)
       expect(user.admin?).to be false
     end

@@ -14,10 +14,10 @@ RSpec.describe ClientPolicy, type: :policy do
   
   subject { described_class }
 
-  let(:admin_role) { create(:user_role, name: 'admin') }
-  let(:partner_role) { create(:user_role, name: 'partner') }
-  let(:manager_role) { create(:user_role, name: 'manager') }
-  let(:client_role) { create(:user_role, name: 'client') }
+  let(:admin_role) { UserRole.find_or_create_by(name: 'admin') { |role| role.description = 'Administrator role with full access' } }
+  let(:partner_role) { UserRole.find_or_create_by(name: 'partner') { |role| role.description = 'Partner role for business owners' } }
+  let(:manager_role) { UserRole.find_or_create_by(name: 'manager') { |role| role.description = 'Manager role for service point managers' } }
+  let(:client_role) { UserRole.find_or_create_by(name: 'client') { |role| role.description = 'Client role for users who book services' } }
   
   let(:admin_user) { create(:user, role: admin_role) }
   let(:partner_user) { create(:user, role: partner_role) }
