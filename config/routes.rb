@@ -15,6 +15,9 @@ Rails.application.routes.draw do
       # Health check endpoint
       get 'health', to: 'health#index'
       
+      # Dashboard statistics
+      get 'dashboard/stats', to: 'dashboard#stats'
+      
       # Аутентификация
       post 'auth/login', to: 'auth#login'
       post 'auth/refresh', to: 'auth#refresh'
