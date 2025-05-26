@@ -1,6 +1,8 @@
 class Partner < ApplicationRecord
   # Связи
   belongs_to :user
+  belongs_to :region, optional: true
+  belongs_to :city, optional: true
   has_many :managers, dependent: :destroy
   has_many :service_points, dependent: :destroy
   has_many :price_lists, dependent: :destroy

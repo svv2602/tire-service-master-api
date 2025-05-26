@@ -124,7 +124,7 @@ Rails.application.routes.draw do
       get 'service_point_statuses', to: 'service_points#statuses'
       
       # Бронирования
-      resources :bookings, only: [:show] do
+      resources :bookings, only: [:index, :show] do
         member do
           post 'confirm', to: 'bookings#confirm'
           post 'cancel', to: 'bookings#cancel'

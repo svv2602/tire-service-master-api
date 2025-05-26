@@ -146,15 +146,16 @@ module Api
         # Применяем фильтры
         @bookings = apply_filters(@bookings)
         
+        # Добавляем связанные данные для отображения названий вместо ID
+        @bookings = @bookings.includes(:status, :payment_status, :car_type)
+        
         # Применяем сортировку
         @bookings = @bookings.order(booking_date: :asc, start_time: :asc)
         
-        # Добавляем пагинацию, если указаны соответствующие параметры
-        if params[:page].present? && params[:per_page].present?
-          @bookings = @bookings.page(params[:page]).per(params[:per_page])
-        end
+        # Применяем пагинацию
+        result = paginate(@bookings)
         
-        render json: @bookings
+        render json: result
       end
       
       # GET /api/v1/bookings/:id

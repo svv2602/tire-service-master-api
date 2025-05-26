@@ -7,39 +7,32 @@ module Api
       
       # GET /api/v1/cities
       def index
-        @cities = City.includes(:region)
+        @cities = City.includes(:region).where(is_active: true)
         
         # Фильтрация по региону
-        @cities = @cities.where(region_id: params[:region_id]) if params[:region_id].present?
-        
-        # Фильтрация активных городов
-        @cities = @cities.where(is_active: true) if params[:active].present? && params[:active] == 'true'
-        
-        # Поиск по названию
-        if params[:query].present?
-          @cities = @cities.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
+        if params[:region_id].present?
+          @cities = @cities.where(region_id: params[:region_id])
         end
         
-        # Сортировка
-        @cities = @cities.order(params[:sort] || :name)
+        @cities = @cities.order(:name)
         
-        # Пагинация
-        page = (params[:page] || 1).to_i
-        per_page = (params[:per_page] || 25).to_i
-        offset = (page - 1) * per_page
-        
-        total_count = @cities.count
-        @cities = @cities.offset(offset).limit(per_page)
-        
-        render json: {
-          cities: @cities.as_json(include: { region: { only: [:id, :name] } }),
-          total_items: total_count
-        }
+        render json: @cities.as_json(include: { 
+          region: { only: [:id, :name, :code] }
+        })
       end
       
       # GET /api/v1/cities/:id
       def show
-        render json: @city.as_json(include: { region: { only: [:id, :name] } })
+        @city = City.includes(:region).find(params[:id])
+        
+        render json: @city.as_json(include: { 
+          region: { only: [:id, :name, :code] }
+        })
+      rescue ActiveRecord::RecordNotFound
+        render json: { 
+          error: "Город с ID #{params[:id]} не найден",
+          message: "Город с указанным идентификатором не существует в системе."
+        }, status: :not_found
       end
       
       # POST /api/v1/cities

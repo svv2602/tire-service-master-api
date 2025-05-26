@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_05_19_000001) do
+ActiveRecord::Schema[8.0].define(version: 2025_05_26_025453) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -229,8 +229,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_19_000001) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.boolean "is_active", default: true
+    t.bigint "region_id"
+    t.bigint "city_id"
+    t.index ["city_id"], name: "index_partners_on_city_id"
     t.index ["company_name"], name: "index_partners_on_company_name"
     t.index ["is_active"], name: "index_partners_on_is_active"
+    t.index ["region_id"], name: "index_partners_on_region_id"
     t.index ["user_id"], name: "index_partners_on_user_id", unique: true
   end
 
@@ -529,6 +533,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_19_000001) do
   add_foreign_key "managers", "partners"
   add_foreign_key "managers", "users"
   add_foreign_key "notifications", "notification_types"
+  add_foreign_key "partners", "cities"
+  add_foreign_key "partners", "regions"
   add_foreign_key "partners", "users"
   add_foreign_key "price_list_items", "price_lists"
   add_foreign_key "price_list_items", "services"

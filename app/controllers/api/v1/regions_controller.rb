@@ -7,36 +7,25 @@ module Api
       
       # GET /api/v1/regions
       def index
-        @regions = Region.all
+        @regions = Region.includes(:cities).where(is_active: true).order(:name)
         
-        # Фильтрация
-        @regions = @regions.where(is_active: true) if params[:active].present? && params[:active] == 'true'
-        
-        # Поиск по названию
-        if params[:query].present?
-          @regions = @regions.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
-        end
-        
-        # Сортировка
-        @regions = @regions.order(params[:sort] || :name)
-        
-        # Пагинация
-        page = (params[:page] || 1).to_i
-        per_page = (params[:per_page] || 25).to_i
-        offset = (page - 1) * per_page
-        
-        total_count = @regions.count
-        @regions = @regions.offset(offset).limit(per_page)
-        
-        render json: {
-          regions: @regions,
-          total_items: total_count
-        }
+        render json: @regions.as_json(include: { 
+          cities: { only: [:id, :name], where: { is_active: true } }
+        })
       end
       
       # GET /api/v1/regions/:id
       def show
-        render json: @region
+        @region = Region.includes(:cities).find(params[:id])
+        
+        render json: @region.as_json(include: { 
+          cities: { only: [:id, :name], where: { is_active: true } }
+        })
+      rescue ActiveRecord::RecordNotFound
+        render json: { 
+          error: "Регион с ID #{params[:id]} не найден",
+          message: "Регион с указанным идентификатором не существует в системе."
+        }, status: :not_found
       end
       
       # POST /api/v1/regions

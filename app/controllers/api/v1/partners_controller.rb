@@ -7,7 +7,7 @@ module Api
       
       # GET /api/v1/partners
       def index
-        @partners = Partner.includes(:user).all
+        @partners = Partner.includes(:user, :region, :city).all
         
         # Поиск по имени компании или контактному лицу (регистронезависимый)
         if params[:query].present?
@@ -40,7 +40,11 @@ module Api
       
       # GET /api/v1/partners/:id
       def show
-        render json: @partner.as_json(include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } })
+        render json: @partner.as_json(include: { 
+          user: { only: [:id, :email, :phone, :first_name, :last_name] },
+          region: { only: [:id, :name, :code] },
+          city: { only: [:id, :name] }
+        })
       end
       
       # POST /api/v1/partners
@@ -79,7 +83,11 @@ module Api
           # если он был сгенерирован автоматически
         end
         
-        render json: @partner.as_json(include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } }), status: :created
+        render json: @partner.as_json(include: { 
+          user: { only: [:id, :email, :phone, :first_name, :last_name] },
+          region: { only: [:id, :name, :code] },
+          city: { only: [:id, :name] }
+        }), status: :created
         
       rescue ActiveRecord::RecordInvalid => e
         errors = {}
@@ -158,7 +166,11 @@ module Api
           end
         end
         
-        render json: @partner.as_json(include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } })
+        render json: @partner.as_json(include: { 
+          user: { only: [:id, :email, :phone, :first_name, :last_name] },
+          region: { only: [:id, :name, :code] },
+          city: { only: [:id, :name] }
+        })
         
       rescue ActiveRecord::RecordInvalid => e
         errors = {}
@@ -292,7 +304,8 @@ module Api
       def partner_params
         permitted_params = params.require(:partner).permit(
           :company_name, :company_description, :contact_person, 
-          :logo_url, :website, :tax_number, :legal_address
+          :logo_url, :website, :tax_number, :legal_address,
+          :region_id, :city_id
         )
         
         # Проверка и установка значений по умолчанию

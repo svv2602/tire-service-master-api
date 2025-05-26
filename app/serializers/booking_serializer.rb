@@ -1,7 +1,7 @@
 class BookingSerializer < ActiveModel::Serializer
   attributes :id, :booking_date, :start_time, :end_time, :status, :payment_status,
              :cancellation_reason, :cancellation_comment, :total_price, :payment_method,
-             :notes, :created_at, :updated_at, :car_type
+             :notes, :created_at, :updated_at, :car_type, :client, :service_point, :car
   
   belongs_to :client
   belongs_to :service_point
@@ -80,6 +80,56 @@ class BookingSerializer < ActiveModel::Serializer
         quantity: booking_service.quantity,
         total_price: booking_service.total_price
       }
+    end
+  end
+
+  def client
+    if object.client && object.client.user
+      {
+        id: object.client.id,
+        name: object.client.user.full_name,
+        phone: object.client.user.phone,
+        email: object.client.user.email
+      }
+    else
+      {
+        id: object.client_id,
+        name: "Клиент ##{object.client_id}",
+        phone: nil,
+        email: nil
+      }
+    end
+  end
+
+  def service_point
+    if object.service_point
+      {
+        id: object.service_point.id,
+        name: object.service_point.name,
+        address: object.service_point.address,
+        partner_name: object.service_point.partner&.name
+      }
+    else
+      {
+        id: object.service_point_id,
+        name: "Точка обслуживания ##{object.service_point_id}",
+        address: nil,
+        partner_name: nil
+      }
+    end
+  end
+
+  def car
+    if object.car
+      {
+        id: object.car.id,
+        brand: object.car.brand,
+        model: object.car.model,
+        year: object.car.year,
+        license_plate: object.car.license_plate
+      }
+    else
+      nil
     end
   end
 end
