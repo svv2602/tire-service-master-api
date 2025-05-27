@@ -10,7 +10,7 @@ module Api
       def index
         authorize Client
         
-        @clients = Client.all
+        @clients = Client.includes(:user)
         
         # Поиск по данным пользователя
         if params[:query].present?
@@ -20,13 +20,21 @@ module Api
           )
         end
         
-        render json: paginate(@clients)
+        paginated_data = paginate(@clients)
+        
+        render json: {
+          data: ActiveModel::Serializer::CollectionSerializer.new(
+            paginated_data[:data], 
+            serializer: ClientSerializer
+          ),
+          pagination: paginated_data[:pagination]
+        }
       end
       
       # GET /api/v1/clients/:id
       def show
         authorize @client
-        render json: @client
+        render json: @client, serializer: ClientSerializer
       end
       
       # POST /api/v1/clients
@@ -256,7 +264,7 @@ module Api
       private
       
       def set_client
-        @client = Client.find(params[:id])
+        @client = Client.includes(:user).find(params[:id])
       end
       
       def client_user_params
