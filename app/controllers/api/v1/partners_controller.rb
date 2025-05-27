@@ -26,15 +26,27 @@ module Api
         # Если нет партнеров, возвращаем пустой массив
         if @partners.empty?
           render json: {
-            partners: [],
-            total_items: 0
+            data: [],
+            meta: {
+              current_page: page,
+              total_pages: 0,
+              total_count: 0,
+              per_page: per_page
+            }
           }
           return
         end
         
+        total_pages = (total_count.to_f / per_page).ceil
+        
         render json: {
-          partners: @partners.as_json(include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } }),
-          total_items: total_count
+          data: @partners.as_json(include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } }),
+          meta: {
+            current_page: page,
+            total_pages: total_pages,
+            total_count: total_count,
+            per_page: per_page
+          }
         }
       end
       

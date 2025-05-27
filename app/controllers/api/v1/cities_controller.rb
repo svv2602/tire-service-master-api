@@ -16,9 +16,11 @@ module Api
         
         @cities = @cities.order(:name)
         
-        render json: @cities.as_json(include: { 
-          region: { only: [:id, :name, :code] }
-        })
+        render json: {
+          data: @cities.as_json(include: { 
+            region: { only: [:id, :name, :code] }
+          })
+        }
       end
       
       # GET /api/v1/cities/:id

@@ -9,9 +9,11 @@ module Api
       def index
         @regions = Region.includes(:cities).where(is_active: true).order(:name)
         
-        render json: @regions.as_json(include: { 
-          cities: { only: [:id, :name], where: { is_active: true } }
-        })
+        render json: {
+          data: @regions.as_json(include: { 
+            cities: { only: [:id, :name], where: { is_active: true } }
+          })
+        }
       end
       
       # GET /api/v1/regions/:id
