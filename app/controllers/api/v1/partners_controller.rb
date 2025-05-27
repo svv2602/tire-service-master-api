@@ -2,7 +2,7 @@ module Api
   module V1
     class PartnersController < ApiController
       before_action :set_partner, only: [:show, :update, :destroy, :toggle_active]
-      before_action :authorize_admin, except: [:index, :show, :create_test, :toggle_active]
+      before_action :authorize_admin, except: [:index, :show, :create, :create_test, :toggle_active]
       skip_before_action :authenticate_request, only: [:index, :create_test]
       
       # GET /api/v1/partners
@@ -63,15 +63,15 @@ module Api
       def create
         ActiveRecord::Base.transaction do
           # Сначала создаем пользователя, если user_id не указан
-          if params[:user_id].blank? && params[:user].present?
-            user_params = params.require(:user).permit(:email, :password, :phone, :first_name, :last_name)
+          if params[:user_id].blank? && params[:partner][:user].present?
+            user_data = user_params
             
             # Генерируем пароль, если он не был предоставлен
-            user_params[:password] ||= SecureRandom.hex(8)
+            user_data[:password] ||= SecureRandom.hex(8)
             # Сохраняем пароль для возможной отправки по email
-            generated_password = user_params[:password]
+            generated_password = user_data[:password]
             
-            @user = User.new(user_params)
+            @user = User.new(user_data)
             @user.role = UserRole.find_by(name: 'operator')
             
             unless @user.save
@@ -164,10 +164,10 @@ module Api
       def update
         ActiveRecord::Base.transaction do
           # Обновляем данные пользователя, если они переданы
-          if params[:user].present? && @partner.user
-            user_params = params.require(:user).permit(:email, :phone, :first_name, :last_name)
+          if params[:partner][:user].present? && @partner.user
+            user_update_params = params.require(:partner).require(:user).permit(:email, :phone, :first_name, :last_name)
             
-            unless @partner.user.update(user_params)
+            unless @partner.user.update(user_update_params)
               raise ActiveRecord::RecordInvalid.new(@partner.user)
             end
           end
@@ -324,6 +324,10 @@ module Api
         permitted_params[:tax_number] = nil if permitted_params[:tax_number].blank?
         
         permitted_params
+      end
+      
+      def user_params
+        params.require(:partner).require(:user).permit(:email, :password, :phone, :first_name, :last_name)
       end
       
       def authorize_admin
