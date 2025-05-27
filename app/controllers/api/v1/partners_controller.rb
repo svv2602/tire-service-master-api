@@ -317,7 +317,7 @@ module Api
         permitted_params = params.require(:partner).permit(
           :company_name, :company_description, :contact_person, 
           :logo_url, :website, :tax_number, :legal_address,
-          :region_id, :city_id
+          :region_id, :city_id, :is_active
         )
         
         # Проверка и установка значений по умолчанию
