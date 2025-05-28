@@ -7,7 +7,8 @@ module Api
       
       # GET /api/v1/regions
       def index
-        @regions = Region.includes(:cities).where(is_active: true).order(:name)
+        # Возвращаем все регионы, независимо от статуса активности
+        @regions = Region.includes(:cities).order(:name)
         
         render json: {
           data: @regions.as_json(include: { 

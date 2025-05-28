@@ -162,6 +162,10 @@ module Api
       
       # PUT /api/v1/partners/:id
       def update
+        Rails.logger.info("Обновление партнера ID: #{params[:id]}")
+        Rails.logger.info("Исходные параметры: #{params[:partner].inspect}")
+        Rails.logger.info("Обработанные параметры: #{partner_params.inspect}")
+        
         ActiveRecord::Base.transaction do
           # Обновляем данные пользователя, если они переданы
           if params[:partner][:user].present? && @partner.user
@@ -177,6 +181,8 @@ module Api
             raise ActiveRecord::RecordInvalid.new(@partner)
           end
         end
+        
+        Rails.logger.info("Партнер после обновления: region_id=#{@partner.region_id}, city_id=#{@partner.city_id}")
         
         render json: @partner.as_json(include: { 
           user: { only: [:id, :email, :phone, :first_name, :last_name] },
@@ -322,6 +328,8 @@ module Api
         
         # Проверка и установка значений по умолчанию
         permitted_params[:tax_number] = nil if permitted_params[:tax_number].blank?
+        permitted_params[:region_id] = nil if permitted_params[:region_id].blank?
+        permitted_params[:city_id] = nil if permitted_params[:city_id].blank?
         
         permitted_params
       end
