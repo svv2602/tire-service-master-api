@@ -1804,6 +1804,58 @@ paths:
                         type: integer
                       per_page:
                         type: integer
+  "/api/v1/service_points/{id}/basic":
+    get:
+      summary: Получение базовой информации о сервисной точке
+      tags:
+      - Service Points
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Базовая информация о сервисной точке
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  address:
+                    type: string
+                  contact_phone:
+                    type: string
+                  status_id:
+                    type: integer
+                  city:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      region:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                          name:
+                            type: string
+                  partner:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      company_name:
+                        type: string
+        '404':
+          description: Сервисная точка не найдена
 servers:
 - url: http://localhost:8000
   description: Development server

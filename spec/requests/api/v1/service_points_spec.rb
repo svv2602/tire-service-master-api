@@ -154,6 +154,57 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
     end
   end
 
+  describe 'GET /api/v1/service_points/:id/basic' do
+    let(:test_point) { create(:service_point, name: "Test Point For Basic #{SecureRandom.hex(8)}", city: city, partner: partner) }
+    
+    context 'public access' do
+      before { get "/api/v1/service_points/#{test_point.id}/basic" }
+      
+      it 'returns basic information about the service point' do
+        expect(json).not_to be_empty
+        expect(json['id']).to eq(test_point.id)
+        expect(json['name']).to eq(test_point.name)
+        expect(json['address']).to eq(test_point.address)
+        expect(json['contact_phone']).to eq(test_point.contact_phone)
+        expect(json['status_id']).to eq(test_point.status_id)
+        
+        # Проверяем данные города
+        expect(json['city']['id']).to eq(test_point.city.id)
+        expect(json['city']['name']).to eq(test_point.city.name)
+        expect(json['city']['region']['id']).to eq(test_point.city.region.id)
+        expect(json['city']['region']['name']).to eq(test_point.city.region.name)
+        
+        # Проверяем данные партнера
+        expect(json['partner']['id']).to eq(test_point.partner.id)
+        expect(json['partner']['company_name']).to eq(test_point.partner.company_name)
+      end
+      
+      it 'returns status code 200' do
+        expect(response).to have_http_status(200)
+      end
+      
+      it 'does not return full service point details' do
+        expect(json).not_to include('description')
+        expect(json).not_to include('latitude')
+        expect(json).not_to include('longitude')
+        expect(json).not_to include('post_count')
+        expect(json).not_to include('default_slot_duration')
+      end
+    end
+
+    context 'when service point does not exist' do
+      before { get "/api/v1/service_points/999/basic" }
+      
+      it 'returns status code 404' do
+        expect(response).to have_http_status(404)
+      end
+      
+      it 'returns a not found message' do
+        expect(response.body).to match(/Resource not found/)
+      end
+    end
+  end
+
   describe 'POST /api/v1/partners/:partner_id/service_points' do
     let(:valid_attributes) do
       {

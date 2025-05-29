@@ -1,8 +1,8 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses]
-      before_action :set_service_point, only: [:show, :update, :destroy]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic]
+      before_action :set_service_point, only: [:show, :update, :destroy, :basic]
       
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points
@@ -107,6 +107,22 @@ module Api
       def statuses
         @statuses = ServicePointStatus.all.order(:sort_order)
         render json: @statuses
+      end
+      
+      # GET /api/v1/service_points/:id/basic
+      # Получение базовой информации о сервисной точке
+      def basic
+        authorize @service_point
+        render json: @service_point.as_json(
+          only: [:id, :name, :address, :contact_phone, :status_id],
+          include: {
+            city: { 
+              only: [:id, :name],
+              include: { region: { only: [:id, :name] } }
+            },
+            partner: { only: [:id, :company_name] }
+          }
+        )
       end
       
       private

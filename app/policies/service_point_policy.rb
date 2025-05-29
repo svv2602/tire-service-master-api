@@ -24,6 +24,10 @@ class ServicePointPolicy < ApplicationPolicy
     true # Публичный доступ к поиску ближайших сервисных точек
   end
 
+  def basic?
+    true # Публичный доступ к базовой информации о сервисной точке
+  end
+
   class Scope < Scope
     def resolve
       if user.nil? || user.client?

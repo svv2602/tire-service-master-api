@@ -64,6 +64,9 @@ Rails.application.routes.draw do
       
       # Сервисные точки
       resources :service_points, only: [:index, :show] do
+        member do
+          get 'basic', to: 'service_points#basic'
+        end
         resources :schedule_templates, only: [:index, :show, :create, :update, :destroy]
         resources :schedule_exceptions, only: [:index, :show, :create, :update, :destroy]
         resources :schedule_slots, only: [:index, :show, :create, :update, :destroy]
