@@ -57,6 +57,18 @@ module Api
         authorize @service_point
         
         if @service_point.save
+          # Обработка загруженных фотографий
+          if params[:photos].present?
+            params[:photos].each do |photo|
+              @service_point.photos.create!(
+                file: photo[:file],
+                description: photo[:description],
+                is_main: photo[:is_main],
+                sort_order: photo[:sort_order]
+              )
+            end
+          end
+          
           log_action('create', 'service_point', @service_point.id, nil, @service_point.as_json)
           render json: @service_point, status: :created
         else
@@ -71,6 +83,33 @@ module Api
         old_values = @service_point.as_json
         
         if @service_point.update(service_point_params)
+          # Обработка загруженных фотографий
+          if params[:photos].present?
+            # Удаляем старые фотографии, если они не используются в новом наборе
+            existing_photo_ids = params[:photos].map { |p| p[:id] }.compact
+            @service_point.photos.where.not(id: existing_photo_ids).destroy_all
+            
+            params[:photos].each do |photo|
+              if photo[:id].present?
+                # Обновляем существующую фотографию
+                existing_photo = @service_point.photos.find(photo[:id])
+                existing_photo.update!(
+                  description: photo[:description],
+                  is_main: photo[:is_main],
+                  sort_order: photo[:sort_order]
+                )
+              else
+                # Создаем новую фотографию
+                @service_point.photos.create!(
+                  file: photo[:file],
+                  description: photo[:description],
+                  is_main: photo[:is_main],
+                  sort_order: photo[:sort_order]
+                )
+              end
+            end
+          end
+          
           log_action('update', 'service_point', @service_point.id, old_values, @service_point.as_json)
           render json: @service_point
         else
@@ -133,8 +172,22 @@ module Api
       
       def service_point_params
         params.require(:service_point).permit(
-          :name, :description, :address, :city_id, :latitude, :longitude, 
-          :contact_phone, :post_count, :default_slot_duration, :status_id
+          :name,
+          :description,
+          :address,
+          :city_id,
+          :partner_id,
+          :status_id,
+          :phone,
+          :contact_phone,
+          :email,
+          :latitude,
+          :longitude,
+          :post_count,
+          :default_slot_duration,
+          :working_hours,
+          services_attributes: [:id, :service_id, :price, :duration, :is_available, :_destroy],
+          photos_attributes: [:id, :file, :description, :is_main, :sort_order, :_destroy]
         )
       end
       
