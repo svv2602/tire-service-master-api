@@ -8,16 +8,34 @@ module Api
       
       # Метод для пагинации
       def paginate(collection)
-        pagy, items = pagy(collection, page: params[:page], items: params[:per_page] || 20)
-        { 
-          data: items,
-          pagination: {
-            current_page: pagy.page,
-            total_pages: pagy.pages,
-            total_count: pagy.count,
-            per_page: pagy.vars[:items]
+        page = params[:page].to_i if params[:page].present?
+        per_page = (params[:per_page] || 20).to_i
+        
+        begin
+          pagy, items = pagy(collection, page: page, items: per_page)
+          { 
+            data: items,
+            pagination: {
+              current_page: pagy.page,
+              total_pages: [pagy.pages, 1].max, # Минимум 1 страница если есть данные
+              total_count: pagy.count,
+              per_page: pagy.vars[:items]
+            }
           }
-        }
+        rescue Pagy::OverflowError
+          # Если запрошенная страница больше максимальной, возвращаем пустой список
+          total_count = collection.count
+          total_pages = [(total_count.to_f / per_page).ceil, 1].max # Минимум 1 страница если есть данные
+          { 
+            data: [],
+            pagination: {
+              current_page: [page, total_pages].min,
+              total_pages: total_pages,
+              total_count: total_count,
+              per_page: per_page
+            }
+          }
+        end
       end
       
       # Параметры для сортировки
