@@ -112,7 +112,9 @@ Rails.application.routes.draw do
       # Каталоги
       resources :regions, only: [:index]
       resources :cities, only: [:index]
-      resources :car_brands
+      resources :car_brands do
+        resources :car_models
+      end
       resources :car_models
       resources :car_types, only: [:index, :show]
       resources :tire_types, only: [:index, :show]
