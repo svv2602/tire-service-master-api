@@ -2066,11 +2066,21 @@ components:
           type: string
           nullable: true
           description: URL логотипа бренда
+        created_at:
+          type: string
+          format: date-time
+          description: Дата создания бренда
+        updated_at:
+          type: string
+          format: date-time
+          description: Дата обновления бренда
       required:
       - id
       - name
       - is_active
       - models_count
+      - created_at
+      - updated_at
     CarModel:
       type: object
       properties:

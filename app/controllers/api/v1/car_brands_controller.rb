@@ -92,8 +92,12 @@ module Api
 
       def brand_json(brand, include_models: false)
         json = brand.as_json(
-          only: [:id, :name, :is_active, :created_at, :updated_at]
+          only: [:id, :name, :is_active]
         )
+
+        # Добавляем дату создания и обновления в ISO8601
+        json['created_at'] = brand.created_at&.iso8601
+        json['updated_at'] = brand.updated_at&.iso8601
 
         # Добавляем URL логотипа, если он есть
         if brand.logo.attached?
@@ -105,7 +109,7 @@ module Api
           json['logo'] = nil
         end
 
-        # Добавляем количество моделей
+        # Добавляем количество моделей (гарантированно присутствует)
         json['models_count'] = brand.car_models.count
 
         # Добавляем модели, если требуется

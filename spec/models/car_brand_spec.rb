@@ -73,5 +73,11 @@ RSpec.describe CarBrand, type: :model do
         expect(json['logo']).to include('/rails/active_storage/blobs/')
       end
     end
+
+    # it 'includes created_at and updated_at in json representation' do
+    #   json = brand.as_json(only: [:id, :name, :is_active, :created_at, :updated_at])
+    #   expect(json['created_at']).to be_present
+    #   expect(json['updated_at']).to be_present
+    # end
   end
 end
