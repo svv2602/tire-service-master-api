@@ -152,7 +152,7 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
       before do
         post "/api/v1/service_points/#{service_point.id}/photos",
              params: { sort_order: 1 },
-             headers: partner_headers
+             headers: partner_headers.merge('Content-Type' => 'multipart/form-data')
       end
       
       it 'returns status code 422' do

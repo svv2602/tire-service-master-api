@@ -97,20 +97,6 @@ RSpec.describe 'Service Point Photos API', type: :request do
         let(:description) { 'Тестовое описание фото' }
         let(:sort_order) { 1 }
         
-        before do
-          # Create a dummy successful response
-          dummy_photo = build_stubbed(:service_point_photo, service_point: service_point, 
-                                     photo_url: 'https://example.com/photos/test.jpg',
-                                     id: 999)
-          
-          # Mock the controller to return success for the photo upload
-          allow_any_instance_of(Api::V1::ServicePointPhotosController).to receive(:create) do |controller|
-            controller.instance_eval do
-              render json: dummy_photo, status: :created
-            end
-          end
-        end
-        
         run_test!
       end
 
@@ -151,16 +137,6 @@ RSpec.describe 'Service Point Photos API', type: :request do
         let(:service_point_id) { service_point.id }
         let(:file) { nil }
         let(:description) { 'Тестовое описание фото' }
-        
-        before do
-          # Mock the controller response for a validation error
-          allow_any_instance_of(Api::V1::ServicePointPhotosController).to receive(:create) do |controller|
-            controller.instance_eval do
-              render json: { errors: { photo_url: ["can't be blank"] } }, status: :unprocessable_entity
-            end
-          end
-        end
-        
         run_test!
       end
     end
