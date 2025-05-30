@@ -15,12 +15,18 @@ class CarBrand < ApplicationRecord
   scope :alphabetical, -> { order(:name) }
 
   # Методы
+  def models_count
+    car_models.count
+  end
+
   def as_json(options = {})
-    super(options).tap do |json|
-      if logo.attached?
-        json['logo'] = Rails.application.routes.url_helpers.rails_blob_path(logo, only_path: true)
-      end
-    end
+    {
+      'id' => id,
+      'name' => name,
+      'is_active' => is_active,
+      'models_count' => models_count,
+      'logo' => logo.attached? ? Rails.application.routes.url_helpers.rails_blob_path(logo, only_path: true) : nil
+    }
   end
 
   private
@@ -28,13 +34,13 @@ class CarBrand < ApplicationRecord
   def acceptable_logo
     return unless logo.attached?
 
-    unless logo.blob.byte_size <= 5.megabyte
-      errors.add(:logo, 'размер не должен превышать 5MB')
+    unless logo.blob.byte_size <= 1.megabyte
+      errors.add(:logo, 'слишком большой размер (не более 1MB)')
     end
 
-    acceptable_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    acceptable_types = ['image/jpeg', 'image/png']
     unless acceptable_types.include?(logo.content_type)
-      errors.add(:logo, 'должен быть в формате JPEG, PNG, GIF или WebP')
+      errors.add(:logo, 'должен быть JPEG или PNG')
     end
   end
 end

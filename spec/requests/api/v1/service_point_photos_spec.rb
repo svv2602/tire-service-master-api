@@ -111,23 +111,19 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
   end
   
   describe 'POST /api/v1/service_points/:service_point_id/photos' do
-    let(:valid_attributes) do
-      {
-        sort_order: 1,
-        photo_url: "https://example.com/photos/#{SecureRandom.hex(8)}.jpg"
-      }
-    end
+    let(:file) { fixture_file_upload(Rails.root.join('spec/fixtures/files/test_logo.png'), 'image/png') }
+    let(:valid_attributes) { { sort_order: 1, file: file } }
     
     context 'when request is valid' do
       context 'as a partner' do
         before do
           post "/api/v1/service_points/#{service_point.id}/photos",
-               params: valid_attributes.to_json, 
+               params: valid_attributes,
                headers: partner_headers
         end
         
         it 'creates a photo' do
-          expect(json['photo_url']).to eq(valid_attributes[:photo_url])
+          expect(json['photo_url']).to be_present
         end
         
         it 'returns status code 201' do
@@ -138,12 +134,12 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
       context 'as an admin' do
         before do
           post "/api/v1/service_points/#{service_point.id}/photos",
-               params: valid_attributes.to_json, 
+               params: valid_attributes,
                headers: admin_headers
         end
         
         it 'creates a photo' do
-          expect(json['photo_url']).to eq(valid_attributes[:photo_url])
+          expect(json['photo_url']).to be_present
         end
         
         it 'returns status code 201' do
@@ -155,7 +151,7 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
     context 'when request is invalid' do
       before do
         post "/api/v1/service_points/#{service_point.id}/photos",
-             params: { sort_order: 1 }.to_json,
+             params: { sort_order: 1 },
              headers: partner_headers
       end
       
@@ -164,14 +160,14 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
       end
       
       it 'returns a validation failure message' do
-        expect(json['errors']).to be_present
+        expect(json['errors'] || json['message'] || json['error']).to be_present
       end
     end
     
     context 'with invalid permissions' do
       before do
         post "/api/v1/service_points/#{service_point.id}/photos",
-             params: valid_attributes.to_json, 
+             params: valid_attributes,
              headers: client_headers
       end
       

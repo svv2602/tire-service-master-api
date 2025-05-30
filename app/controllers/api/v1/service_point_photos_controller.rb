@@ -24,6 +24,10 @@ module Api
         
         @photo = @service_point.photos.new(photo_params)
         
+        if params[:file].present?
+          @photo.file.attach(params[:file])
+        end
+        
         if @photo.save
           render json: photo_json(@photo), status: :created
         else
@@ -34,6 +38,11 @@ module Api
       # PATCH/PUT /api/v1/service_points/:service_point_id/photos/:id
       def update
         authorize @service_point, :update?
+        
+        if params[:file].present?
+          @photo.file.purge
+          @photo.file.attach(params[:file])
+        end
         
         if @photo.update(photo_update_params)
           render json: photo_json(@photo)
@@ -64,17 +73,17 @@ module Api
       end
       
       def photo_params
-        params.permit(:photo_url, :sort_order)
+        params.permit(:sort_order)
       end
       
       def photo_update_params
-        params.permit(:photo_url, :sort_order)
+        params.permit(:sort_order)
       end
       
       def photo_json(photo)
         {
           id: photo.id,
-          photo_url: photo.photo_url,
+          photo_url: photo.file.attached? ? url_for(photo.file) : nil,
           sort_order: photo.sort_order,
           created_at: photo.created_at
         }

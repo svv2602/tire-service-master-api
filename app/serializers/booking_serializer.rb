@@ -125,8 +125,7 @@ class BookingSerializer < ActiveModel::Serializer
         id: object.car.id,
         brand: object.car.brand,
         model: object.car.model,
-        year: object.car.year,
-        license_plate: object.car.license_plate
+        year: object.car.year
       }
     else
       nil

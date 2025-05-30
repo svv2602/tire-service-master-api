@@ -271,13 +271,12 @@ RSpec.describe 'API V1 Clients', type: :request do
         }.to_json, headers: {'Content-Type' => 'application/json'}
       end
       
-      # Фактическое поведение API - оно создает пользователя даже с невалидными параметрами
-      it 'returns status code 201' do
-        expect(response).to have_http_status(201)
+      it 'returns status code 422' do
+        expect(response).to have_http_status(422)
       end
-      
-      it 'returns success message' do
-        expect(json['message']).to eq('Account created successfully')
+
+      it 'returns validation error message' do
+        expect(json['message'] || json['errors'] || json['error']).to be_present
       end
     end
   end

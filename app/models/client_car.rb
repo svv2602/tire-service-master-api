@@ -37,11 +37,8 @@ class ClientCar < ApplicationRecord
   private
   
   def only_one_primary_per_client
-    # Пропускаем проверку, если машина не установлена как основная
-    return unless is_primary?
-    
-    # Проверка существования другой основной машины у клиента
-    other_primary = client.cars.primary.where.not(id: id).exists?
-    errors.add(:is_primary, "client already has a primary car") if other_primary
+    if is_primary && client.present? && client.cars.where.not(id: id).exists?(is_primary: true)
+      errors.add(:is_primary, 'может быть только один основной автомобиль')
+    end
   end
 end

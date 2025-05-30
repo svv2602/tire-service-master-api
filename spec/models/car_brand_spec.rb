@@ -34,4 +34,44 @@ RSpec.describe CarBrand, type: :model do
       end
     end
   end
+
+  describe '#models_count' do
+    let(:brand) { create(:car_brand) }
+
+    it 'returns 0 when brand has no models' do
+      expect(brand.models_count).to eq(0)
+    end
+
+    it 'returns correct count of models' do
+      create_list(:car_model, 3, brand: brand)
+      expect(brand.models_count).to eq(3)
+    end
+  end
+
+  describe '#as_json' do
+    let(:brand) { create(:car_brand) }
+
+    it 'includes models_count in json representation' do
+      create_list(:car_model, 2, brand: brand)
+      json = brand.as_json
+
+      expect(json['models_count']).to eq(2)
+    end
+
+    context 'when logo is attached' do
+      before do
+        brand.logo.attach(
+          io: File.open(Rails.root.join('spec', 'fixtures', 'files', 'test_logo.png')),
+          filename: 'test_logo.png',
+          content_type: 'image/png'
+        )
+      end
+
+      it 'includes logo url in json representation' do
+        json = brand.as_json
+        expect(json['logo']).to be_present
+        expect(json['logo']).to include('/rails/active_storage/blobs/')
+      end
+    end
+  end
 end

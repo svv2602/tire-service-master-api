@@ -106,5 +106,29 @@ FactoryBot.define do
     trait :unverified do
       email_verified { false }
     end
+
+    trait :admin do
+      after(:build) do |user|
+        admin_role = UserRole.find_by(name: 'admin') || 
+                    FactoryBot.create(:user_role, name: 'admin', description: 'Administrator role with full access')
+        user.role_id = admin_role.id
+      end
+    end
+
+    trait :manager do
+      after(:build) do |user|
+        manager_role = UserRole.find_by(name: 'manager') || 
+                      FactoryBot.create(:user_role, name: 'manager', description: 'Manager role for service point managers')
+        user.role_id = manager_role.id
+      end
+    end
+
+    trait :client do
+      after(:build) do |user|
+        client_role = UserRole.find_by(name: 'client') || 
+                     FactoryBot.create(:user_role, name: 'client', description: 'Client role for users who book services')
+        user.role_id = client_role.id
+      end
+    end
   end
 end

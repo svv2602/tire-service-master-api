@@ -11,6 +11,9 @@ class Partner < ApplicationRecord
   # Валидации
   validates :user_id, presence: true, uniqueness: true
   validates :company_name, presence: true
+  validates :contact_person, presence: true
+  validates :tax_number, presence: true, uniqueness: true
+  validates :legal_address, presence: true
   
   # Скоупы
   scope :with_active_user, -> { joins(:user).where(users: { is_active: true }) }
@@ -26,6 +29,10 @@ class Partner < ApplicationRecord
     return 0 if service_points_count.zero?
     
     service_points.sum(:average_rating) / service_points_count
+  end
+  
+  def name
+    company_name
   end
   
   # Метод для переключения активности партнера

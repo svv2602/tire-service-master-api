@@ -27,7 +27,7 @@ RSpec.describe ClientCar, type: :model do
       it 'prevents multiple primary cars for the same client' do
         second_car = build(:client_car, client: client, brand: brand, model: model, is_primary: true)
         expect(second_car).not_to be_valid
-        expect(second_car.errors[:is_primary]).to include("client already has a primary car")
+        expect(second_car.errors[:is_primary]).to include('может быть только один основной автомобиль')
       end
       
       it 'allows non-primary cars for the same client' do

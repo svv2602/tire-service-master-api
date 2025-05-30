@@ -83,12 +83,12 @@ RSpec.describe 'API V1 Authentication', type: :request do
       
       before { post '/api/v1/clients/register', params: invalid_attributes }
 
-      it 'still creates a user with default values' do
-        expect(response).to have_http_status(201)
+      it 'returns status code 422' do
+        expect(response).to have_http_status(422)
       end
 
-      it 'returns success message' do
-        expect(json['message']).to match(/Account created successfully/)
+      it 'returns validation error message' do
+        expect(json['message'] || json['errors'] || json['error']).to be_present
       end
     end
   end

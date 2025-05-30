@@ -22,6 +22,16 @@ module RequestSpecHelper
     data.to_json
   end
 
+  def valid_headers(user = nil)
+    return {} unless user
+
+    token = generate_token(user.id)
+    {
+      'Authorization' => "Bearer #{token}",
+      'Content-Type' => 'application/json'
+    }
+  end
+
   private
 
   # Generate JWT token for test users

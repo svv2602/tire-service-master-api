@@ -1,6 +1,7 @@
 FactoryBot.define do
   factory :car_brand do
-    name { Faker::Vehicle.make }
-    logo { "https://example.com/logos/#{name.downcase}.png" }
+    sequence(:name) { |n| "#{Faker::Vehicle.make} #{n}" }
+    logo { Rack::Test::UploadedFile.new(Rails.root.join('spec', 'fixtures', 'files', 'test_logo.png'), 'image/png') }
+    is_active { true }
   end
 end

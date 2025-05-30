@@ -28,7 +28,7 @@ module Api
         
         # Пагинация
         page = (params[:page] || 1).to_i
-        per_page = (params[:per_page] || 25).to_i
+        per_page = (params[:per_page] || 10).to_i
         offset = (page - 1) * per_page
         
         total_count = @car_models.count

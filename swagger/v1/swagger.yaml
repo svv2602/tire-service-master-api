@@ -1879,6 +1879,21 @@ paths:
         schema:
           type: boolean
         description: Фильтр по статусу активности
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+        description: Номер страницы для пагинации
+      - name: per_page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          maximum: 100
+        description: Количество элементов на странице
       responses:
         '200':
           description: Список моделей
@@ -1893,6 +1908,10 @@ paths:
                       $ref: '#/components/schemas/CarModel'
                   total_items:
                     type: integer
+                    description: Общее количество моделей с учетом фильтров
+                required:
+                  - car_models
+                  - total_items
     post:
       summary: Создает новую модель для указанного бренда
       tags:
@@ -2028,6 +2047,30 @@ components:
           description: Ошибки валидации по полям
       required:
       - errors
+    CarBrand:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Уникальный идентификатор бренда
+        name:
+          type: string
+          description: Название бренда
+        is_active:
+          type: boolean
+          description: Активен ли бренд
+        models_count:
+          type: integer
+          description: Количество моделей в бренде
+        logo:
+          type: string
+          nullable: true
+          description: URL логотипа бренда
+      required:
+      - id
+      - name
+      - is_active
+      - models_count
     CarModel:
       type: object
       properties:

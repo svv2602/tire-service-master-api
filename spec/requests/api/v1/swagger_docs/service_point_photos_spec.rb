@@ -74,7 +74,7 @@ RSpec.describe 'Service Point Photos API', type: :request do
       parameter name: 'Authorization', in: :header, type: :string, required: true
       parameter name: :service_point_id, in: :path, type: :integer, required: true,
                 description: 'ID сервисной точки'
-      parameter name: :photo, in: :formData, type: :file, required: true,
+      parameter name: :file, in: :formData, type: :file, required: true,
                 description: 'Файл изображения'
       parameter name: :description, in: :formData, type: :string, required: false,
                 description: 'Описание фотографии'
@@ -85,7 +85,7 @@ RSpec.describe 'Service Point Photos API', type: :request do
         schema type: :object,
           properties: {
             id: { type: :integer },
-            url: { type: :string },
+            photo_url: { type: :string },
             description: { type: :string },
             sort_order: { type: :integer },
             created_at: { type: :string, format: :date_time }
@@ -93,7 +93,7 @@ RSpec.describe 'Service Point Photos API', type: :request do
         
         let(:service_point) { create(:service_point, partner: partner) }
         let(:service_point_id) { service_point.id }
-        let(:photo) { Rack::Test::UploadedFile.new(mock_photo_path, 'image/jpeg') }
+        let(:file) { Rack::Test::UploadedFile.new(mock_photo_path, 'image/jpeg') }
         let(:description) { 'Тестовое описание фото' }
         let(:sort_order) { 1 }
         
@@ -123,7 +123,7 @@ RSpec.describe 'Service Point Photos API', type: :request do
         let(:other_partner) { create(:partner) }
         let(:service_point) { create(:service_point, partner: other_partner) }
         let(:service_point_id) { service_point.id }
-        let(:photo) { Rack::Test::UploadedFile.new(mock_photo_path, 'image/jpeg') }
+        let(:file) { Rack::Test::UploadedFile.new(mock_photo_path, 'image/jpeg') }
         
         before do
           # Override the request headers to use valid token but still get 403
@@ -145,14 +145,11 @@ RSpec.describe 'Service Point Photos API', type: :request do
       response '422', 'Неверные данные' do
         schema type: :object,
           properties: {
-            errors: { 
-              type: :object 
-            }
+            errors: { type: :object }
           }
         let(:service_point) { create(:service_point, partner: partner) }
         let(:service_point_id) { service_point.id }
-        # Explicitly set photo to nil to trigger validation error
-        let(:photo) { nil }
+        let(:file) { nil }
         let(:description) { 'Тестовое описание фото' }
         
         before do

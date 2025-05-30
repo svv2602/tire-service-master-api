@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_05_30_070631) do
+ActiveRecord::Schema[8.0].define(version: 2025_05_30_101222) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -412,7 +412,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_30_070631) do
 
   create_table "service_point_photos", force: :cascade do |t|
     t.bigint "service_point_id", null: false
-    t.string "photo_url", null: false
     t.integer "sort_order", default: 0
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
