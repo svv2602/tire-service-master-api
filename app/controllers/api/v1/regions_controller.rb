@@ -7,13 +7,36 @@ module Api
       
       # GET /api/v1/regions
       def index
-        # Возвращаем все регионы, независимо от статуса активности
         @regions = Region.includes(:cities).order(:name)
+        
+        # Фильтрация по поиску
+        if params[:search].present?
+          @regions = @regions.where("name ILIKE ?", "%#{params[:search]}%")
+        end
+        
+        # Фильтрация по статусу активности
+        if params[:is_active].present?
+          @regions = @regions.where(is_active: params[:is_active])
+        end
+        
+        # Пагинация
+        page = (params[:page] || 1).to_i
+        per_page = (params[:per_page] || 25).to_i
+        offset = (page - 1) * per_page
+        
+        total_count = @regions.count
+        @regions = @regions.offset(offset).limit(per_page)
         
         render json: {
           data: @regions.as_json(include: { 
             cities: { only: [:id, :name], where: { is_active: true } }
-          })
+          }),
+          pagination: {
+            total_count: total_count,
+            total_pages: (total_count.to_f / per_page).ceil,
+            current_page: page,
+            per_page: per_page
+          }
         }
       end
       

@@ -110,8 +110,8 @@ Rails.application.routes.draw do
       post 'clients/social_auth', to: 'clients#social_auth'
       
       # Каталоги
-      resources :regions, only: [:index]
-      resources :cities, only: [:index]
+      resources :regions, only: [:index, :show, :create, :update, :destroy]
+      resources :cities, only: [:index, :show, :create, :update, :destroy]
       resources :car_brands do
         resources :car_models
       end
