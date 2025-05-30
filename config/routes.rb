@@ -110,8 +110,8 @@ Rails.application.routes.draw do
       post 'clients/social_auth', to: 'clients#social_auth'
       
       # Каталоги
-      resources :regions
-      resources :cities
+      resources :regions, only: [:index]
+      resources :cities, only: [:index]
       resources :car_brands
       resources :car_models
       resources :car_types, only: [:index, :show]
@@ -159,6 +159,8 @@ Rails.application.routes.draw do
       
       # Добавляем health check эндпоинт
       get 'health', to: 'health#index'
+      
+      resources :service_point_statuses, only: [:index]
     end
   end
 end
