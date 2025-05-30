@@ -1856,11 +1856,151 @@ paths:
                         type: string
         '404':
           description: Сервисная точка не найдена
-servers:
-- url: http://localhost:8000
-  description: Development server
-- url: https://api.tire-service.com
-  description: Production server
+  "/api/v1/car_brands/{car_brand_id}/car_models":
+    get:
+      summary: Получает список моделей для указанного бренда
+      tags:
+      - Car Models
+      parameters:
+      - name: car_brand_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: query
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Поиск по названию модели
+      - name: active
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Фильтр по статусу активности
+      responses:
+        '200':
+          description: Список моделей
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  car_models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CarModel'
+                  total_items:
+                    type: integer
+    post:
+      summary: Создает новую модель для указанного бренда
+      tags:
+      - Car Models
+      security:
+        - BearerAuth: []
+      parameters:
+      - name: car_brand_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                car_model:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    is_active:
+                      type: boolean
+                  required:
+                    - name
+      responses:
+        '201':
+          description: Модель создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarModel'
+        '401':
+          description: Не авторизован
+        '422':
+          description: Ошибка валидации
+
+  "/api/v1/car_brands/{car_brand_id}/car_models/{id}":
+    put:
+      summary: Обновляет модель
+      tags:
+      - Car Models
+      security:
+        - BearerAuth: []
+      parameters:
+      - name: car_brand_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                car_model:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    is_active:
+                      type: boolean
+      responses:
+        '200':
+          description: Модель обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarModel'
+        '401':
+          description: Не авторизован
+        '422':
+          description: Ошибка валидации
+    delete:
+      summary: Удаляет модель
+      tags:
+      - Car Models
+      security:
+        - BearerAuth: []
+      parameters:
+      - name: car_brand_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: Модель удалена
+        '401':
+          description: Не авторизован
+        '422':
+          description: Невозможно удалить модель
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1888,6 +2028,30 @@ components:
           description: Ошибки валидации по полям
       required:
       - errors
+    CarModel:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        brand_id:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        brand:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
 tags:
 - name: Authentication
   description: Аутентификация и авторизация пользователей
