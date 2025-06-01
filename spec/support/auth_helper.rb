@@ -1,6 +1,6 @@
 module AuthHelper
   def auth_token_for_user(user)
-    Auth::JsonWebToken.encode(user_id: user.id)
+    Auth::JsonWebToken.encode_access_token(user_id: user.id)
   end
   
   def auth_headers_for_user(user)

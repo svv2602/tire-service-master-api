@@ -10,6 +10,32 @@ RSpec.describe Service, type: :model do
   describe 'validations' do
     it { should validate_presence_of(:name) }
     it { should validate_numericality_of(:default_duration).is_greater_than(0) }
+    
+    # Дополнительные тесты валидации
+    it 'validates uniqueness of name within the same category' do
+      category = create(:service_category)
+      create(:service, name: 'Test Service', category: category)
+      
+      duplicate_service = build(:service, name: 'Test Service', category: category)
+      expect(duplicate_service).not_to be_valid
+      expect(duplicate_service.errors[:name]).to include('has already been taken')
+    end
+    
+    it 'allows same name in different categories' do
+      category1 = create(:service_category)
+      category2 = create(:service_category)
+      
+      create(:service, name: 'Test Service', category: category1)
+      duplicate_service = build(:service, name: 'Test Service', category: category2)
+      
+      expect(duplicate_service).to be_valid
+    end
+    
+    it 'validates sort_order is not negative' do
+      service = build(:service, sort_order: -1)
+      expect(service).not_to be_valid
+      expect(service.errors[:sort_order]).to include('must be greater than or equal to 0')
+    end
   end
 
   describe 'scopes' do

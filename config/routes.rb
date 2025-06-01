@@ -118,8 +118,10 @@ Rails.application.routes.draw do
       resources :car_models
       resources :car_types, only: [:index, :show]
       resources :tire_types, only: [:index, :show]
-      resources :service_categories, only: [:index, :show, :create, :update, :destroy]
-      resources :services, only: [:index, :show, :create, :update, :destroy]
+      resources :service_categories do
+        resources :services
+      end
+      resources :services
       resources :booking_statuses, only: [:index, :show]
       resources :payment_statuses, only: [:index, :show]
       resources :cancellation_reasons, only: [:index, :show]
