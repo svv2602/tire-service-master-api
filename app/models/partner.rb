@@ -12,7 +12,7 @@ class Partner < ApplicationRecord
   validates :user_id, presence: true, uniqueness: true
   validates :company_name, presence: true
   validates :contact_person, presence: true
-  validates :tax_number, presence: true, uniqueness: true
+  validates :tax_number, uniqueness: true, allow_blank: true
   validates :legal_address, presence: true
   
   # Скоупы

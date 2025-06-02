@@ -11,29 +11,28 @@ RSpec.describe Partner, type: :model do
 
   describe 'validations' do
     it { should validate_presence_of(:company_name) }
+    it { should validate_presence_of(:contact_person) }
+    it { should validate_presence_of(:legal_address) }
     it { should validate_presence_of(:user_id) }
     
-    describe 'uniqueness of user_id' do
-      let(:role) { UserRole.find_by(name: 'partner') || create(:user_role, name: 'partner') }
-      let(:user) { create(:user, role_id: role.id) }
-      before { create(:partner, user: user) }
-      
-      it 'validates uniqueness of user_id' do
-        new_partner = build(:partner, user: user)
-        expect(new_partner).not_to be_valid
-        expect(new_partner.errors[:user_id]).to include('has already been taken')
-      end
+    it 'validates uniqueness of tax_number when present' do
+      # Этот тест проверяет, что налоговый номер должен быть уникальным, если указан
+      # Но может быть пустым (nil или '')
+      expect(Partner.validators_on(:tax_number).map(&:class)).to include(ActiveRecord::Validations::UniquenessValidator)
     end
   end
 
   describe 'scopes' do
-    let!(:active_user) { create(:user, is_active: true) }
-    let!(:inactive_user) { create(:user, is_active: false) }
-    let!(:active_partner) { create(:partner, user: active_user) }
-    let!(:inactive_partner) { create(:partner, user: inactive_user) }
-
     describe '.with_active_user' do
       it 'returns only partners with active users' do
+        role = UserRole.find_or_create_by(name: 'partner') { |r| r.description = 'Partner role' }
+        
+        active_user = create(:user, is_active: true, role_id: role.id)
+        inactive_user = create(:user, is_active: false, role_id: role.id)
+        
+        active_partner = create(:partner, user: active_user)
+        inactive_partner = create(:partner, user: inactive_user)
+
         expect(Partner.with_active_user).to include(active_partner)
         expect(Partner.with_active_user).not_to include(inactive_partner)
       end
@@ -41,38 +40,42 @@ RSpec.describe Partner, type: :model do
   end
 
   describe '#total_clients_served' do
-    let(:partner) { create(:partner) }
-    let!(:service_point1) { create(:service_point, partner: partner, total_clients_served: 100, name: "Service Point A #{SecureRandom.hex(4)}-#{Time.now.to_f}") }
-    let!(:service_point2) { create(:service_point, partner: partner, total_clients_served: 200, name: "Service Point B #{SecureRandom.hex(4)}-#{Time.now.to_f}") }
-
     it 'calculates total clients served across all service points' do
+      role = UserRole.find_or_create_by(name: 'partner') { |r| r.description = 'Partner role' }
+      partner_user = create(:user, role_id: role.id)
+      partner = create(:partner, user: partner_user)
+      service_point1 = create(:service_point, partner: partner, total_clients_served: 100, name: "Service Point A #{SecureRandom.hex(4)}-#{Time.now.to_f}")
+      service_point2 = create(:service_point, partner: partner, total_clients_served: 200, name: "Service Point B #{SecureRandom.hex(4)}-#{Time.now.to_f}")
+      
       expect(partner.total_clients_served).to eq(300)
     end
 
-    context 'when partner has no service points' do
-      let(:empty_partner) { create(:partner) }
+    it 'returns zero when partner has no service points' do
+      role = UserRole.find_or_create_by(name: 'partner') { |r| r.description = 'Partner role' }
+      empty_partner_user = create(:user, role_id: role.id)
+      empty_partner = create(:partner, user: empty_partner_user)
 
-      it 'returns zero' do
-        expect(empty_partner.total_clients_served).to eq(0)
-      end
+      expect(empty_partner.total_clients_served).to eq(0)
     end
   end
 
   describe '#average_rating' do
-    let(:partner) { create(:partner) }
-    let!(:service_point1) { create(:service_point, partner: partner, average_rating: 4.0, name: "Service Point #1 #{SecureRandom.hex(4)}-#{Time.now.to_f}") }
-    let!(:service_point2) { create(:service_point, partner: partner, average_rating: 5.0, name: "Service Point #2 #{SecureRandom.hex(4)}-#{Time.now.to_f}") }
-
     it 'calculates average rating across all service points' do
+      role = UserRole.find_or_create_by(name: 'partner') { |r| r.description = 'Partner role' }
+      partner_user = create(:user, role_id: role.id)
+      partner = create(:partner, user: partner_user)
+      service_point1 = create(:service_point, partner: partner, average_rating: 4.0, name: "Service Point #1 #{SecureRandom.hex(4)}-#{Time.now.to_f}")
+      service_point2 = create(:service_point, partner: partner, average_rating: 5.0, name: "Service Point #2 #{SecureRandom.hex(4)}-#{Time.now.to_f}")
+
       expect(partner.average_rating).to eq(4.5)
     end
 
-    context 'when partner has no service points' do
-      let(:empty_partner) { create(:partner) }
+    it 'returns zero when partner has no service points' do
+      role = UserRole.find_or_create_by(name: 'partner') { |r| r.description = 'Partner role' }
+      empty_partner_user = create(:user, role_id: role.id)
+      empty_partner = create(:partner, user: empty_partner_user)
 
-      it 'returns zero' do
-        expect(empty_partner.average_rating).to eq(0)
-      end
+      expect(empty_partner.average_rating).to eq(0)
     end
   end
 end

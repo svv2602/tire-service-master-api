@@ -119,10 +119,30 @@ POST /api/v1/partners
     "logo_url": "https://example.com/logo.png",
     "website": "https://autoservice.com",
     "tax_number": "12345678",
-    "legal_address": "123 Main St, Kiev, Ukraine"
+    "legal_address": "123 Main St, Kiev, Ukraine",
+    "region_id": 1,
+    "city_id": 1
   }
 }
 ```
+
+**Обязательные поля**:
+- `user.email` - email пользователя (должен быть уникальным)
+- `user.first_name` - имя пользователя
+- `user.last_name` - фамилия пользователя
+- `user.phone` - телефон пользователя
+- `partner.company_name` - название компании
+- `partner.contact_person` - контактное лицо
+- `partner.legal_address` - юридический адрес
+- `partner.region_id` - ID региона
+- `partner.city_id` - ID города
+
+**Необязательные поля**:
+- `user.password` - пароль (если не указан, будет сгенерирован автоматически)
+- `partner.company_description` - описание компании
+- `partner.logo_url` - URL логотипа
+- `partner.website` - веб-сайт компании
+- `partner.tax_number` - налоговый номер (если указан, должен быть уникальным)
 
 ## Менеджеры
 
