@@ -1,8 +1,8 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic]
-      before_action :set_service_point, only: [:show, :update, :destroy, :basic]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule]
+      before_action :set_service_point, only: [:show, :update, :destroy, :basic, :posts_schedule]
       
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points
@@ -162,6 +162,49 @@ module Api
             partner: { only: [:id, :company_name] }
           }
         )
+      end
+      
+      # Получает расписание с детализацией по постам обслуживания
+      def posts_schedule
+        date = Date.parse(params[:date]) rescue Date.current
+        
+        schedule_by_posts = {}
+        
+        @service_point.service_posts.active.ordered_by_post_number.each do |service_post|
+          slots = @service_point.schedule_slots
+                               .where(slot_date: date, service_post: service_post)
+                               .left_joins(:bookings)
+                               .order(:start_time)
+          
+          schedule_by_posts[service_post.id] = {
+            post_info: ServicePostSerializer.new(service_post).as_json,
+            slots: slots.map do |slot|
+              {
+                id: slot.id,
+                start_time: slot.start_time.strftime('%H:%M'),
+                end_time: slot.end_time.strftime('%H:%M'),
+                duration_minutes: slot.duration_in_minutes,
+                is_available: slot.is_available,
+                is_booked: slot.booked?
+              }
+            end,
+            total_slots: slots.count,
+            available_slots: slots.select { |s| s.is_available && !s.booked? }.count,
+            occupancy_rate: slots.count > 0 ? ((slots.select(&:booked?).count.to_f / slots.count) * 100).round(2) : 0
+          }
+        end
+        
+        render json: {
+          service_point: ServicePointBasicSerializer.new(@service_point).as_json,
+          date: date,
+          schedule_by_posts: schedule_by_posts,
+          summary: {
+            total_posts: @service_point.service_posts.active.count,
+            total_slots: @service_point.schedule_slots.where(slot_date: date).count,
+            total_available: @service_point.schedule_slots.where(slot_date: date, is_available: true)
+                                          .left_joins(:bookings).where(bookings: { id: nil }).count
+          }
+        }
       end
       
       private

@@ -68,6 +68,11 @@ class ServicePoint < ApplicationRecord
     status.name == 'active'
   end
   
+  # Количество активных постов обслуживания
+  def posts_count
+    service_posts.active.count
+  end
+  
   def temporarily_closed?
     status.name == 'temporarily_closed'
   end

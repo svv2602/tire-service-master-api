@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_02_100036) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_02_104036) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -84,7 +84,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_100036) do
     t.bigint "client_id", null: false
     t.bigint "service_point_id", null: false
     t.bigint "car_id"
-    t.bigint "slot_id", null: false
     t.date "booking_date", null: false
     t.time "start_time", null: false
     t.time "end_time", null: false
@@ -98,13 +97,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_100036) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "car_type_id", null: false
+    t.index ["booking_date", "start_time", "end_time"], name: "idx_bookings_time_range"
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_id"], name: "index_bookings_on_car_id"
     t.index ["car_type_id"], name: "index_bookings_on_car_type_id"
     t.index ["client_id"], name: "index_bookings_on_client_id"
     t.index ["payment_status_id"], name: "index_bookings_on_payment_status_id"
+    t.index ["service_point_id", "booking_date", "start_time"], name: "idx_bookings_service_point_date_time"
     t.index ["service_point_id"], name: "index_bookings_on_service_point_id"
-    t.index ["slot_id"], name: "index_bookings_on_slot_id"
     t.index ["status_id"], name: "index_bookings_on_status_id"
   end
 
@@ -371,9 +371,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_100036) do
     t.string "special_description"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "service_post_id", null: false
     t.index ["is_available"], name: "idx_schedule_slots_availability"
     t.index ["service_point_id", "slot_date", "start_time", "post_number"], name: "idx_unique_slot", unique: true
     t.index ["service_point_id"], name: "index_schedule_slots_on_service_point_id"
+    t.index ["service_post_id"], name: "index_schedule_slots_on_service_post_id"
   end
 
   create_table "schedule_templates", force: :cascade do |t|
@@ -559,7 +561,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_100036) do
   add_foreign_key "bookings", "client_cars", column: "car_id"
   add_foreign_key "bookings", "clients"
   add_foreign_key "bookings", "payment_statuses", on_delete: :restrict, validate: false
-  add_foreign_key "bookings", "schedule_slots", column: "slot_id"
   add_foreign_key "bookings", "service_points"
   add_foreign_key "car_models", "car_brands", column: "brand_id"
   add_foreign_key "cities", "regions"
@@ -590,6 +591,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_100036) do
   add_foreign_key "reviews", "service_points"
   add_foreign_key "schedule_exceptions", "service_points"
   add_foreign_key "schedule_slots", "service_points"
+  add_foreign_key "schedule_slots", "service_posts"
   add_foreign_key "schedule_templates", "service_points"
   add_foreign_key "schedule_templates", "weekdays"
   add_foreign_key "service_point_amenities", "amenities"

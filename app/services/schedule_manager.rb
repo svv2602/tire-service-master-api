@@ -2,6 +2,15 @@ class ScheduleManager
   # Генерирует слоты расписания на указанную дату для указанной сервисной точки
   def self.generate_slots_for_date(service_point_id, date)
     service_point = ServicePoint.find(service_point_id)
+    
+    # Проверяем наличие активных постов
+    active_posts = service_point.service_posts.active
+    if active_posts.empty?
+      Rails.logger.warn "ScheduleManager: Нет активных постов для точки обслуживания #{service_point_id}"
+      delete_unused_slots(service_point_id, date)
+      return
+    end
+    
     # Преобразуем wday (0-воскресенье, 1-6 пн-сб) в sort_order (1-7 пн-вс)
     sort_order = date.wday == 0 ? 7 : date.wday
     weekday = Weekday.find_by(sort_order: sort_order)
@@ -29,8 +38,8 @@ class ScheduleManager
       return
     end
     
-    # Генерируем слоты на основе шаблона
-    generate_slots_from_template(service_point, date, template)
+    # Генерируем слоты на основе шаблона с учетом индивидуальных постов
+    generate_slots_from_template_with_posts(service_point, date, template)
   end
   
   # Генерирует слоты расписания на указанный период для указанной сервисной точки
@@ -59,8 +68,8 @@ class ScheduleManager
   
   private
   
-  # Генерирует слоты на основе шаблона расписания
-  def self.generate_slots_from_template(service_point, date, template)
+  # Генерирует слоты на основе шаблона расписания с учетом индивидуальных постов
+  def self.generate_slots_from_template_with_posts(service_point, date, template)
     # Сначала удаляем все неиспользуемые слоты для этой даты
     delete_unused_slots(service_point.id, date)
     
@@ -68,44 +77,51 @@ class ScheduleManager
     start_time = template.opening_time
     end_time = template.closing_time
     
-    # Определяем продолжительность слота
-    slot_duration = service_point.default_slot_duration
+    # Получаем активные посты с их индивидуальными настройками
+    active_posts = service_point.service_posts.active.ordered_by_post_number
     
-    # Генерируем слоты с шагом, равным продолжительности слота
+    # Для каждого поста генерируем слоты с его индивидуальной длительностью
+    active_posts.each do |service_post|
+      generate_slots_for_post(service_point, date, start_time, end_time, service_post)
+    end
+  end
+  
+  # Генерирует слоты для конкретного поста с его индивидуальной длительностью
+  def self.generate_slots_for_post(service_point, date, start_time, end_time, service_post)
+    slot_duration = service_post.slot_duration
     current_time = start_time
+    
     while current_time + slot_duration.minutes <= end_time
       slot_end_time = current_time + slot_duration.minutes
       
-      # Для каждого поста создаем отдельный слот
-      1.upto(service_point.post_count) do |post_number|
-        # Проверяем, нет ли уже такого слота
-        slot = ScheduleSlot.find_by(
+      # Проверяем, нет ли уже такого слота
+      slot = ScheduleSlot.find_by(
+        service_point_id: service_point.id,
+        service_post_id: service_post.id,
+        slot_date: date,
+        start_time: current_time,
+        end_time: slot_end_time
+      )
+      
+      # Если слота нет, создаем его
+      unless slot
+        ScheduleSlot.create!(
           service_point_id: service_point.id,
+          service_post_id: service_post.id,
           slot_date: date,
           start_time: current_time,
           end_time: slot_end_time,
-          post_number: post_number
+          post_number: service_post.post_number,
+          is_available: true
         )
-        
-        # Если слота нет, создаем его
-        unless slot
-          ScheduleSlot.create!(
-            service_point_id: service_point.id,
-            slot_date: date,
-            start_time: current_time,
-            end_time: slot_end_time,
-            post_number: post_number,
-            is_available: true
-          )
-        end
       end
       
-      # Переходим к следующему временному слоту
+      # Переходим к следующему временному слоту для этого поста
       current_time = slot_end_time
     end
   end
   
-  # Генерирует слоты на основе исключения из расписания
+  # Генерирует слоты на основе исключения из расписания с учетом индивидуальных постов
   def self.generate_slots_from_exception(service_point, date, exception)
     # Сначала удаляем все неиспользуемые слоты для этой даты
     delete_unused_slots(service_point.id, date)
@@ -114,40 +130,12 @@ class ScheduleManager
     start_time = exception.start_time
     end_time = exception.end_time
     
-    # Определяем продолжительность слота
-    slot_duration = service_point.default_slot_duration
+    # Получаем активные посты с их индивидуальными настройками
+    active_posts = service_point.service_posts.active.ordered_by_post_number
     
-    # Генерируем слоты с шагом, равным продолжительности слота
-    current_time = start_time
-    while current_time + slot_duration.minutes <= end_time
-      slot_end_time = current_time + slot_duration.minutes
-      
-      # Для каждого поста создаем отдельный слот
-      1.upto(service_point.post_count) do |post_number|
-        # Проверяем, нет ли уже такого слота
-        slot = ScheduleSlot.find_by(
-          service_point_id: service_point.id,
-          slot_date: date,
-          start_time: current_time,
-          end_time: slot_end_time,
-          post_number: post_number
-        )
-        
-        # Если слота нет, создаем его
-        unless slot
-          ScheduleSlot.create!(
-            service_point_id: service_point.id,
-            slot_date: date,
-            start_time: current_time,
-            end_time: slot_end_time,
-            post_number: post_number,
-            is_available: true
-          )
-        end
-      end
-      
-      # Переходим к следующему временному слоту
-      current_time = slot_end_time
+    # Для каждого поста генерируем слоты с его индивидуальной длительностью
+    active_posts.each do |service_post|
+      generate_slots_for_post(service_point, date, start_time, end_time, service_post)
     end
   end
   

@@ -170,7 +170,7 @@ module Api
           }
         end
         
-        private
+        # Методы для создания тестовых данных (доступны для seed файлов)
         
         def create_test_client_internal
           # Создаем пользователя для клиента
@@ -361,25 +361,25 @@ module Api
           # Находим сервисную точку
           service_point = ServicePoint.find(service_point_id)
           
-          # Находим или создаем слот расписания на завтра
+          # Выбираем завтрашний день для бронирования
           tomorrow = Date.tomorrow
           
-          # Генерируем расписание для завтрашнего дня
-          ScheduleManager.generate_slots_for_date(service_point.id, tomorrow)
+          # Проверяем доступность с помощью динамической системы
+          available_times = DynamicAvailabilityService.available_times_for_date(
+            service_point.id, 
+            tomorrow,
+            60 # минимум 60 минут
+          )
           
-          # Находим свободный слот
-          slot = service_point.available_slots_for_date(tomorrow).first
-          
-          # Если нет свободных слотов, создаем новый
-          unless slot
-            slot = ScheduleSlot.create!(
-              service_point_id: service_point.id,
-              slot_date: tomorrow,
-              start_time: "10:00:00",
-              end_time: "11:00:00",
-              post_number: 1,
-              is_available: true
-            )
+          # Если есть доступное время, используем его
+          if available_times.any?
+            time_slot = available_times.first
+            start_time = time_slot[:datetime]
+            end_time = start_time + 90.minutes # 90 минут обслуживания
+          else
+            # Если нет доступности, создаем время в 10:00 (для тестов)
+            start_time = Time.parse("#{tomorrow} 10:00")
+            end_time = start_time + 90.minutes
           end
           
           # Находим или создаем статус бронирования "pending"
@@ -404,22 +404,25 @@ module Api
             )
           end
           
-          # Создаем бронирование
-          booking = Booking.create!(
+          # Создаем бронирование для динамической системы
+          booking = Booking.new(
             client_id: client.id,
             service_point_id: service_point.id,
             car_id: client_car.id,
             car_type_id: client_car.car_type_id,
-            slot_id: slot.id,
-            booking_date: slot.slot_date,
-            start_time: slot.start_time,
-            end_time: slot.end_time,
+            booking_date: tomorrow,
+            start_time: start_time,
+            end_time: end_time,
             status_id: pending_status.id,
             payment_status_id: not_paid_status.id,
             total_price: 1000.0,
             payment_method: "cash",
             notes: "Тестовое бронирование"
           )
+          
+          # Пропускаем валидацию доступности для тестовых данных
+          booking.skip_availability_check = true
+          booking.save!
           
           # Добавляем услуги к бронированию
           services = service_point.services.limit(2)

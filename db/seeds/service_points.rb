@@ -164,4 +164,98 @@ else
   end
 
   puts "Created #{ServicePoint.count} service points successfully!"
+
+  # Создание индивидуальных постов обслуживания для каждой точки
+  puts 'Creating service posts with individual slot durations...'
+  
+  ServicePoint.all.each do |service_point|
+    puts "  Creating posts for #{service_point.name}..."
+    
+    # Очищаем существующие посты для этой точки
+    service_point.service_posts.destroy_all
+    
+    # Определяем конфигурацию постов в зависимости от типа точки
+    case service_point.post_count
+    when 2
+      # Маленькие точки - 2 поста
+      posts_config = [
+        { post_number: 1, name: "Экспресс пост", slot_duration: 20, description: "Быстрый шиномонтаж" },
+        { post_number: 2, name: "Стандартный пост", slot_duration: 45, description: "Стандартное обслуживание" }
+      ]
+    when 3
+      # Средние точки - 3 поста
+      posts_config = [
+        { post_number: 1, name: "Быстрый пост", slot_duration: 30, description: "Быстрое обслуживание легковых авто" },
+        { post_number: 2, name: "Универсальный пост", slot_duration: 60, description: "Стандартное обслуживание" },
+        { post_number: 3, name: "Грузовой пост", slot_duration: 90, description: "Обслуживание грузовых автомобилей" }
+      ]
+    when 4
+      # Стандартные точки - 4 поста
+      posts_config = [
+        { post_number: 1, name: "Экспресс пост 1", slot_duration: 25, description: "Быстрый шиномонтаж и балансировка" },
+        { post_number: 2, name: "Экспресс пост 2", slot_duration: 25, description: "Быстрый шиномонтаж и балансировка" },
+        { post_number: 3, name: "Универсальный пост", slot_duration: 60, description: "Полное обслуживание легковых авто" },
+        { post_number: 4, name: "Комплексный пост", slot_duration: 120, description: "Сложные работы и ремонт дисков" }
+      ]
+    when 5
+      # Большие точки - 5 постов
+      posts_config = [
+        { post_number: 1, name: "Экспресс пост 1", slot_duration: 30, description: "Быстрое обслуживание" },
+        { post_number: 2, name: "Экспресс пост 2", slot_duration: 30, description: "Быстрое обслуживание" },
+        { post_number: 3, name: "Стандартный пост 1", slot_duration: 60, description: "Стандартное обслуживание" },
+        { post_number: 4, name: "Стандартный пост 2", slot_duration: 60, description: "Стандартное обслуживание" },
+        { post_number: 5, name: "Грузовой пост", slot_duration: 120, description: "Обслуживание коммерческого транспорта" }
+      ]
+    when 6
+      # Очень большие точки - 6 постов
+      posts_config = [
+        { post_number: 1, name: "Быстрый пост 1", slot_duration: 20, description: "Экспресс шиномонтаж" },
+        { post_number: 2, name: "Быстрый пост 2", slot_duration: 20, description: "Экспресс шиномонтаж" },
+        { post_number: 3, name: "Стандартный пост 1", slot_duration: 45, description: "Стандартное обслуживание" },
+        { post_number: 4, name: "Стандартный пост 2", slot_duration: 45, description: "Стандартное обслуживание" },
+        { post_number: 5, name: "Премиум пост", slot_duration: 90, description: "Премиум обслуживание" },
+        { post_number: 6, name: "Грузовой пост", slot_duration: 150, description: "Грузовые автомобили и спецтехника" }
+      ]
+    else
+      # Универсальная конфигурация для остальных
+      posts_config = []
+      (1..service_point.post_count).each do |i|
+        duration = case i
+                  when 1..2 then 30  # Первые 2 поста - быстрые
+                  when 3..4 then 60  # Средние посты - стандартные
+                  else 90            # Остальные - долгие
+                  end
+        posts_config << {
+          post_number: i,
+          name: "Пост #{i}",
+          slot_duration: duration,
+          description: "Автоматически созданный пост №#{i}"
+        }
+      end
+    end
+    
+    # Создаем посты для данной точки
+    posts_config.each do |post_config|
+      service_post = service_point.service_posts.create!(
+        post_number: post_config[:post_number],
+        name: post_config[:name],
+        slot_duration: post_config[:slot_duration],
+        description: post_config[:description],
+        is_active: true
+      )
+      puts "    Created #{service_post.display_name} (#{service_post.slot_duration} мин)"
+    end
+  end
+  
+  total_posts = ServicePost.count
+  puts "Created #{total_posts} service posts with individual configurations!"
+  
+  # Выводим сводку по конфигурациям
+  puts "\nService posts summary:"
+  ServicePoint.includes(:service_posts).each do |sp|
+    puts "  #{sp.name}: #{sp.service_posts.count} постов"
+    sp.service_posts.ordered_by_post_number.each do |post|
+      puts "    - #{post.display_name}: #{post.slot_duration} мин"
+    end
+  end
 end 

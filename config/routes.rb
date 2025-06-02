@@ -67,6 +67,16 @@ Rails.application.routes.draw do
         member do
           get 'basic', to: 'service_points#basic'
         end
+        
+        # Новое API для динамической доступности
+        member do
+          get 'availability/:date', to: 'availability#available_times', as: 'availability_times'
+          post 'availability/check', to: 'availability#check_time'
+          get 'availability/:date/next', to: 'availability#next_available', as: 'next_available'
+          get 'availability/:date/details', to: 'availability#day_details', as: 'day_details'
+          get 'availability/week', to: 'availability#week_overview', as: 'week_overview'
+        end
+        
         resources :schedule_templates, only: [:index, :show, :create, :update, :destroy]
         resources :schedule_exceptions, only: [:index, :show, :create, :update, :destroy]
         resources :schedule_slots, only: [:index, :show, :create, :update, :destroy]
@@ -94,6 +104,7 @@ Rails.application.routes.draw do
           get 'available_slots', to: 'service_points#available_slots'
           get 'occupancy', to: 'service_points#occupancy'
           get 'weekly_occupancy', to: 'service_points#weekly_occupancy'
+          get 'posts_schedule', to: 'service_points#posts_schedule'
         end
         
         collection do

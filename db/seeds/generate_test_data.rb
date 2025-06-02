@@ -416,17 +416,9 @@ if Partner.count == 0
   puts "Создано партнеров: #{Partner.count}, сервисных точек: #{ServicePoint.count}, менеджеров: #{Manager.count}"
 end
 
-# 13. Генерируем слоты расписания и создаем бронирования
+# 13. Создаем тестовые бронирования для динамической системы
 if Booking.count == 0
-  puts "Создание тестовых бронирований..."
-  
-  # Генерируем слоты расписания на ближайшие 7 дней
-  start_date = Date.today
-  end_date = start_date + 6.days
-  
-  ServicePoint.all.each do |service_point|
-    ScheduleManager.generate_slots_for_period(service_point.id, start_date, end_date)
-  end
+  puts "Создание тестовых бронирований для динамической системы..."
   
   pending_status = BookingStatus.find_by(name: 'pending')
   confirmed_status = BookingStatus.find_by(name: 'confirmed')
@@ -440,13 +432,24 @@ if Booking.count == 0
     rand(2..3).times do
       service_point = ServicePoint.all.sample
       car = client.cars.sample
-      slot_date = [Date.today, Date.today + 1.day, Date.today + 2.days].sample
       
-      # Ищем свободный слот
-      available_slots = service_point.available_slots_for_date(slot_date)
+      # Выбираем случайную дату: вчера, сегодня или завтра
+      slot_date = [Date.today - 1.day, Date.today, Date.today + 1.day, Date.today + 2.days].sample
       
-      if available_slots.any?
-        slot = available_slots.sample
+      # Проверяем доступность с помощью динамической системы
+      available_times = DynamicAvailabilityService.available_times_for_date(
+        service_point.id, 
+        slot_date,
+        60 # минимум 60 минут
+      )
+      
+      if available_times.any?
+        time_slot = available_times.sample
+        start_time = time_slot[:datetime]
+        
+        # Случайная длительность обслуживания: 60, 90 или 120 минут
+        duration_minutes = [60, 90, 120].sample
+        end_time = start_time + duration_minutes.minutes
         
         # Определяем статус бронирования
         status = if slot_date < Date.today
@@ -460,22 +463,25 @@ if Booking.count == 0
         # Определяем статус оплаты
         payment_status = status == completed_status ? paid_status : not_paid_status
         
-        # Создаем бронирование
-        booking = Booking.create!(
+        # Создаем бронирование с отключением валидации доступности для тестовых данных
+        booking = Booking.new(
           client: client,
           service_point: service_point,
           car: car,
           car_type: car.car_type,
-          slot: slot,
-          booking_date: slot.slot_date,
-          start_time: slot.start_time,
-          end_time: slot.end_time,
-          status: status,
+          booking_date: slot_date,
+          start_time: start_time,
+          end_time: end_time,
+          status_id: status.id,
           payment_status: payment_status,
           total_price: rand(500..2000),
           payment_method: ["cash", "card"].sample,
           notes: ["Прошу быть внимательными", "Позвоните за 30 минут", ""].sample
         )
+        
+        # Пропускаем валидацию доступности для тестовых данных
+        booking.skip_availability_check = true
+        booking.save!
         
         # Добавляем услуги в бронирование
         service_point_services = service_point.service_point_services.sample(rand(1..3))
@@ -491,6 +497,10 @@ if Booking.count == 0
         # Пересчитываем общую стоимость
         total_price = booking.booking_services.sum { |bs| bs.price * bs.quantity }
         booking.update(total_price: total_price)
+        
+        puts "    Создано бронирование на #{slot_date} с #{start_time.strftime('%H:%M')} до #{end_time.strftime('%H:%M')}"
+      else
+        puts "    Нет доступных времен для #{service_point.name} на #{slot_date}"
       end
     end
   end

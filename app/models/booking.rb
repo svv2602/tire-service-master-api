@@ -7,7 +7,6 @@ class Booking < ApplicationRecord
   belongs_to :service_point
   belongs_to :car, class_name: 'ClientCar', optional: true
   belongs_to :car_type
-  belongs_to :slot, class_name: 'ScheduleSlot'
   belongs_to :status, class_name: 'BookingStatus', foreign_key: 'status_id', required: true
   belongs_to :payment_status, optional: true
   belongs_to :cancellation_reason, optional: true
@@ -26,9 +25,10 @@ class Booking < ApplicationRecord
   validate :end_time_after_start_time
   validate :car_belongs_to_client, if: -> { car_id.present? }
   validate :valid_status_id, unless: -> { skip_status_validation || ENV['SWAGGER_DRY_RUN'] }
+  validate :booking_time_available, on: :create, unless: -> { skip_availability_check }
   
-  # Атрибут для пропуска валидации статуса (нужен для тестов)
-  attr_accessor :skip_status_validation
+  # Атрибуты для пропуска валидаций (нужны для тестов)
+  attr_accessor :skip_status_validation, :skip_availability_check
   
   # Скоупы
   scope :upcoming, -> { where('booking_date >= ?', Date.current) }
@@ -41,10 +41,61 @@ class Booking < ApplicationRecord
   scope :completed, -> { where(status_id: BookingStatus.completed_statuses) }
   scope :canceled, -> { where(status_id: BookingStatus.canceled_statuses) }
   
+  # Скоупы для динамической проверки занятости
+  scope :overlapping_time, ->(date, start_time, end_time) {
+    where(booking_date: date)
+      .where('start_time < ? AND end_time > ?', end_time, start_time)
+      .where.not(status_id: BookingStatus.canceled_statuses)
+  }
+  
+  scope :at_time, ->(date, time) {
+    where(booking_date: date)
+      .where('start_time <= ? AND end_time > ?', time, time)
+      .where.not(status_id: BookingStatus.canceled_statuses)
+  }
+  
   # Helper method для получения имени статуса по ID
   def self.status_name_for_id(status_id)
     status = BookingStatus.find_by(id: status_id)
     status&.name || 'unknown'
+  end
+  
+  # Метод для проверки доступности времени
+  def self.available_posts_at_time(service_point_id, date, time)
+    service_point = ServicePoint.find(service_point_id)
+    total_posts = service_point.posts_count
+    occupied_posts = at_time(date, time).where(service_point_id: service_point_id).count
+    
+    total_posts - occupied_posts
+  end
+  
+  # Метод для резервирования времени (создание бронирования)
+  def self.reserve_time(service_point_id, date, start_time, end_time, client_id, car_type_id, services_duration)
+    # Проверяем доступность
+    availability = DynamicAvailabilityService.check_availability_at_time(
+      service_point_id, 
+      date, 
+      start_time, 
+      services_duration
+    )
+    
+    return { success: false, error: availability[:reason] } unless availability[:available]
+    
+    # Создаем бронирование
+    booking = new(
+      service_point_id: service_point_id,
+      booking_date: date,
+      start_time: start_time,
+      end_time: end_time,
+      client_id: client_id,
+      car_type_id: car_type_id
+    )
+    
+    if booking.save
+      { success: true, booking: booking }
+    else
+      { success: false, error: booking.errors.full_messages.join(', ') }
+    end
   end
   
   # Initialize statuses for AASM
@@ -115,6 +166,7 @@ class Booking < ApplicationRecord
   # Метод для пропуска валидаций AASM при создании в тестах
   def validation_skip_for_aasm
     self.skip_status_validation = true
+    self.skip_availability_check = true
     self
   end
   
@@ -131,6 +183,17 @@ class Booking < ApplicationRecord
   
   def update_total_price!
     update(total_price: calculate_total_price)
+  end
+  
+  # Проверка пересечения с другими бронированиями
+  def overlaps_with_other_bookings?
+    overlapping = self.class.overlapping_time(booking_date, start_time, end_time)
+                     .where(service_point_id: service_point_id)
+                     
+    # Исключаем текущее бронирование если оно уже существует
+    overlapping = overlapping.where.not(id: id) if persisted?
+    
+    overlapping.exists?
   end
   
   private
@@ -163,6 +226,31 @@ class Booking < ApplicationRecord
     # Check if status exists
     unless BookingStatus.exists?(status_id)
       errors.add(:status_id, "is invalid")
+    end
+  end
+  
+  # Валидация доступности времени бронирования
+  def booking_time_available
+    return if skip_availability_check
+    
+    # Проверяем что время в рабочих часах
+    availability = DynamicAvailabilityService.check_availability_at_time(
+      service_point_id,
+      booking_date,
+      start_time,
+      total_duration_minutes
+    )
+    
+    unless availability[:available]
+      errors.add(:base, "Время недоступно: #{availability[:reason]}")
+    end
+    
+    # Проверяем пересечения с другими бронированиями
+    if overlaps_with_other_bookings?
+      available_posts = self.class.available_posts_at_time(service_point_id, booking_date, start_time)
+      if available_posts <= 0
+        errors.add(:base, "Все посты заняты на выбранное время")
+      end
     end
   end
 end
