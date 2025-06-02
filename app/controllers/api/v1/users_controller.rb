@@ -34,7 +34,7 @@ module Api
       # GET /api/v1/users/:id
       def show
         authorize @user
-        render json: @user
+        render json: { data: @user }
       end
       
       # POST /api/v1/users
@@ -44,7 +44,7 @@ module Api
         
         if @user.save
           log_action('create', 'user', @user.id, nil, @user.as_json)
-          render json: @user, status: :created
+          render json: { data: @user }, status: :created
         else
           render json: { errors: @user.errors }, status: :unprocessable_entity
         end
@@ -58,7 +58,7 @@ module Api
         
         if @user.update(user_update_params)
           log_action('update', 'user', @user.id, old_values, @user.as_json)
-          render json: @user
+          render json: { data: @user }
         else
           render json: { errors: @user.errors }, status: :unprocessable_entity
         end
@@ -96,11 +96,25 @@ module Api
       end
       
       def user_update_params
-        # Не позволяем менять роль через этот контроллер
+        # Разрешаем изменение роли через обновление
         params.require(:user).permit(
           :email, :phone, :password, :password_confirmation, :first_name, 
-          :last_name, :middle_name, :is_active
+          :last_name, :middle_name, :role_id, :is_active
         )
+      end
+      
+      def sort_params
+        sort_by = params[:sort_by] || 'created_at'
+        sort_order = params[:sort_order] || 'desc'
+        
+        # Ограничиваем возможные поля для сортировки
+        allowed_fields = %w[id email first_name last_name created_at updated_at is_active]
+        sort_by = 'created_at' unless allowed_fields.include?(sort_by)
+        
+        # Ограничиваем порядок сортировки
+        sort_order = 'desc' unless %w[asc desc].include?(sort_order)
+        
+        "#{sort_by} #{sort_order}"
       end
     end
   end
