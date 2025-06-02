@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_02_064859) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_02_100036) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -463,6 +463,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_064859) do
     t.index ["status_id"], name: "index_service_points_on_status_id"
   end
 
+  create_table "service_posts", force: :cascade do |t|
+    t.bigint "service_point_id", null: false
+    t.integer "post_number", null: false
+    t.string "name", limit: 255
+    t.integer "slot_duration", default: 60, null: false
+    t.boolean "is_active", default: true, null: false
+    t.text "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["service_point_id", "is_active"], name: "index_service_posts_on_service_point_and_active"
+    t.index ["service_point_id", "post_number"], name: "index_service_posts_on_service_point_and_post_number", unique: true
+    t.index ["service_point_id"], name: "index_service_posts_on_service_point_id"
+  end
+
   create_table "services", force: :cascade do |t|
     t.bigint "category_id", null: false
     t.string "name", null: false
@@ -586,6 +600,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_064859) do
   add_foreign_key "service_points", "cities"
   add_foreign_key "service_points", "partners"
   add_foreign_key "service_points", "service_point_statuses", column: "status_id"
+  add_foreign_key "service_posts", "service_points"
   add_foreign_key "services", "service_categories", column: "category_id"
   add_foreign_key "system_logs", "users"
   add_foreign_key "users", "user_roles", column: "role_id"

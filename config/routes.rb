@@ -76,6 +76,18 @@ Rails.application.routes.draw do
         resources :photos, controller: 'service_point_photos'
         resources :services, only: [:index, :create, :destroy], controller: 'service_point_services'
         
+        # Добавляем маршруты для управления постами обслуживания
+        resources :service_posts, only: [:index, :show, :create, :update] do
+          member do
+            post 'activate'
+            post 'deactivate'
+          end
+          collection do
+            post 'create_defaults'
+            get 'statistics'
+          end
+        end
+        
         # Добавляем маршруты для управления расписанием
         member do
           post 'generate_schedule', to: 'service_points#generate_schedule'

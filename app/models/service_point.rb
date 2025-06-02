@@ -22,6 +22,9 @@ class ServicePoint < ApplicationRecord
   has_many :service_point_services, dependent: :destroy
   has_many :services, through: :service_point_services
   
+  # Добавляем связь с постами обслуживания
+  has_many :service_posts, dependent: :destroy
+  
   # Принимаем вложенные атрибуты
   accepts_nested_attributes_for :photos, allow_destroy: true
   accepts_nested_attributes_for :service_point_services, allow_destroy: true
