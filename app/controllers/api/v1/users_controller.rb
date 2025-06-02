@@ -23,8 +23,9 @@ module Api
         
         # Поиск по email или имени
         if params[:query].present?
-          @users = @users.where("email LIKE ? OR first_name LIKE ? OR last_name LIKE ?", 
-                               "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%")
+          query_downcase = params[:query].downcase
+          @users = @users.where("LOWER(email) LIKE ? OR LOWER(first_name) LIKE ? OR LOWER(last_name) LIKE ?", 
+                               "%#{query_downcase}%", "%#{query_downcase}%", "%#{query_downcase}%")
         end
         
         result = paginate(@users.order(created_at: :desc))
