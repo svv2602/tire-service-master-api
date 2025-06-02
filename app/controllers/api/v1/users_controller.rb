@@ -17,18 +17,18 @@ module Api
         @users = @users.with_role(params[:role]) if params[:role].present?
         
         # Фильтрация по активности
-        @users = @users.where(is_active: params[:is_active]) if params[:is_active].present?
+        if params[:active].present?
+          @users = @users.where(is_active: params[:active] == 'true')
+        end
         
         # Поиск по email или имени
         if params[:query].present?
           @users = @users.where("email LIKE ? OR first_name LIKE ? OR last_name LIKE ?", 
-                              "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%")
+                               "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%")
         end
         
-        # Сортировка
-        @users = @users.order(sort_params)
-        
-        render json: paginate(@users)
+        result = paginate(@users.order(created_at: :desc))
+        render json: result
       end
       
       # GET /api/v1/users/:id
