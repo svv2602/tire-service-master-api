@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_03_184130) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_03_191119) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -425,6 +425,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_03_184130) do
     t.bigint "service_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "price", precision: 10, scale: 2, default: "0.0", null: false
+    t.integer "duration", default: 60, null: false
+    t.boolean "is_available", default: true, null: false
     t.index ["service_id"], name: "index_service_point_services_on_service_id"
     t.index ["service_point_id", "service_id"], name: "idx_service_point_services_unique", unique: true
     t.index ["service_point_id"], name: "index_service_point_services_on_service_point_id"

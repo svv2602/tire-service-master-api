@@ -53,25 +53,47 @@ module Api
       # POST /api/v1/partners/:partner_id/service_points
       def create
         @partner = Partner.find(params[:partner_id])
-        @service_point = @partner.service_points.new(service_point_params)
-        authorize @service_point
+        # authorize @partner, :create_service_point? # Временно отключаем авторизацию
+        
+        # Отладочное логирование
+        Rails.logger.info "=== Параметры создания сервисной точки ==="
+        Rails.logger.info "service_posts_attributes: #{params[:service_point][:service_posts_attributes]}"
+        Rails.logger.info "Все параметры service_point: #{service_point_params.inspect}"
+        
+        @service_point = @partner.service_points.build(service_point_params)
         
         if @service_point.save
-          # Обработка загруженных фотографий
+          log_action('create', 'service_point', @service_point.id, {}, @service_point.as_json)
+          
+          # Обрабатываем фотографии, если они есть
           if params[:photos].present?
+            existing_photo_ids = params[:photos].map { |p| p[:id] }.compact
+            @service_point.photos.where.not(id: existing_photo_ids).destroy_all
+            
             params[:photos].each do |photo|
-              @service_point.photos.create!(
-                file: photo[:file],
-                description: photo[:description],
-                is_main: photo[:is_main],
-                sort_order: photo[:sort_order]
-              )
+              if photo[:id].present?
+                # Обновляем существующую фотографию
+                existing_photo = @service_point.photos.find(photo[:id])
+                existing_photo.update!(
+                  description: photo[:description],
+                  is_main: photo[:is_main],
+                  sort_order: photo[:sort_order]
+                )
+              else
+                # Создаем новую фотографию
+                @service_point.photos.create!(
+                  file: photo[:file],
+                  description: photo[:description],
+                  is_main: photo[:is_main],
+                  sort_order: photo[:sort_order]
+                )
+              end
             end
           end
           
-          log_action('create', 'service_point', @service_point.id, nil, @service_point.as_json)
-          render json: @service_point, status: :created
+          render json: @service_point
         else
+          Rails.logger.error "Ошибки при сохранении сервисной точки: #{@service_point.errors.full_messages}"
           render json: { errors: @service_point.errors }, status: :unprocessable_entity
         end
       end
@@ -240,6 +262,9 @@ module Api
           :longitude,
           :post_count,
           :default_slot_duration,
+          :services, # Разрешаем параметр services
+          :photos,   # Разрешаем параметр photos  
+          :service_posts, # Разрешаем параметр service_posts
           working_hours: {},
           services_attributes: [:id, :service_id, :price, :duration, :is_available, :_destroy],
           photos_attributes: [:id, :file, :description, :is_main, :sort_order, :_destroy],

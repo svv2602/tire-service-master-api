@@ -7,29 +7,40 @@ module Api
       
       # GET /api/v1/service_points/:service_point_id/services
       def index
-        @services = @service_point.services.includes(:category)
+        # Получаем записи ServicePointService вместо Service напрямую
+        @service_point_services = @service_point.service_point_services.includes(service: :category)
         
         # Фильтрация по категории
         if params[:category_id].present?
-          @services = @services.where(category_id: params[:category_id])
+          @service_point_services = @service_point_services.joins(:service).where(services: { category_id: params[:category_id] })
         end
         
         # Фильтрация по активности
         if params[:active].present?
-          @services = @services.where(is_active: params[:active] == 'true')
+          @service_point_services = @service_point_services.where(is_available: params[:active] == 'true')
         end
         
-        # Сортировка по умолчанию по имени
-        @services = @services.order(:name)
+        # Сортировка по умолчанию по имени услуги
+        @service_point_services = @service_point_services.joins(:service).order('services.name')
         
-        # Формируем JSON с текущими ценами для данной сервисной точки
-        services_with_prices = @services.map do |service|
-          service.as_json(include: :category).merge({
-            current_price: service.current_price_for_service_point(@service_point.id)
-          })
+        # Формируем JSON с полной информацией для обновления
+        services_data = @service_point_services.map do |sps|
+          service = sps.service
+          {
+            id: sps.id,  # ID записи ServicePointService для обновления
+            service_id: service.id,
+            name: service.name,
+            description: service.description,
+            category: service.category&.as_json,
+            default_duration: service.default_duration,
+            current_price: sps.price,  # Цена из ServicePointService
+            duration: sps.duration,    # Длительность из ServicePointService
+            is_available: sps.is_available,
+            price: sps.price  # Дублируем для совместимости
+          }
         end
         
-        render json: services_with_prices
+        render json: services_data
       end
       
       # POST /api/v1/service_points/:service_point_id/services
