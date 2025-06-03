@@ -9,8 +9,9 @@ class Service < ApplicationRecord
   has_many :service_points, through: :service_point_services
   
   # Валидации
-  validates :name, presence: true
+  validates :name, presence: true, uniqueness: { scope: :category_id }
   validates :default_duration, numericality: { greater_than: 0 }
+  validates :sort_order, numericality: { greater_than_or_equal_to: 0 }
   
   # Скоупы
   scope :active, -> { where(is_active: true) }

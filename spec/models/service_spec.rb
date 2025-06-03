@@ -69,7 +69,7 @@ RSpec.describe Service, type: :model do
   end
 
   describe '#current_price_for_service_point' do
-    let(:partner) { create(:partner) }
+    let(:partner) { create(:partner, :with_new_user) }
     let(:service_point) { create(:service_point, partner: partner) }
     let(:service) { create(:service) }
     let(:current_date) { Date.current }

@@ -51,7 +51,16 @@ RSpec.describe "Api::V1::Services", type: :request do
     end
     
     context "with search" do
-      let!(:searchable_service) { create(:service, name: "Замена шин R16", category: category) }
+      # Пересоздаем услуги с конкретными именами для предсказуемого тестирования
+      before do
+        # Удаляем все существующие услуги в категории
+        Service.where(category: category).delete_all
+        
+        # Создаем услуги с конкретными именами
+        create(:service, name: "Замена шин R16", category: category)
+        create(:service, name: "Балансировка колес", category: category)
+        create(:service, name: "Ремонт проколов", category: category)
+      end
       
       it "filters services by name" do
         get "/api/v1/service_categories/#{category.id}/services", 

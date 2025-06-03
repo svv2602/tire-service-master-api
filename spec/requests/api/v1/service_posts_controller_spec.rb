@@ -214,7 +214,7 @@ RSpec.describe Api::V1::ServicePostsController, type: :request do
   def auth_headers_for(user)
     token = JWT.encode(
       { user_id: user.id, exp: 1.hour.from_now.to_i, token_type: 'access' },
-      Rails.application.credentials.secret_key_base
+      Rails.application.secret_key_base
     )
     { 'Authorization' => "Bearer #{token}" }
   end

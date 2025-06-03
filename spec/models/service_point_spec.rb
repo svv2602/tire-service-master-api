@@ -41,12 +41,12 @@ RSpec.describe ServicePoint, type: :model do
   end
 
   describe 'scopes' do
-    let(:partner) { create(:partner) }
+    let(:partner) { create(:partner, :with_new_user) }
     let(:city) { create(:city) }
     let!(:active_point) { create(:service_point, is_active: true, work_status: 'working', partner: partner, city: city) }
     let!(:inactive_point) { create(:service_point, is_active: false, work_status: 'suspended') }
     let!(:maintenance_point) { create(:service_point, is_active: true, work_status: 'maintenance') }
-    let!(:other_partner_point) { create(:service_point, partner: create(:partner)) }
+    let!(:other_partner_point) { create(:service_point, partner: create(:partner, :with_new_user)) }
     let!(:other_city_point) { create(:service_point, city: create(:city)) }
     let(:amenity1) { create(:amenity) }
     let(:amenity2) { create(:amenity) }

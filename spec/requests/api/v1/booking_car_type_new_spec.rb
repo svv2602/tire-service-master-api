@@ -12,15 +12,6 @@ RSpec.describe "API Booking with Car Type", type: :request do
   let(:client) { create(:client) }
   let(:service_point) { create(:service_point) }
   let(:suv) { @suv_type } # Используем существующий car_type
-  let(:slot) do 
-    create(:schedule_slot, 
-           service_point: service_point, 
-           slot_date: Date.tomorrow,
-           start_time: "10:00",
-           end_time: "11:00",
-           post_number: rand(1..999), # Рандомный номер для уникальности
-           is_available: true)
-  end
   
   let(:auth_token) do
     user = client.user
@@ -43,22 +34,26 @@ RSpec.describe "API Booking with Car Type", type: :request do
       status.is_active = true
     end
     
-    # Создаем бронирование с использованием типа автомобиля
+    # Создаем бронирование с использованием типа автомобиля (новая система без слотов)
+    booking_date = Date.tomorrow
+    start_time = Time.parse("#{booking_date} 10:00")
+    end_time = Time.parse("#{booking_date} 11:00")
+    
     booking = Booking.new(
       client: client,
       service_point: service_point,
       car_type: suv,
-      slot: slot,
-      booking_date: Date.tomorrow,
-      start_time: "10:00",
-      end_time: "11:00",
-      status_id: booking_status.id, # Используем существующий статус
-      payment_status_id: payment_status.id, # Используем существующий статус оплаты
+      booking_date: booking_date,
+      start_time: start_time,
+      end_time: end_time,
+      status_id: booking_status.id,
+      payment_status_id: payment_status.id,
       notes: "Need SUV service"
     )
     
-    # Пропускаем валидации и сохраняем
-    booking.save(validate: false)
+    # Пропускаем валидации доступности для тестовых данных
+    booking.skip_availability_check = true
+    booking.save!
     
     # Проверяем API для получения созданного бронирования
     get "/api/v1/bookings/#{booking.id}",

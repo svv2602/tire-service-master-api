@@ -20,8 +20,8 @@ RSpec.describe DynamicAvailabilityService, type: :service do
       service_point: service_point,
       weekday: weekday,
       is_working_day: true,
-      opening_time: Time.parse('09:00'),
-      closing_time: Time.parse('18:00')
+      opening_time: '09:00:00',
+      closing_time: '18:00:00'
     )
   end
   

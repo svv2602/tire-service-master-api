@@ -8,8 +8,12 @@ module Api
       
       # Метод для пагинации
       def paginate(collection)
-        page = params[:page].to_i if params[:page].present?
-        per_page = (params[:per_page] || 20).to_i
+        page = params[:page].present? ? params[:page].to_i : 1
+        per_page = params[:per_page].present? ? params[:per_page].to_i : 20
+        
+        # Ограничиваем per_page
+        per_page = [per_page, 100].min
+        per_page = [per_page, 1].max
         
         begin
           pagy, items = pagy(collection, page: page, items: per_page)
@@ -17,19 +21,20 @@ module Api
             data: items,
             pagination: {
               current_page: pagy.page,
-              total_pages: [pagy.pages, 1].max, # Минимум 1 страница если есть данные
+              total_pages: pagy.pages,
               total_count: pagy.count,
               per_page: pagy.vars[:items]
             }
           }
         rescue Pagy::OverflowError
-          # Если запрошенная страница больше максимальной, возвращаем пустой список
+          # Если запрошенная страница больше максимальной, возвращаем последнюю страницу
           total_count = collection.count
-          total_pages = [(total_count.to_f / per_page).ceil, 1].max # Минимум 1 страница если есть данные
+          total_pages = [(total_count.to_f / per_page).ceil, 1].max
+          last_page_items = collection.offset((total_pages - 1) * per_page).limit(per_page)
           { 
-            data: [],
+            data: last_page_items,
             pagination: {
-              current_page: [page, total_pages].min,
+              current_page: total_pages,
               total_pages: total_pages,
               total_count: total_count,
               per_page: per_page

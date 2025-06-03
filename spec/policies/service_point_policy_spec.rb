@@ -153,11 +153,8 @@ RSpec.describe ServicePointPolicy, type: :policy do
 
     permissions_for_scope :resolve do
       it 'includes only active service points' do
-        active_status = create(:service_point_status, name: 'active')
-        inactive_status = create(:service_point_status, name: 'inactive')
-        
-        active_point = create(:service_point, status: active_status)
-        inactive_point = create(:service_point, status: inactive_status)
+        active_point = create(:service_point, is_active: true, work_status: 'working')
+        inactive_point = create(:service_point, is_active: false, work_status: 'suspended')
         
         scope = described_class::Scope.new(user, ServicePoint).resolve
         expect(scope).to include(active_point)
@@ -183,11 +180,8 @@ RSpec.describe ServicePointPolicy, type: :policy do
 
     permissions_for_scope :resolve do
       it 'includes only active service points' do
-        active_status = create(:service_point_status, name: 'active')
-        inactive_status = create(:service_point_status, name: 'inactive')
-        
-        active_point = create(:service_point, status: active_status)
-        inactive_point = create(:service_point, status: inactive_status)
+        active_point = create(:service_point, is_active: true, work_status: 'working')
+        inactive_point = create(:service_point, is_active: false, work_status: 'suspended')
         
         scope = described_class::Scope.new(user, ServicePoint).resolve
         expect(scope).to include(active_point)
