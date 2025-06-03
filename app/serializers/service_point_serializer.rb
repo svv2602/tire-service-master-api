@@ -2,7 +2,7 @@ class ServicePointSerializer < ActiveModel::Serializer
   attributes :id, :name, :description, :address, :latitude, :longitude, :contact_phone, 
              :is_active, :work_status, :status_display, :post_count, :default_slot_duration, 
              :rating, :total_clients_served, :average_rating, :cancellation_rate, :created_at, :updated_at,
-             :posts_count, :service_posts_summary
+             :posts_count, :service_posts_summary, :service_posts
   
   belongs_to :partner
   belongs_to :city
@@ -25,6 +25,22 @@ class ServicePointSerializer < ActiveModel::Serializer
         name: post.name,
         slot_duration: post.slot_duration,
         is_active: post.is_active
+      }
+    end
+  end
+  
+  def service_posts
+    object.service_posts.order(:post_number).map do |post|
+      {
+        id: post.id,
+        service_point_id: post.service_point_id,
+        post_number: post.post_number,
+        name: post.name,
+        description: post.description,
+        slot_duration: post.slot_duration,
+        is_active: post.is_active,
+        created_at: post.created_at,
+        updated_at: post.updated_at
       }
     end
   end
