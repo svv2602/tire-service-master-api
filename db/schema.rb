@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_03_024154) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_03_184130) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -460,6 +460,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_03_024154) do
     t.datetime "updated_at", null: false
     t.boolean "is_active", default: true, null: false
     t.string "work_status", default: "working", null: false
+    t.json "working_hours"
     t.index ["city_id"], name: "index_service_points_on_city_id"
     t.index ["is_active", "work_status"], name: "index_service_points_on_is_active_and_work_status"
     t.index ["is_active"], name: "index_service_points_on_is_active"
