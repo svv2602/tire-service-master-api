@@ -242,7 +242,8 @@ module Api
           :default_slot_duration,
           :working_hours,
           services_attributes: [:id, :service_id, :price, :duration, :is_available, :_destroy],
-          photos_attributes: [:id, :file, :description, :is_main, :sort_order, :_destroy]
+          photos_attributes: [:id, :file, :description, :is_main, :sort_order, :_destroy],
+          service_posts_attributes: [:id, :name, :description, :slot_duration, :is_active, :post_number, :_destroy]
         )
       end
       

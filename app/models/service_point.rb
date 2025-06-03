@@ -28,6 +28,7 @@ class ServicePoint < ApplicationRecord
   # Принимаем вложенные атрибуты
   accepts_nested_attributes_for :photos, allow_destroy: true
   accepts_nested_attributes_for :service_point_services, allow_destroy: true
+  accepts_nested_attributes_for :service_posts, allow_destroy: true
   
   # Явно объявляем тип атрибута для enum
   attribute :work_status, :string, default: 'working'
