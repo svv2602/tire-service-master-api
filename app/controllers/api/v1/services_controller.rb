@@ -117,8 +117,13 @@ module Api
       end
       
       def authorize_admin
-        unless current_user && current_user.admin?
+        unless current_user
           render json: { error: 'Unauthorized' }, status: :unauthorized
+          return
+        end
+        
+        unless current_user.admin?
+          render json: { error: 'Forbidden' }, status: :forbidden
         end
       end
     end

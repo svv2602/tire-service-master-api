@@ -286,9 +286,8 @@ RSpec.describe "Api::V1::Services", type: :request do
   private
   
   def generate_token(user)
-    # Предполагаем, что у вас есть метод для генерации JWT токена
-    # Адаптируйте под вашу систему аутентификации
-    payload = { user_id: user.id, exp: 24.hours.from_now.to_i }
-    JWT.encode(payload, Rails.application.credentials.secret_key_base)
+    # Используем тот же метод что и в Auth::JsonWebToken
+    payload = { user_id: user.id, exp: 1.hour.from_now.to_i, token_type: 'access' }
+    JWT.encode(payload, Rails.application.secret_key_base)
   end
 end
