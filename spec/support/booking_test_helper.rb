@@ -37,7 +37,7 @@ module BookingTestHelper
     city = attributes[:city] || create(:city, region: region)
     
     # Create a valid partner with a city
-    partner = attributes[:partner] || create(:partner)
+    partner = attributes[:partner] || create(:partner, :with_new_user)
     
     # Create a service point with the city and partner
     service_point = attributes[:service_point] || create(:service_point, city: city, partner: partner)

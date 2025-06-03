@@ -8,7 +8,6 @@ RSpec.describe Booking, type: :model do
     it { should belong_to(:service_point) }
     it { should belong_to(:car).class_name('ClientCar').optional }
     it { should belong_to(:car_type) }
-    it { should belong_to(:slot).class_name('ScheduleSlot') }
     it { should belong_to(:status).class_name('BookingStatus').without_validating_presence }
     it { should belong_to(:payment_status).optional }
     it { should belong_to(:cancellation_reason).optional }
@@ -31,14 +30,15 @@ RSpec.describe Booking, type: :model do
       end
 
       it 'is valid when end_time is after start_time' do
-        # Create a service point
-        service_point = create(:service_point)
+        # Create a service point with proper partner
+        partner = create(:partner, :with_new_user)
+        city = create(:city)
+        service_point = create(:service_point, partner: partner, city: city)
+        
         # Create a client
         client = create(:client)
         # Create a car type
         car_type = create(:car_type)
-        # Create a slot
-        slot = create(:schedule_slot, service_point: service_point)
         
         # Create a booking with valid status
         booking = build(:booking, 
@@ -47,8 +47,7 @@ RSpec.describe Booking, type: :model do
                         status_id: BookingStatus.pending_id,
                         service_point: service_point,
                         client: client,
-                        car_type: car_type,
-                        slot: slot)
+                        car_type: car_type)
         
         # Skip validation in the test environment
         ENV['SWAGGER_DRY_RUN'] = 'true'
@@ -77,10 +76,11 @@ RSpec.describe Booking, type: :model do
 
       it 'is valid when the car belongs to the client' do
         # Create required associations
-        service_point = create(:service_point)
+        partner = create(:partner, :with_new_user)
+        city = create(:city)
+        service_point = create(:service_point, partner: partner, city: city)
         client = create(:client)
         car_type = create(:car_type)
-        slot = create(:schedule_slot, service_point: service_point)
         
         # Create car brand and model
         brand = create(:car_brand)
@@ -98,8 +98,7 @@ RSpec.describe Booking, type: :model do
                      car: car, 
                      status_id: BookingStatus.pending_id,
                      service_point: service_point,
-                     car_type: car_type,
-                     slot: slot)
+                     car_type: car_type)
         
         # Skip validation in the test environment
         ENV['SWAGGER_DRY_RUN'] = 'true'
@@ -112,10 +111,11 @@ RSpec.describe Booking, type: :model do
 
       it 'is valid when car_id is not present' do
         # Create required associations
-        service_point = create(:service_point)
+        partner = create(:partner, :with_new_user)
+        city = create(:city)
+        service_point = create(:service_point, partner: partner, city: city)
         client = create(:client)
         car_type = create(:car_type)
-        slot = create(:schedule_slot, service_point: service_point)
         
         # Create the booking
         booking = build(:booking, 
@@ -123,8 +123,7 @@ RSpec.describe Booking, type: :model do
                       status_id: BookingStatus.pending_id,
                       service_point: service_point,
                       client: client,
-                      car_type: car_type,
-                      slot: slot)
+                      car_type: car_type)
         
         # Skip validation in the test environment
         ENV['SWAGGER_DRY_RUN'] = 'true'
@@ -143,7 +142,9 @@ RSpec.describe Booking, type: :model do
     let!(:upcoming_booking) { create_booking_with_status('pending', booking_date: Date.current + 1.day) }
     let!(:client) { create(:client) }
     let!(:client_booking) { create_booking_with_status('pending', client: client) }
-    let!(:service_point) { create(:service_point) }
+    let!(:partner) { create(:partner, :with_new_user) }
+    let!(:city) { create(:city) }
+    let!(:service_point) { create(:service_point, partner: partner, city: city) }
     let!(:service_point_booking) { create_booking_with_status('pending', service_point: service_point) }
     let!(:pending_booking) { create_booking_with_status('pending') }
     let!(:confirmed_booking) { create_booking_with_status('confirmed') }

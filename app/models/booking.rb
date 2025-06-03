@@ -172,6 +172,8 @@ class Booking < ApplicationRecord
   
   # Методы
   def total_duration_minutes
+    return 0 unless start_time && end_time
+    
     minutes_start = start_time.hour * 60 + start_time.min
     minutes_end = end_time.hour * 60 + end_time.min
     minutes_end - minutes_start
@@ -232,6 +234,7 @@ class Booking < ApplicationRecord
   # Валидация доступности времени бронирования
   def booking_time_available
     return if skip_availability_check
+    return unless service_point_id && booking_date && start_time && end_time
     
     # Проверяем что время в рабочих часах
     availability = DynamicAvailabilityService.check_availability_at_time(

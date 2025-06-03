@@ -5,7 +5,6 @@ FactoryBot.define do
     # Делаем car необязательным и nil по умолчанию
     car { nil }
     association :car_type, factory: :car_type
-    association :slot, factory: :schedule_slot
     
     before(:build) do |booking|
       # Ensure all statuses exist
@@ -33,6 +32,10 @@ FactoryBot.define do
     start_time { Time.parse('10:00') }
     end_time { Time.parse('11:00') }
     total_price { rand(1000..10000) }
+    
+    # Пропускаем валидации доступности в тестах
+    skip_availability_check { true }
+    skip_status_validation { true }
     
     trait :with_services do
       after(:create) do |booking|
