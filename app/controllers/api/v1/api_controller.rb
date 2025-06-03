@@ -16,14 +16,26 @@ module Api
         per_page = [per_page, 1].max
         
         begin
-          pagy, items = pagy(collection, page: page, items: per_page)
+          # Создаем Pagy с чистыми параметрами, используя :limit
+          total_count = collection.count
+          pagy_vars = {
+            count: total_count,
+            page: page,
+            limit: per_page,  # Используем :limit вместо :items
+            outset: 0
+          }
+          pagy = Pagy.new(**pagy_vars)
+          
+          offset = (pagy.page - 1) * pagy.vars[:limit]
+          items = collection.offset(offset).limit(pagy.vars[:limit])
+          
           { 
             data: items,
             pagination: {
               current_page: pagy.page,
               total_pages: pagy.pages,
               total_count: pagy.count,
-              per_page: pagy.vars[:items]
+              per_page: pagy.vars[:limit]
             }
           }
         rescue Pagy::OverflowError

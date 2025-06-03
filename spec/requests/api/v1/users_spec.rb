@@ -374,8 +374,8 @@ RSpec.describe "API V1 Users", type: :request do
         get '/api/v1/users', headers: admin_headers, params: { page: 1, per_page: 10 }
       end
 
-      # Временно пропускаем этот тест из-за проблем с настройкой Pagy
-      xit 'returns correct pagination metadata' do
+      # Тестируем пагинацию после исправления Pagy
+      it 'returns correct pagination metadata' do
         expect(json['pagination']).to include(
           'current_page' => 1,
           'per_page' => 10
@@ -402,7 +402,7 @@ RSpec.describe "API V1 Users", type: :request do
         get '/api/v1/users', headers: admin_headers, params: { page: 2, per_page: 5 }
       end
 
-      xit 'returns correct page' do
+      it 'returns correct page' do
         expect(json['pagination']['current_page']).to eq(2)
         expect(json['data'].length).to eq(5)
       end
