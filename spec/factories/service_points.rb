@@ -10,7 +10,7 @@ FactoryBot.define do
     default_slot_duration { 30 }
     is_active { true }
     work_status { 'working' }
-    partner
+    partner { association :partner, :with_new_user }
     city
     total_clients_served { 0 }
     average_rating { 0.0 }

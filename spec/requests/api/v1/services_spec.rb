@@ -1,8 +1,8 @@
 require 'rails_helper'
 
 RSpec.describe "Api::V1::Services", type: :request do
-  let(:admin) { create(:user, role: 'admin') }
-  let(:user) { create(:user, role: 'client') }
+  let(:admin) { create(:user, :admin) }
+  let(:user) { create(:user, :client) }
   let(:admin_headers) { { 'Authorization' => "Bearer #{generate_token(admin)}" } }
   let(:user_headers) { { 'Authorization' => "Bearer #{generate_token(user)}" } }
   

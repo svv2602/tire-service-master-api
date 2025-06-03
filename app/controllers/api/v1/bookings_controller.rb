@@ -466,7 +466,9 @@ module Api
         begin
           if @booking.confirm!
             # Обновляем метрики сервисной точки
-            @booking.service_point.recalculate_metrics!
+            if @booking.service_point.respond_to?(:recalculate_metrics!)
+              @booking.service_point.recalculate_metrics!
+            end
             
             log_action('confirm', 'booking', @booking.id, { status: @booking.status_id_was }, { status: @booking.status_id })
             render json: @booking
@@ -547,11 +549,13 @@ module Api
               @booking.update(cancellation_reason_id: reason_id, cancellation_comment: comment)
             end
             
-            # Освобождение слота
-            @booking.slot&.update(is_available: true)
+            # Убираем ссылку на slot - больше не используется
+            # @booking.slot&.update(is_available: true)
             
             # Обновляем метрики сервисной точки
-            @booking.service_point.recalculate_metrics!
+            if @booking.service_point.respond_to?(:recalculate_metrics!)
+              @booking.service_point.recalculate_metrics!
+            end
             
             log_action('cancel', 'booking', @booking.id, { status: @booking.status_id_was }, { status: @booking.status_id, reason_id: reason_id })
           end
@@ -586,7 +590,9 @@ module Api
         begin
           if @booking.complete!
             # Обновляем метрики сервисной точки
-            @booking.service_point.recalculate_metrics!
+            if @booking.service_point.respond_to?(:recalculate_metrics!)
+              @booking.service_point.recalculate_metrics!
+            end
             
             log_action('complete', 'booking', @booking.id, { status: @booking.status_id_was }, { status: @booking.status_id })
             render json: @booking
@@ -622,7 +628,9 @@ module Api
         begin
           if @booking.mark_no_show!
             # Обновляем метрики сервисной точки
-            @booking.service_point.recalculate_metrics!
+            if @booking.service_point.respond_to?(:recalculate_metrics!)
+              @booking.service_point.recalculate_metrics!
+            end
             
             log_action('no_show', 'booking', @booking.id, { status: @booking.status_id_was }, { status: @booking.status_id })
             render json: @booking
@@ -801,11 +809,13 @@ module Api
               cancellation_comment: comment
             )
             
-            # Освобождение слота
-            @booking.slot&.update(is_available: true)
+            # Убираем ссылку на slot - больше не используется
+            # @booking.slot&.update(is_available: true)
             
             # Обновление метрик сервисной точки
-            @booking.service_point.recalculate_metrics!
+            if @booking.service_point.respond_to?(:recalculate_metrics!)
+              @booking.service_point.recalculate_metrics!
+            end
             
             log_action('cancel', 'booking', @booking.id, old_values, @booking.as_json)
             render json: @booking

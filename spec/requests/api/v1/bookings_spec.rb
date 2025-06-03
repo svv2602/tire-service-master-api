@@ -79,7 +79,8 @@ RSpec.describe 'API V1 Bookings', type: :request do
   let(:headers) { generate_auth_headers(client_user) }
   let(:partner_headers) { generate_auth_headers(partner_user) }
   let(:service_point) { create(:service_point, partner: partner_user.partner) }
-  let(:slot) { create(:schedule_slot, service_point: service_point) }
+  # Убираем slot - больше не используется
+  # let(:slot) { create(:schedule_slot, service_point: service_point) }
   
   # Создадим сервис с правильным сервисным пунктом
   let(:service) do
@@ -222,7 +223,8 @@ RSpec.describe 'API V1 Bookings', type: :request do
           start_time: '10:00',
           end_time: '11:00',
           car_type_id: create(:car_type).id,
-          slot_id: slot.id,
+          # Убираем slot_id - больше не используется
+          # slot_id: slot.id,
           services: [
             { id: service.id, quantity: 1 }
           ]
