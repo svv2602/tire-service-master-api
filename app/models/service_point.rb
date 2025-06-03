@@ -41,11 +41,14 @@ class ServicePoint < ApplicationRecord
     suspended: 'suspended'                 # приостановлена
   }
   
+  # Custom setter для совместимости с фронтендом
+  def services_attributes=(attributes)
+    self.service_point_services_attributes = attributes
+  end
+  
   # Валидации
   validates :name, presence: true
   validates :address, presence: true
-  validates :post_count, numericality: { greater_than: 0 }
-  validates :default_slot_duration, numericality: { greater_than: 0 }
   validates :work_status, presence: true, inclusion: { in: work_statuses.keys }
   
   # Геолокация
