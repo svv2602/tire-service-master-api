@@ -41,8 +41,8 @@ begin
     },
     {
       email: 'admin@test.com',  # Основной тестовый пользователь
-      password: 'admin',
-      password_confirmation: 'admin',
+      password: 'admin123',
+      password_confirmation: 'admin123',
       is_active: true,
       first_name: 'Тестовый',
       last_name: 'Админ',
@@ -158,7 +158,7 @@ begin
   puts ""
   puts "=== ТЕСТОВЫЕ УЧЕТНЫЕ ДАННЫЕ ДЛЯ ВХОДА ==="
   puts "Админ 1: admin@example.com / password123"
-  puts "Админ 2: admin@test.com / admin"  
+  puts "Админ 2: admin@test.com / admin123"  
   puts "Тест:    test@test.com / test123"
   puts "Менеджер: manager@test.com / manager123"
   puts "Оператор: operator@test.com / operator123"
