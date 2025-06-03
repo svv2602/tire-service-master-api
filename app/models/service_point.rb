@@ -30,6 +30,9 @@ class ServicePoint < ApplicationRecord
   accepts_nested_attributes_for :service_point_services, allow_destroy: true
   accepts_nested_attributes_for :service_posts, allow_destroy: true
   
+  # Callback для перенумерации постов после сохранения
+  after_save :renumber_service_posts
+  
   # Явно объявляем тип атрибута для enum
   attribute :work_status, :string, default: 'working'
   
@@ -211,5 +214,11 @@ class ServicePoint < ApplicationRecord
     
     cancelled = bookings.joins(:status).where(booking_statuses: { name: ['canceled_by_client', 'canceled_by_partner', 'no_show'] }).count
     (cancelled.to_f / total) * 100
+  end
+  
+  def renumber_service_posts
+    service_posts.order(created_at: :asc).each_with_index do |post, index|
+      post.update(post_number: index + 1)
+    end
   end
 end

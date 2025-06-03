@@ -4,11 +4,10 @@ class ServicePost < ApplicationRecord
   has_many :schedule_slots, dependent: :destroy
   
   # Валидации
-  validates :post_number, presence: true, 
-            uniqueness: { scope: :service_point_id, 
-                         message: "Номер поста должен быть уникальным в рамках точки обслуживания" }
+  validates :post_number, presence: true
   validates :post_number, numericality: { greater_than: 0, 
                                          message: "Номер поста должен быть положительным числом" }
+  validate :unique_post_number_within_service_point
   validates :name, presence: true, length: { maximum: 255 }
   validates :slot_duration, presence: true, 
             numericality: { greater_than: 15, less_than_or_equal_to: 480,
@@ -58,5 +57,22 @@ class ServicePost < ApplicationRecord
                                  .count
     
     (booked_slots.to_f / total_slots * 100).round(2)
+  end
+
+  private
+
+  # Собственная валидация уникальности post_number которая игнорирует записи помеченные на удаление
+  def unique_post_number_within_service_point
+    return if marked_for_destruction? # Не валидируем если запись помечена на удаление
+    return if post_number.blank? || service_point_id.blank?
+
+    # Проверяем есть ли другие посты с таким же номером в той же сервисной точке
+    # Исключаем текущую запись если она уже сохранена
+    existing_posts = ServicePost.where(service_point_id: service_point_id, post_number: post_number)
+    existing_posts = existing_posts.where.not(id: id) if persisted?
+    
+    if existing_posts.exists?
+      errors.add(:post_number, "Номер поста должен быть уникальным в рамках точки обслуживания")
+    end
   end
 end
