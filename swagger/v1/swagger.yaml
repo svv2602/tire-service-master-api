@@ -2241,6 +2241,437 @@ paths:
         '422':
           description: Невозможно удалить модель
 
+  "/api/v1/service_points/work_statuses":
+    get:
+      summary: Получить список статусов работы сервисных точек
+      description: Возвращает список доступных статусов работы для сервисных точек (working, temporarily_closed, maintenance, suspended)
+      tags:
+        - Service Points
+      responses:
+        '200':
+          description: Список статусов работы
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkStatus'
+  
+  "/api/v1/service_points/{service_point_id}/service_posts":
+    get:
+      summary: Получить список постов обслуживания
+      description: Возвращает список всех постов обслуживания для указанной сервисной точки
+      tags:
+        - Service Posts
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список постов обслуживания
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServicePost'
+        '404':
+          description: Сервисная точка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Создать новый пост обслуживания
+      description: Создает новый пост обслуживания для указанной сервисной точки
+      tags:
+        - Service Posts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service_post:
+                  $ref: '#/components/schemas/ServicePostRequest'
+      responses:
+        '201':
+          description: Пост обслуживания создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePost'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Ошибки валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  "/api/v1/service_points/{service_point_id}/service_posts/{id}":
+    get:
+      summary: Получить информацию о посте обслуживания
+      description: Возвращает детальную информацию о конкретном посте обслуживания
+      tags:
+        - Service Posts
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          description: ID поста обслуживания
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Информация о посте обслуживания
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePost'
+        '404':
+          description: Пост обслуживания не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Обновить пост обслуживания
+      description: Обновляет информацию о посте обслуживания
+      tags:
+        - Service Posts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          description: ID поста обслуживания
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service_post:
+                  $ref: '#/components/schemas/ServicePostRequest'
+      responses:
+        '200':
+          description: Пост обслуживания обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePost'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Пост обслуживания не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Ошибки валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+    delete:
+      summary: Удалить пост обслуживания
+      description: Удаляет пост обслуживания
+      tags:
+        - Service Posts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          description: ID поста обслуживания
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Пост обслуживания удален
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Пост обслуживания не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  "/api/v1/service_points/{service_point_id}/service_posts/{id}/activate":
+    post:
+      summary: Активировать пост обслуживания
+      description: Устанавливает пост обслуживания в активное состояние
+      tags:
+        - Service Posts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          description: ID поста обслуживания
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Пост обслуживания активирован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Пост активирован"
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Пост обслуживания не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  "/api/v1/service_points/{service_point_id}/service_posts/{id}/deactivate":
+    post:
+      summary: Деактивировать пост обслуживания
+      description: Устанавливает пост обслуживания в неактивное состояние
+      tags:
+        - Service Posts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          description: ID поста обслуживания
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Пост обслуживания деактивирован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Пост деактивирован"
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Пост обслуживания не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  "/api/v1/service_points/{service_point_id}/service_posts/create_defaults":
+    post:
+      summary: Создать стандартные посты обслуживания
+      description: Создает набор стандартных постов обслуживания для сервисной точки
+      tags:
+        - Service Posts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                post_count:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 3
+                  description: Количество постов для создания
+                slot_duration:
+                  type: integer
+                  minimum: 15
+                  maximum: 480
+                  default: 60
+                  description: Длительность слота в минутах
+      responses:
+        '201':
+          description: Стандартные посты созданы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Создано 3 постов"
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServicePost'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Ошибки при создании (например, дублирующиеся посты)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Частичное создание постов"
+                  created_count:
+                    type: integer
+                    example: 2
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Пост 1 уже существует"]
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServicePost'
+
+  "/api/v1/service_points/{service_point_id}/service_posts/statistics":
+    get:
+      summary: Получить статистику постов обслуживания
+      description: Возвращает статистическую информацию о постах обслуживания
+      tags:
+        - Service Posts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service_point_id
+          in: path
+          required: true
+          description: ID сервисной точки
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Статистика постов обслуживания
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_posts:
+                    type: integer
+                    description: Общее количество постов
+                  active_posts:
+                    type: integer
+                    description: Количество активных постов
+                  inactive_posts:
+                    type: integer
+                    description: Количество неактивных постов
+                  average_slot_duration:
+                    type: number
+                    format: float
+                    description: Средняя длительность слота
+                  posts_by_duration:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                    description: Количество постов по длительности слотов
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2468,6 +2899,109 @@ components:
           type: integer
         per_page:
           type: integer
+    WorkStatus:
+      type: object
+      properties:
+        value:
+          type: string
+          enum: [working, temporarily_closed, maintenance, suspended]
+          description: Значение статуса работы
+        label:
+          type: string
+          description: Отображаемое название статуса
+        description:
+          type: string
+          description: Описание статуса
+      required:
+        - value
+        - label
+        - description
+    ServicePost:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Уникальный идентификатор поста обслуживания
+        post_number:
+          type: integer
+          description: Номер поста
+        name:
+          type: string
+          description: Название поста
+        slot_duration:
+          type: integer
+          description: Длительность слота в минутах
+        description:
+          type: string
+          nullable: true
+          description: Описание поста
+        is_active:
+          type: boolean
+          description: Активен ли пост
+        created_at:
+          type: string
+          format: date-time
+          description: Дата создания
+        updated_at:
+          type: string
+          format: date-time
+          description: Дата обновления
+      required:
+        - id
+        - post_number
+        - name
+        - slot_duration
+        - is_active
+        - created_at
+        - updated_at
+    ServicePostRequest:
+      type: object
+      properties:
+        post_number:
+          type: integer
+          minimum: 1
+          description: Номер поста
+        name:
+          type: string
+          minLength: 1
+          description: Название поста
+        slot_duration:
+          type: integer
+          minimum: 15
+          maximum: 480
+          description: Длительность слота в минутах
+        description:
+          type: string
+          nullable: true
+          description: Описание поста
+        is_active:
+          type: boolean
+          default: true
+          description: Активен ли пост
+      required:
+        - post_number
+        - name
+        - slot_duration
+    ValidationErrorResponse:
+      type: object
+      properties:
+        errors:
+          type: object
+          description: Ошибки валидации по полям
+      required:
+      - errors
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Описание ошибки
+        message:
+          type: string
+          description: Сообщение об ошибке
+      required:
+        - error
+
 tags:
 - name: Authentication
   description: Аутентификация и авторизация пользователей
@@ -2479,6 +3013,8 @@ tags:
   description: Управление партнерами
 - name: Service Points
   description: Управление сервисными точками
+- name: Service Posts
+  description: Управление постами обслуживания сервисных точек
 - name: Bookings
   description: Управление бронированиями
 - name: Photos

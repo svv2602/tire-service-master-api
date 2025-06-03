@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_02_104036) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_03_024154) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -450,7 +450,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_104036) do
     t.decimal "latitude", precision: 10, scale: 8
     t.decimal "longitude", precision: 11, scale: 8
     t.string "contact_phone"
-    t.bigint "status_id", default: 1, null: false
     t.integer "post_count", default: 1
     t.integer "default_slot_duration", default: 60
     t.decimal "rating", precision: 3, scale: 2, default: "0.0"
@@ -459,10 +458,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_104036) do
     t.decimal "cancellation_rate", precision: 5, scale: 2, default: "0.0"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "is_active", default: true, null: false
+    t.string "work_status", default: "working", null: false
     t.index ["city_id"], name: "index_service_points_on_city_id"
+    t.index ["is_active", "work_status"], name: "index_service_points_on_is_active_and_work_status"
+    t.index ["is_active"], name: "index_service_points_on_is_active"
     t.index ["latitude", "longitude"], name: "idx_service_points_location"
     t.index ["partner_id"], name: "index_service_points_on_partner_id"
-    t.index ["status_id"], name: "index_service_points_on_status_id"
+    t.index ["work_status"], name: "index_service_points_on_work_status"
   end
 
   create_table "service_posts", force: :cascade do |t|
@@ -601,7 +604,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_02_104036) do
   add_foreign_key "service_point_services", "services"
   add_foreign_key "service_points", "cities"
   add_foreign_key "service_points", "partners"
-  add_foreign_key "service_points", "service_point_statuses", column: "status_id"
   add_foreign_key "service_posts", "service_points"
   add_foreign_key "services", "service_categories", column: "category_id"
   add_foreign_key "system_logs", "users"

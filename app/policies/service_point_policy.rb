@@ -31,13 +31,16 @@ class ServicePointPolicy < ApplicationPolicy
   class Scope < Scope
     def resolve
       if user.nil? || user.client?
-        scope.active
+        # Неаутентифицированные пользователи и клиенты видят только активные работающие точки
+        scope.available_for_booking
       elsif user.admin?
+        # Админы видят все точки
         scope.all
       elsif user.partner?
+        # Партнеры видят только свои точки (в любом состоянии)
         scope.by_partner(user.partner&.id)
       elsif user.manager?
-        # Use a join to find service points associated with this manager
+        # Менеджеры видят точки, к которым у них есть доступ
         if user.manager&.id
           scope.joins(:manager_service_points)
                .where(manager_service_points: { manager_id: user.manager.id })

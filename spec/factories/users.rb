@@ -1,6 +1,6 @@
 FactoryBot.define do
   factory :user do
-    email { Faker::Internet.unique.email }
+    sequence(:email) { |n| "user#{n}@example.com" }
     password { 'password123' }
     first_name { Faker::Name.first_name }
     last_name { Faker::Name.last_name }
@@ -129,6 +129,14 @@ FactoryBot.define do
         client_role = UserRole.find_by(name: 'client') || 
                      FactoryBot.create(:user_role, name: 'client', description: 'Client role for users who book services')
         user.role_id = client_role.id
+      end
+    end
+
+    trait :partner do
+      after(:build) do |user|
+        partner_role = UserRole.find_by(name: 'partner') || 
+                      FactoryBot.create(:user_role, name: 'partner', description: 'Partner role for business owners')
+        user.role_id = partner_role.id
       end
     end
   end

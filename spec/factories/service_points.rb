@@ -8,9 +8,10 @@ FactoryBot.define do
     description { Faker::Lorem.paragraph }
     post_count { rand(1..5) }
     default_slot_duration { 30 }
+    is_active { true }
+    work_status { 'working' }
     partner
     city
-    association :status, factory: :service_point_status
     total_clients_served { 0 }
     average_rating { 0.0 }
     cancellation_rate { 0.0 }

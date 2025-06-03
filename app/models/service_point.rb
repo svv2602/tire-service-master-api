@@ -2,7 +2,7 @@ class ServicePoint < ApplicationRecord
   # Связи
   belongs_to :partner
   belongs_to :city
-  belongs_to :status, class_name: 'ServicePointStatus', foreign_key: 'status_id'
+  # Убираем связь со старой таблицей статусов - теперь используем is_active и work_status
   has_many :photos, class_name: 'ServicePointPhoto', dependent: :destroy
   has_many :service_point_amenities, dependent: :destroy
   has_many :amenities, through: :service_point_amenities
@@ -29,19 +29,33 @@ class ServicePoint < ApplicationRecord
   accepts_nested_attributes_for :photos, allow_destroy: true
   accepts_nested_attributes_for :service_point_services, allow_destroy: true
   
+  # Явно объявляем тип атрибута для enum
+  attribute :work_status, :string, default: 'working'
+  
+  # Enum для рабочего состояния
+  enum :work_status, {
+    working: 'working',                    # работает в обычном режиме
+    temporarily_closed: 'temporarily_closed', # временно закрыта
+    maintenance: 'maintenance',            # плановое обслуживание  
+    suspended: 'suspended'                 # приостановлена
+  }
+  
   # Валидации
-  # Удаляем валидацию уникальности имени, чтобы разрешить одинаковые имена у разных партнеров/городов
   validates :name, presence: true
   validates :address, presence: true
   validates :post_count, numericality: { greater_than: 0 }
   validates :default_slot_duration, numericality: { greater_than: 0 }
+  validates :work_status, presence: true, inclusion: { in: work_statuses.keys }
   
   # Геолокация
   validates :latitude, numericality: { greater_than_or_equal_to: -90, less_than_or_equal_to: 90 }, allow_nil: true
   validates :longitude, numericality: { greater_than_or_equal_to: -180, less_than_or_equal_to: 180 }, allow_nil: true
   
-  # Скоупы
-  scope :active, -> { joins(:status).where(service_point_statuses: { name: 'active' }) }
+  # Обновленные скоупы
+  scope :active, -> { where(is_active: true) }                    # активные точки
+  scope :inactive, -> { where(is_active: false) }                 # неактивные точки
+  scope :working, -> { where(is_active: true, work_status: 'working') }  # работающие точки
+  scope :available_for_booking, -> { active.where(work_status: ['working']) } # доступны для бронирования
   scope :by_city, ->(city_id) { where(city_id: city_id) }
   scope :by_partner, ->(partner_id) { where(partner_id: partner_id) }
   scope :with_amenities, ->(amenity_ids) { 
@@ -63,26 +77,30 @@ class ServicePoint < ApplicationRecord
       latitude, longitude, latitude, distance_km)
   }
   
-  # Методы
+  # Обновленные методы статусов
   def active?
-    status.name == 'active'
+    is_active?
+  end
+  
+  def can_accept_bookings?
+    is_active? && working?
+  end
+  
+  def display_status
+    return 'Неактивная' unless is_active?
+    
+    case work_status
+    when 'working' then 'Работает'
+    when 'temporarily_closed' then 'Временно закрыта'
+    when 'maintenance' then 'Техническое обслуживание'
+    when 'suspended' then 'Приостановлена'
+    else work_status.humanize
+    end
   end
   
   # Количество активных постов обслуживания
   def posts_count
     service_posts.active.count
-  end
-  
-  def temporarily_closed?
-    status.name == 'temporarily_closed'
-  end
-  
-  def closed?
-    status.name == 'closed'
-  end
-  
-  def maintenance?
-    status.name == 'maintenance'
   end
   
   def recalculate_metrics!

@@ -1,8 +1,8 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule]
-      before_action :set_service_point, only: [:show, :update, :destroy, :basic, :posts_schedule]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses]
+      before_action :set_service_point, except: [:index, :create, :statuses, :work_statuses]
       
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points
@@ -123,7 +123,7 @@ module Api
         
         old_values = @service_point.as_json
         
-        if @service_point.update(status: ServicePointStatus.find_by(name: 'closed'))
+        if @service_point.update(is_active: false, work_status: 'suspended')
           log_action('close', 'service_point', @service_point.id, old_values, @service_point.as_json)
           render json: { message: 'Service point closed successfully' }
         else
@@ -148,12 +148,23 @@ module Api
         render json: @statuses
       end
       
+      # GET /api/v1/service_points/work_statuses
+      def work_statuses
+        statuses = [
+          { value: 'working', label: 'Работает', description: 'Точка работает в обычном режиме' },
+          { value: 'temporarily_closed', label: 'Временно закрыта', description: 'Точка временно не работает' },
+          { value: 'maintenance', label: 'Техобслуживание', description: 'Проводится техническое обслуживание' },
+          { value: 'suspended', label: 'Приостановлена', description: 'Работа точки приостановлена' }
+        ]
+        render json: statuses
+      end
+      
       # GET /api/v1/service_points/:id/basic
       # Получение базовой информации о сервисной точке
       def basic
         authorize @service_point
         render json: @service_point.as_json(
-          only: [:id, :name, :address, :contact_phone, :status_id],
+          only: [:id, :name, :address, :contact_phone, :is_active, :work_status],
           include: {
             city: { 
               only: [:id, :name],
@@ -220,7 +231,8 @@ module Api
           :address,
           :city_id,
           :partner_id,
-          :status_id,
+          :is_active,
+          :work_status,
           :phone,
           :contact_phone,
           :email,

@@ -1,6 +1,7 @@
 module Api
   module V1
     class ServicePointServicesController < ApiController
+      skip_before_action :authenticate_request, only: [:index]
       before_action :set_service_point
       before_action :authorize_admin_or_partner, except: [:index]
       
@@ -21,7 +22,14 @@ module Api
         # Сортировка по умолчанию по имени
         @services = @services.order(:name)
         
-        render json: @services.as_json(include: :category, methods: [:current_price_for_service_point])
+        # Формируем JSON с текущими ценами для данной сервисной точки
+        services_with_prices = @services.map do |service|
+          service.as_json(include: :category).merge({
+            current_price: service.current_price_for_service_point(@service_point.id)
+          })
+        end
+        
+        render json: services_with_prices
       end
       
       # POST /api/v1/service_points/:service_point_id/services
@@ -42,7 +50,9 @@ module Api
         )
         
         if @service_point_service.save
-          render json: @service.as_json(include: :category, methods: [:current_price_for_service_point]), status: :created
+          render json: @service.as_json(include: :category).merge({
+            current_price: @service.current_price_for_service_point(@service_point.id)
+          }), status: :created
         else
           render json: { errors: @service_point_service.errors }, status: :unprocessable_entity
         end

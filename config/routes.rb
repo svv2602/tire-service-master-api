@@ -62,10 +62,17 @@ Rails.application.routes.draw do
         resources :service_points, only: [:index]
       end
       
+      # Статусы сервисных точек
+      get 'service_point_statuses', to: 'service_points#statuses'
+      
+      # Специальные эндпоинты для сервисных точек (должны быть ДО resources)
+      get 'service_points/work_statuses', to: 'service_points#work_statuses'
+      
       # Сервисные точки
       resources :service_points, only: [:index, :show] do
         member do
           get 'basic', to: 'service_points#basic'
+          get 'schedule', to: 'schedule#day'
         end
         
         # Новое API для динамической доступности
@@ -86,12 +93,13 @@ Rails.application.routes.draw do
         resources :photos, controller: 'service_point_photos'
         resources :services, only: [:index, :create, :destroy], controller: 'service_point_services'
         
-        # Добавляем маршруты для управления постами обслуживания
-        resources :service_posts, only: [:index, :show, :create, :update] do
+        # Посты обслуживания
+        resources :service_posts do
           member do
             post 'activate'
             post 'deactivate'
           end
+          
           collection do
             post 'create_defaults'
             get 'statistics'
@@ -111,9 +119,6 @@ Rails.application.routes.draw do
           get 'nearby', to: 'service_points#nearby'
         end
       end
-      
-      # Добавляем маршрут для получения статусов сервисных точек
-      get 'service_point_statuses', to: 'service_points#statuses'
       
       # Клиенты
       resources :clients, only: [:index, :show, :create, :update, :destroy] do
@@ -149,9 +154,6 @@ Rails.application.routes.draw do
       resources :payment_statuses, only: [:index, :show]
       resources :cancellation_reasons, only: [:index, :show]
       resources :amenities, only: [:index, :show]
-      
-      # Статусы сервисных точек
-      get 'service_point_statuses', to: 'service_points#statuses'
       
       # Бронирования
       resources :bookings, only: [:index, :show] do
