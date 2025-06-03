@@ -207,23 +207,71 @@ RSpec.describe User, type: :model do
 
     describe 'after_create' do
       it 'creates associated client record for client role' do
-        user = create(:user, role: client_role)
+        # Включаем callback для этого теста
+        User.set_callback(:create, :after, :create_role_specific_record)
+        
+        user = User.create!(
+          email: 'client@test.com',
+          password: 'password123',
+          first_name: 'Test',
+          last_name: 'Client',
+          role: client_role
+        )
         expect(user.client).to be_present
+        
+        # Отключаем обратно
+        User.skip_callback(:create, :after, :create_role_specific_record)
       end
 
       it 'creates associated manager record for manager role' do
-        user = create(:user, role: manager_role)
+        # Включаем callback для этого теста
+        User.set_callback(:create, :after, :create_role_specific_record)
+        
+        user = User.create!(
+          email: 'manager@test.com',
+          password: 'password123',
+          first_name: 'Test',
+          last_name: 'Manager',
+          role: manager_role
+        )
         expect(user.manager).to be_present
+        
+        # Отключаем обратно
+        User.skip_callback(:create, :after, :create_role_specific_record)
       end
 
       it 'creates associated partner record for partner role' do
-        user = create(:user, role: partner_role)
+        # Включаем callback для этого теста
+        User.set_callback(:create, :after, :create_role_specific_record)
+        
+        user = User.create!(
+          email: 'partner@test.com',
+          password: 'password123',
+          first_name: 'Test',
+          last_name: 'Partner',
+          role: partner_role
+        )
         expect(user.partner).to be_present
+        
+        # Отключаем обратно
+        User.skip_callback(:create, :after, :create_role_specific_record)
       end
 
       it 'creates associated administrator record for admin role' do
-        user = create(:user, role: admin_role)
+        # Включаем callback для этого теста
+        User.set_callback(:create, :after, :create_role_specific_record)
+        
+        user = User.create!(
+          email: 'admin@test.com',
+          password: 'password123',
+          first_name: 'Test',
+          last_name: 'Admin',
+          role: admin_role
+        )
         expect(user.administrator).to be_present
+        
+        # Отключаем обратно
+        User.skip_callback(:create, :after, :create_role_specific_record)
       end
     end
   end
