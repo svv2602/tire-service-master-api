@@ -48,27 +48,6 @@ module BookingTestHelper
     # Create a car type if not provided
     car_type = attributes[:car_type] || create(:car_type)
     
-    # Create a slot if not provided - use random post number to avoid uniqueness constraint
-    if attributes[:slot].present?
-      slot = attributes[:slot]
-    else
-      # Generate a unique random post number (ensure it's positive)
-      post_number = rand(1..999)
-      
-      # Try to create a slot with a unique combination
-      begin
-        slot = create(:schedule_slot, service_point: service_point, post_number: post_number)
-      rescue ActiveRecord::RecordInvalid => e
-        # If validation fails due to uniqueness constraint, try again with a different post number
-        if e.message.include?('taken')
-          post_number = rand(1..999)
-          retry
-        else
-          raise e
-        end
-      end
-    end
-    
     # Find the booking status
     status = BookingStatus.find_by(name: status_name)
     raise "Status '#{status_name}' not found. Available statuses: #{BookingStatus.pluck(:name).join(', ')}" unless status
@@ -77,18 +56,17 @@ module BookingTestHelper
     payment_status = PaymentStatus.find_by(name: 'pending')
     raise "PaymentStatus 'pending' not found" unless payment_status
     
-    # Build attributes with explicit status_id
+    # Build attributes with explicit status_id (больше не используем slot)
     booking_attributes = {
       service_point: service_point,
       client: client,
       car_type: car_type,
-      slot: slot,
       booking_date: attributes[:booking_date] || (Date.current + 1.day),
       start_time: attributes[:start_time] || Time.parse('10:00'),
       end_time: attributes[:end_time] || Time.parse('11:00'),
       status_id: status.id,
       payment_status_id: payment_status.id
-    }.merge(attributes.except(:status_id, :payment_status_id))
+    }.merge(attributes.except(:status_id, :payment_status_id, :slot, :service_post))
     
     # Create the booking with skip_validation flag
     booking = Booking.new(booking_attributes)

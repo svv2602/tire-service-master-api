@@ -1,12 +1,7 @@
 FactoryBot.define do
   factory :partner do
-    # Создаем уникального пользователя для каждого партнера
-    user do
-      partner_role = UserRole.find_by(name: 'partner') || 
-                    FactoryBot.create(:user_role, name: 'partner', description: 'Partner role for business owners')
-      
-      FactoryBot.create(:user, role_id: partner_role.id)
-    end
+    # По умолчанию не создаем пользователя - он должен быть передан явно
+    user { nil }
     
     company_name { Faker::Company.name }
     company_description { Faker::Lorem.paragraph }
@@ -16,6 +11,16 @@ FactoryBot.define do
     tax_number { nil } # Теперь по умолчанию пустой
     is_active { true }
     
+    # Трейт для создания с новым пользователем
+    trait :with_new_user do
+      user do
+        partner_role = UserRole.find_by(name: 'partner') || 
+                      FactoryBot.create(:user_role, name: 'partner', description: 'Partner role for business owners')
+        
+        FactoryBot.create(:user, role_id: partner_role.id)
+      end
+    end
+    
     # Трейт для партнера с налоговым номером
     trait :with_tax_number do
       tax_number { "#{Faker::Number.number(digits: 10)}" }
@@ -24,15 +29,10 @@ FactoryBot.define do
     # Трейт для полных данных
     trait :complete do
       with_tax_number
+      with_new_user
       is_active { true }
       region { association :region }
       city { association :city }
-    end
-    
-    # Трейт для создания с существующим пользователем партнера  
-    trait :with_existing_user do
-      # В этом случае пользователь должен быть передан явно
-      user { nil }
     end
   end
 end

@@ -62,10 +62,10 @@ FactoryBot.define do
         user.role_id = partner_role.id
       end
       
-      # Временно отключаем автоматическое создание партнера для тестов
-      # after(:create) do |user|
-      #   create(:partner, user: user)
-      # end
+      # Создаем партнера для пользователя-партнера
+      after(:create) do |user|
+        create(:partner, user: user)
+      end
     end
     
     trait :with_admin_role do

@@ -30,24 +30,23 @@ module ServicePointsTestHelper
       name: unique_name,
       address: Faker::Address.full_address,
       post_count: 1,
-      default_slot_duration: 60
+      default_slot_duration: 60,
+      is_active: true,
+      work_status: 'working'
     }
     
-    # Если партнер и город не указаны, создаем их автоматически
-    default_attributes[:partner] ||= attributes[:partner] || create(:partner)
-    default_attributes[:city] ||= attributes[:city] || create(:city, name: "City-#{Time.now.to_f}-#{SecureRandom.hex(4)}")
-    
-    # Используем существующие статусы вместо создания новых
-    unless attributes[:status]
-      status = ServicePointStatus.find_by(name: 'active')
-      if status.nil?
-        status = create(:service_point_status, name: 'active')
-      end
-      default_attributes[:status] = status
+    # Используем переданные partner и city, или создаем новые только если не переданы
+    unless attributes[:partner]
+      default_attributes[:partner] = create(:partner, :with_new_user)
     end
     
-    # Объединяем атрибуты по умолчанию с переданными
-    create(:service_point, default_attributes.merge(attributes))
+    unless attributes[:city]
+      default_attributes[:city] = create(:city, name: "City-#{Time.now.to_f}-#{SecureRandom.hex(4)}")
+    end
+    
+    # Объединяем атрибуты по умолчанию с переданными (исключаем устаревшие поля)
+    clean_attributes = attributes.except(:status, :status_id)
+    create(:service_point, default_attributes.merge(clean_attributes))
   end
   
   # Debug helper for authentication issues

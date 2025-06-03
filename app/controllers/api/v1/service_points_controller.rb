@@ -2,7 +2,7 @@ module Api
   module V1
     class ServicePointsController < ApiController
       skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses]
-      before_action :set_service_point, except: [:index, :create, :statuses, :work_statuses]
+      before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses]
       
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points

@@ -4,7 +4,7 @@ RSpec.describe ServicePoint, type: :model do
   describe 'associations' do
     it { should belong_to(:partner) }
     it { should belong_to(:city) }
-    it { should belong_to(:status).class_name('ServicePointStatus') }
+    it { should have_many(:service_posts).dependent(:destroy) }
     it { should have_many(:photos).class_name('ServicePointPhoto').dependent(:destroy) }
     it { should have_many(:service_point_amenities).dependent(:destroy) }
     it { should have_many(:amenities).through(:service_point_amenities) }
@@ -28,15 +28,24 @@ RSpec.describe ServicePoint, type: :model do
     it { should validate_numericality_of(:default_slot_duration).is_greater_than(0) }
     it { should validate_numericality_of(:latitude).is_greater_than_or_equal_to(-90).is_less_than_or_equal_to(90).allow_nil }
     it { should validate_numericality_of(:longitude).is_greater_than_or_equal_to(-180).is_less_than_or_equal_to(180).allow_nil }
+    it { should validate_presence_of(:work_status) }
+  end
+
+  describe 'enums' do
+    it { should define_enum_for(:work_status).with_values(
+      working: 'working',
+      temporarily_closed: 'temporarily_closed',
+      maintenance: 'maintenance',
+      suspended: 'suspended'
+    ).backed_by_column_of_type(:string)}
   end
 
   describe 'scopes' do
     let(:partner) { create(:partner) }
     let(:city) { create(:city) }
-    let(:active_status) { create(:service_point_status, name: 'active') }
-    let(:inactive_status) { create(:service_point_status, name: 'closed') }
-    let!(:active_point) { create(:service_point, status: active_status, partner: partner, city: city) }
-    let!(:inactive_point) { create(:service_point, status: inactive_status) }
+    let!(:active_point) { create(:service_point, is_active: true, work_status: 'working', partner: partner, city: city) }
+    let!(:inactive_point) { create(:service_point, is_active: false, work_status: 'suspended') }
+    let!(:maintenance_point) { create(:service_point, is_active: true, work_status: 'maintenance') }
     let!(:other_partner_point) { create(:service_point, partner: create(:partner)) }
     let!(:other_city_point) { create(:service_point, city: create(:city)) }
     let(:amenity1) { create(:amenity) }
@@ -98,42 +107,54 @@ RSpec.describe ServicePoint, type: :model do
   end
 
   describe 'status methods' do
-    let(:active_status) { create(:service_point_status, name: 'active') }
-    let(:closed_status) { create(:service_point_status, name: 'closed') }
-    let(:maintenance_status) { create(:service_point_status, name: 'maintenance') }
-    let(:temp_closed_status) { create(:service_point_status, name: 'temporarily_closed') }
-    
-    let(:active_point) { create(:service_point, status: active_status) }
-    let(:closed_point) { create(:service_point, status: closed_status) }
-    let(:maintenance_point) { create(:service_point, status: maintenance_status) }
-    let(:temp_closed_point) { create(:service_point, status: temp_closed_status) }
+    let(:working_point) { create(:service_point, is_active: true, work_status: 'working') }
+    let(:temporarily_closed_point) { create(:service_point, is_active: true, work_status: 'temporarily_closed') }
+    let(:maintenance_point) { create(:service_point, is_active: true, work_status: 'maintenance') }
+    let(:suspended_point) { create(:service_point, is_active: false, work_status: 'suspended') }
 
     describe '#active?' do
-      it 'returns true when status is active' do
-        expect(active_point.active?).to be true
-        expect(closed_point.active?).to be false
+      it 'returns true when is_active is true' do
+        expect(working_point.active?).to be true
+        expect(suspended_point.active?).to be false
+      end
+    end
+
+    describe '#working?' do
+      it 'returns true when work_status is working' do
+        expect(working_point.working?).to be true
+        expect(temporarily_closed_point.working?).to be false
       end
     end
 
     describe '#temporarily_closed?' do
-      it 'returns true when status is temporarily_closed' do
-        expect(temp_closed_point.temporarily_closed?).to be true
-        expect(active_point.temporarily_closed?).to be false
-      end
-    end
-
-    describe '#closed?' do
-      it 'returns true when status is closed' do
-        expect(closed_point.closed?).to be true
-        expect(active_point.closed?).to be false
+      it 'returns true when work_status is temporarily_closed' do
+        expect(temporarily_closed_point.temporarily_closed?).to be true
+        expect(working_point.temporarily_closed?).to be false
       end
     end
 
     describe '#maintenance?' do
-      it 'returns true when status is maintenance' do
+      it 'returns true when work_status is maintenance' do
         expect(maintenance_point.maintenance?).to be true
-        expect(active_point.maintenance?).to be false
+        expect(working_point.maintenance?).to be false
       end
+    end
+
+    describe '#suspended?' do
+      it 'returns true when work_status is suspended' do
+        expect(suspended_point.suspended?).to be true
+        expect(working_point.suspended?).to be false
+      end
+    end
+  end
+
+  describe '#display_status' do
+    let(:working_point) { create(:service_point, work_status: 'working') }
+    let(:temporarily_closed_point) { create(:service_point, work_status: 'temporarily_closed') }
+
+    it 'returns localized status display' do
+      expect(working_point.display_status).to be_present
+      expect(temporarily_closed_point.display_status).to be_present
     end
   end
 

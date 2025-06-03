@@ -20,8 +20,6 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
   # Вместо массового создания 5 сервисных точек, будем создавать их по одной в каждом тесте или группе тестов
   let(:service_point) { create(:service_point, city: city, partner: partner) }
   let(:service_point_id) { service_point.id }
-  let(:active_status) { create(:service_point_status, name: 'active') }
-  let(:closed_status) { create(:service_point_status, name: 'closed') }
   
   describe 'GET /api/v1/service_points' do
     context 'public access' do
@@ -113,7 +111,7 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
         clear_service_points
         
         point1 = create_unique_service_point(name: unique_name("PartnerPoint"), partner: partner)
-        another_partner = create(:partner)
+        another_partner = create(:partner, :with_new_user)
         point2 = create_unique_service_point(name: unique_name("OtherPartnerPoint"), partner: another_partner)
         
         get "/api/v1/partners/#{partner.id}/service_points", headers: partner_headers
@@ -126,7 +124,7 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
   end
 
   describe 'GET /api/v1/service_points/:id' do
-    let(:test_point) { create(:service_point, name: "Test Point For ID #{SecureRandom.hex(8)}") }
+    let(:test_point) { create(:service_point, name: "Test Point For ID #{SecureRandom.hex(8)}", partner: create(:partner, :with_new_user), city: create(:city)) }
     
     context 'public access' do
       before { get "/api/v1/service_points/#{test_point.id}" }
@@ -166,7 +164,8 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
         expect(json['name']).to eq(test_point.name)
         expect(json['address']).to eq(test_point.address)
         expect(json['contact_phone']).to eq(test_point.contact_phone)
-        expect(json['status_id']).to eq(test_point.status_id)
+        expect(json['work_status']).to eq(test_point.work_status)
+        expect(json['is_active']).to eq(test_point.is_active)
         
         # Проверяем данные города
         expect(json['city']['id']).to eq(test_point.city.id)
@@ -218,7 +217,8 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
           contact_phone: '+79001234567',
           post_count: 3,
           default_slot_duration: 30,
-          status_id: active_status.id
+          is_active: true,
+          work_status: 'working'
         }
       }
     end
@@ -389,11 +389,7 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
   end
 
   describe 'DELETE /api/v1/partners/:partner_id/service_points/:id' do
-    let(:delete_point) { create(:service_point, name: "Point To Delete #{SecureRandom.hex(8)}", partner: partner, status: active_status) }
-    
-    before do
-      allow(ServicePointStatus).to receive(:find_by).with(name: 'closed').and_return(closed_status)
-    end
+    let(:delete_point) { create(:service_point, name: "Point To Delete #{SecureRandom.hex(8)}", partner: partner, is_active: true, work_status: 'working') }
     
     context 'as a partner' do
       before do
@@ -410,7 +406,8 @@ RSpec.describe 'API V1 ServicePoints', type: :request do
       end
       
       it 'changes the status to closed' do
-        expect(ServicePoint.find(delete_point.id).status_id).to eq(closed_status.id)
+        delete_point.reload
+        expect(delete_point.is_active).to be false
       end
     end
     
