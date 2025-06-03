@@ -21,7 +21,7 @@ RSpec.describe PriceList, type: :model do
   end
 
   describe 'scopes' do
-    let(:partner) { create(:partner) }
+    let(:partner) { create(:partner, :with_new_user) }
     let(:service_point) { create(:service_point, partner: partner) }
     let!(:active_price_list) { create(:price_list, partner: partner, is_active: true) }
     let!(:inactive_price_list) { create(:price_list, partner: partner, is_active: false) }
@@ -32,7 +32,7 @@ RSpec.describe PriceList, type: :model do
     let!(:service_point_price_list) { create(:price_list, partner: partner, service_point: service_point) }
     let!(:winter_price_list) { create(:price_list, :winter, partner: partner) }
     let!(:summer_price_list) { create(:price_list, :summer, partner: partner) }
-    let(:another_partner) { create(:partner) }
+    let(:another_partner) { create(:partner, :with_new_user) }
     let!(:another_partner_price_list) { create(:price_list, partner: another_partner) }
 
     describe '.active' do

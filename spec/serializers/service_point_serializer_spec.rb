@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe ServicePointSerializer, type: :serializer do
-  let(:partner) { create(:partner) }
+  let(:partner) { create(:partner, :with_new_user) }
   let(:city) { create(:city) }
   let(:service_point) { create(:service_point, partner: partner, city: city, is_active: true, work_status: 'working') }
   let!(:service_posts) { create_list(:service_post, 3, service_point: service_point) }

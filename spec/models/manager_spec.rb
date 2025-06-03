@@ -15,7 +15,7 @@ RSpec.describe Manager, type: :model do
     it { should validate_presence_of(:partner_id) }
     # Проверка на уникальность user_id требует создания корректного объекта
     let(:user) { create(:user) }
-    let(:partner) { create(:partner) }
+    let(:partner) { create(:partner, :with_new_user) }
     subject { build(:manager, user: user, partner: partner) }
     it { should validate_uniqueness_of(:user_id) }
     it { should validate_numericality_of(:access_level).only_integer.is_greater_than(0) }
@@ -23,7 +23,7 @@ RSpec.describe Manager, type: :model do
 
   describe '#full_name' do
     let(:user) { create(:user, first_name: 'Jane', last_name: 'Smith') }
-    let(:partner) { create(:partner) }
+    let(:partner) { create(:partner, :with_new_user) }
     let(:manager) { create(:manager, user: user, partner: partner) }
 
     it 'returns the full name of the user' do
@@ -32,7 +32,7 @@ RSpec.describe Manager, type: :model do
   end
 
   describe 'scopes' do
-    let(:partner) { create(:partner) }
+    let(:partner) { create(:partner, :with_new_user) }
     let!(:active_manager) { create(:manager, partner: partner) }
     let!(:inactive_manager) { create(:manager, partner: partner, user: create(:user, is_active: false)) }
 
@@ -44,7 +44,7 @@ RSpec.describe Manager, type: :model do
     end
 
     describe '.for_partner' do
-      let(:another_partner) { create(:partner) }
+      let(:another_partner) { create(:partner, :with_new_user) }
       let!(:another_manager) { create(:manager, partner: another_partner) }
 
       it 'returns only managers for the specified partner' do

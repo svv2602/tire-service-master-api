@@ -2,7 +2,7 @@ FactoryBot.define do
   factory :price_list do
     name { "#{Faker::Commerce.product_name} Price List" }
     description { Faker::Lorem.paragraph }
-    partner
+    partner { association :partner, :with_new_user }
     start_date { Date.current - 1.month }
     end_date { Date.current + 1.month }
     is_active { true }
