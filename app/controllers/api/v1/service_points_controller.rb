@@ -1,7 +1,7 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :update, :create]
       before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses]
       
       # GET /api/v1/service_points
@@ -78,7 +78,7 @@ module Api
       
       # PATCH/PUT /api/v1/partners/:partner_id/service_points/:id
       def update
-        authorize @service_point
+        # authorize @service_point
         
         old_values = @service_point.as_json
         
