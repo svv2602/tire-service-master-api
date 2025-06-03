@@ -6,34 +6,31 @@ puts 'Creating service points...'
 # Очищення існуючих записів
 ServicePoint.destroy_all
 
-# Визначення статусів сервісних точок
-STATUSES = {
-  active: 1,
-  suspended: 2,
-  blocked: 3
-}
-
-# Дані міст
-cities = [
-  { id: 1, name: 'Київ' },
-  { id: 2, name: 'Львів' },
-  { id: 3, name: 'Одеса' },
-  { id: 4, name: 'Харків' },
-  { id: 5, name: 'Дніпро' },
-  { id: 6, name: 'Запоріжжя' },
-  { id: 7, name: 'Вінниця' },
-  { id: 8, name: 'Івано-Франківськ' },
-  { id: 9, name: 'Тернопіль' },
-  { id: 10, name: 'Житомир' }
+# Дані міст з регионами
+cities_data = [
+  { id: 1, name: 'Київ', region_name: 'Київська область' },
+  { id: 2, name: 'Львів', region_name: 'Львівська область' },
+  { id: 3, name: 'Одеса', region_name: 'Одеська область' },
+  { id: 4, name: 'Харків', region_name: 'Харківська область' },
+  { id: 5, name: 'Дніпро', region_name: 'Дніпропетровська область' },
+  { id: 6, name: 'Запоріжжя', region_name: 'Запорізька область' },
+  { id: 7, name: 'Вінниця', region_name: 'Вінницька область' },
+  { id: 8, name: 'Івано-Франківськ', region_name: 'Івано-Франківська область' },
+  { id: 9, name: 'Тернопіль', region_name: 'Тернопільська область' },
+  { id: 10, name: 'Житомир', region_name: 'Житомирська область' }
 ]
 
-# Створення або оновлення міст
-cities.each do |city_data|
+# Створення регіонів та міст
+cities_data.each do |city_data|
+  # Создаем или находим регион
+  region = Region.find_or_create_by(name: city_data[:region_name])
+  
+  # Создаем или обновляем город
   city = City.find_or_initialize_by(id: city_data[:id])
-  city.update!(name: city_data[:name])
+  city.update!(name: city_data[:name], region: region)
 end
 
-puts "  Created #{cities.count} cities"
+puts "  Created #{cities_data.count} cities with regions"
 
 # Отримання всіх партнерів
 partners = Partner.all
@@ -41,7 +38,7 @@ partners = Partner.all
 if partners.empty?
   puts "  No partners found, please run partners seed first"
 else
-  # Дані сервісних точок
+  # Дані сервісних точок - используем только доступных партнеров
   service_points_data = [
     {
       partner_id: partners[0].id,
@@ -50,7 +47,8 @@ else
       city_id: 1, # Київ
       address: 'вул. Хрещатик, 22',
       contact_phone: '+380 67 123 45 67',
-      status_id: STATUSES[:active],
+      is_active: true,
+      work_status: 'working',
       post_count: 4,
       default_slot_duration: 30,
       latitude: 50.450001,
@@ -64,7 +62,8 @@ else
       city_id: 1, # Київ
       address: 'пр. Оболонський, 45',
       contact_phone: '+380 67 123 45 68',
-      status_id: STATUSES[:active],
+      is_active: true,
+      work_status: 'working',
       post_count: 3,
       default_slot_duration: 30,
       latitude: 50.501747,
@@ -78,7 +77,8 @@ else
       city_id: 2, # Львів
       address: 'вул. Личаківська, 45',
       contact_phone: '+380 50 987 65 43',
-      status_id: STATUSES[:active],
+      is_active: true,
+      work_status: 'working',
       post_count: 5,
       default_slot_duration: 45,
       latitude: 49.842957,
@@ -92,70 +92,34 @@ else
       city_id: 2, # Львів
       address: 'пр. Червоної Калини, 35',
       contact_phone: '+380 50 987 65 44',
-      status_id: STATUSES[:suspended],
+      is_active: true,
+      work_status: 'temporarily_closed',
       post_count: 2,
       default_slot_duration: 30,
       latitude: 49.816721,
       longitude: 24.056284,
       rating: 4.2
-    },
-    {
+    }
+  ]
+  
+  # Добавляем больше точек если партнеров достаточно
+  if partners.count >= 3
+    service_points_data << {
       partner_id: partners[2].id,
       name: 'ШинМайстер Одеса',
       description: 'Найкращі послуги шиномонтажу в місті',
       city_id: 3, # Одеса
       address: 'вул. Дерибасівська, 12',
       contact_phone: '+380 63 555 55 55',
-      status_id: STATUSES[:active],
+      is_active: true,
+      work_status: 'working',
       post_count: 4,
       default_slot_duration: 40,
       latitude: 46.482526,
       longitude: 30.723309,
       rating: 4.6
-    },
-    {
-      partner_id: partners[3].id,
-      name: 'ВелоШина Харків',
-      description: 'Спеціалізований шиномонтаж для велосипедів та мототехніки',
-      city_id: 4, # Харків
-      address: 'вул. Сумська, 37',
-      contact_phone: '+380 96 111 22 33',
-      status_id: STATUSES[:suspended],
-      post_count: 2,
-      default_slot_duration: 20,
-      latitude: 49.994507,
-      longitude: 36.231572,
-      rating: 4.3
-    },
-    {
-      partner_id: partners[4].id,
-      name: 'МастерШина Дніпро',
-      description: 'Комплексне обслуговування та ремонт шин',
-      city_id: 5, # Дніпро
-      address: 'пр. Яворницького, 45',
-      contact_phone: '+380 73 444 33 22',
-      status_id: STATUSES[:active],
-      post_count: 6,
-      default_slot_duration: 35,
-      latitude: 48.464717,
-      longitude: 35.046183,
-      rating: 4.8
-    },
-    {
-      partner_id: partners[4].id,
-      name: 'МастерШина Лівобережний',
-      description: 'Шиномонтаж та технічне обслуговування',
-      city_id: 5, # Дніпро
-      address: 'вул. Кайдацька, 122',
-      contact_phone: '+380 73 444 33 23',
-      status_id: STATUSES[:blocked],
-      post_count: 3,
-      default_slot_duration: 30,
-      latitude: 48.471367,
-      longitude: 35.052494,
-      rating: 3.9
     }
-  ]
+  end
 
   # Створення сервісних точок
   service_points_data.each do |point_data|
