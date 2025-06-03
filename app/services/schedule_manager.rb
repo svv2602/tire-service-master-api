@@ -58,12 +58,29 @@ class ScheduleManager
   
   # Удаляет все неиспользуемые слоты на указанную дату для указанной сервисной точки
   def self.delete_unused_slots(service_point_id, date)
-    # Удаляем только те слоты, которые не связаны с бронированиями
+    # Получаем все слоты для данной точки и даты
     slots = ScheduleSlot.where(service_point_id: service_point_id, slot_date: date)
-                      .left_joins(:bookings)
-                      .where(bookings: { id: nil })
     
-    slots.destroy_all
+    slots_to_delete = []
+    
+    slots.each do |slot|
+      # Проверяем, есть ли бронирования в это время для этой точки
+      has_bookings = Booking.where(
+        service_point_id: service_point_id,
+        booking_date: date
+      ).where(
+        "(start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?)",
+        slot.end_time, slot.start_time, slot.start_time, slot.end_time
+      ).exists?
+      
+      # Если нет бронирований, слот можно удалить
+      unless has_bookings
+        slots_to_delete << slot
+      end
+    end
+    
+    # Удаляем неиспользуемые слоты
+    ScheduleSlot.where(id: slots_to_delete.map(&:id)).destroy_all if slots_to_delete.any?
   end
   
   private
@@ -141,16 +158,27 @@ class ScheduleManager
   
   # Проверяет, доступен ли указанный временной интервал для бронирования
   def self.is_time_available?(service_point_id, date, start_time, end_time)
-    # Проверяем, есть ли свободный слот в указанное время
+    # Проверяем, есть ли слот в указанное время
     slot = ScheduleSlot.where(
       service_point_id: service_point_id,
       slot_date: date,
       start_time: start_time,
       end_time: end_time,
       is_available: true
-    ).left_joins(:bookings).where(bookings: { id: nil }).first
+    ).first
     
-    return !slot.nil?
+    return false unless slot
+    
+    # Проверяем, нет ли бронирований в это время
+    has_bookings = Booking.where(
+      service_point_id: service_point_id,
+      booking_date: date
+    ).where(
+      "(start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?)",
+      end_time, start_time, start_time, end_time
+    ).exists?
+    
+    return !has_bookings
   end
   
   # Находит ближайшее свободное время для бронирования
@@ -161,18 +189,26 @@ class ScheduleManager
     preferred_time ||= Time.current.strftime("%H:%M:%S")
     
     # Ищем свободный слот на указанную дату
-    slot = ScheduleSlot.where(
+    slots = ScheduleSlot.where(
       service_point_id: service_point_id,
       slot_date: date,
       is_available: true
     ).where("start_time >= ?", preferred_time)
-    .left_joins(:bookings)
-    .where(bookings: { id: nil })
     .order(start_time: :asc)
-    .first
     
-    # Если нашли слот на указанную дату, возвращаем его
-    return slot if slot
+    # Проверяем каждый слот на наличие бронирований
+    slots.each do |slot|
+      has_bookings = Booking.where(
+        service_point_id: service_point_id,
+        booking_date: date
+      ).where(
+        "(start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?)",
+        slot.end_time, slot.start_time, slot.start_time, slot.end_time
+      ).exists?
+      
+      # Если нет бронирований, возвращаем этот слот
+      return slot unless has_bookings
+    end
     
     # Если на указанную дату нет свободных слотов, ищем на следующие даты
     next_date = date + 1.day
@@ -183,17 +219,25 @@ class ScheduleManager
       generate_slots_for_date(service_point_id, next_date)
       
       # Ищем свободный слот на следующую дату
-      slot = ScheduleSlot.where(
+      slots = ScheduleSlot.where(
         service_point_id: service_point_id,
         slot_date: next_date,
         is_available: true
-      ).left_joins(:bookings)
-      .where(bookings: { id: nil })
-      .order(start_time: :asc)
-      .first
+      ).order(start_time: :asc)
       
-      # Если нашли слот, возвращаем его
-      return slot if slot
+      # Проверяем каждый слот на наличие бронирований
+      slots.each do |slot|
+        has_bookings = Booking.where(
+          service_point_id: service_point_id,
+          booking_date: next_date
+        ).where(
+          "(start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?)",
+          slot.end_time, slot.start_time, slot.start_time, slot.end_time
+        ).exists?
+        
+        # Если нет бронирований, возвращаем этот слот
+        return slot unless has_bookings
+      end
       
       # Переходим к следующей дате
       next_date += 1.day

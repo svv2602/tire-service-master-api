@@ -1,6 +1,7 @@
 FactoryBot.define do
   factory :schedule_slot do
     service_point
+    service_post { association :service_post, service_point: service_point, post_number: post_number }
     slot_date { Date.current + 1.day }
     start_time { Time.parse('10:00') }
     end_time { Time.parse('11:00') }

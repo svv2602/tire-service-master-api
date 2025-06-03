@@ -1,11 +1,22 @@
 require 'rails_helper'
 
 RSpec.describe ScheduleManager, type: :service do
+  # Создаем все дни недели перед тестами
+  before(:all) do
+    # Создаем все дни недели если их нет
+    (1..7).each do |sort_order|
+      Weekday.find_or_create_by(sort_order: sort_order) do |weekday|
+        weekday.name = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][sort_order - 1]
+        weekday.short_name = ["Пон", "Вто", "Сре", "Чет", "Пят", "Суб", "Вос"][sort_order - 1]
+      end
+    end
+  end
+
   let!(:region) { create(:region) }
   let!(:city) { create(:city, region: region) }
-  let!(:partner) { create(:partner, is_active: true) }
+  let!(:partner) { create(:partner, :with_new_user, is_active: true) }
   let!(:service_point) { create(:service_point, partner: partner, city: city) }
-  let!(:weekday) { create(:weekday, sort_order: 1) } # Понедельник
+  let!(:weekday) { Weekday.find_by(sort_order: 1) } # Понедельник
   let!(:template) { create(:schedule_template, 
                           service_point: service_point, 
                           weekday: weekday,
@@ -88,7 +99,7 @@ RSpec.describe ScheduleManager, type: :service do
 
       it 'удаляет неиспользуемые слоты и завершается' do
         # Создаем тестовые слоты
-        create(:schedule_slot, service_point: service_point, slot_date: test_date)
+        create(:schedule_slot, service_point: service_point, slot_date: test_date, service_post: service_post_1)
         
         expect {
           ScheduleManager.generate_slots_for_date(service_point.id, test_date)
@@ -109,7 +120,7 @@ RSpec.describe ScheduleManager, type: :service do
       end
 
       it 'удаляет неиспользуемые слоты' do
-        create(:schedule_slot, service_point: service_point, slot_date: test_date)
+        create(:schedule_slot, service_point: service_point, slot_date: test_date, service_post: service_post_1)
         
         expect {
           ScheduleManager.generate_slots_for_date(service_point.id, test_date)
@@ -121,6 +132,21 @@ RSpec.describe ScheduleManager, type: :service do
   describe '.generate_slots_for_period' do
     let(:start_date) { Date.current.next_occurring(:monday) }
     let(:end_date) { start_date + 2.days }
+
+    before do
+      # Создаем шаблоны расписания для всех дней недели
+      (1..7).each do |sort_order|
+        weekday = Weekday.find_by(sort_order: sort_order)
+        ScheduleTemplate.find_or_create_by(
+          service_point: service_point,
+          weekday: weekday
+        ) do |template|
+          template.is_working_day = sort_order < 7 # Понедельник-суббота рабочие
+          template.opening_time = '09:00:00'
+          template.closing_time = '18:00:00'
+        end
+      end
+    end
 
     it 'генерирует слоты для каждого дня в периоде' do
       ScheduleManager.generate_slots_for_period(service_point.id, start_date, end_date)
@@ -134,9 +160,29 @@ RSpec.describe ScheduleManager, type: :service do
 
   describe '.delete_unused_slots' do
     let(:test_date) { Date.current + 1.day }
-    let!(:used_slot) { create(:schedule_slot, service_point: service_point, slot_date: test_date) }
-    let!(:unused_slot) { create(:schedule_slot, service_point: service_point, slot_date: test_date) }
-    let!(:booking) { create(:booking, slot: used_slot) }
+    let!(:client) { create(:client) }
+    let!(:booking_status) { create(:booking_status, name: 'pending') }
+    let!(:payment_status) { create(:payment_status, name: 'pending') }
+    let!(:used_slot) { create(:schedule_slot, 
+                             service_point: service_point, 
+                             slot_date: test_date, 
+                             service_post: service_post_1,
+                             start_time: Time.parse('10:00'),
+                             end_time: Time.parse('11:00')) }
+    let!(:unused_slot) { create(:schedule_slot, 
+                               service_point: service_point, 
+                               slot_date: test_date, 
+                               service_post: service_post_2,
+                               start_time: Time.parse('11:00'),
+                               end_time: Time.parse('12:00')) }
+    let!(:booking) { create(:booking, 
+                           client: client,
+                           service_point: service_point,
+                           booking_date: test_date,
+                           start_time: used_slot.start_time,
+                           end_time: used_slot.end_time,
+                           status_id: booking_status.id,
+                           payment_status_id: payment_status.id) }
 
     it 'удаляет только неиспользуемые слоты' do
       expect {
