@@ -82,6 +82,22 @@ module Api
         Rails.logger.info "params[:service_point]: #{params[:service_point].inspect}"
         Rails.logger.info "Все параметры: #{params.inspect}"
         
+        # Дополнительная отладка service_posts_attributes
+        if params[:service_point][:service_posts_attributes]
+          Rails.logger.info "=== SERVICE POSTS ATTRIBUTES ==="
+          params[:service_point][:service_posts_attributes].each do |index, post_params|
+            Rails.logger.info "Post #{index}: #{post_params.inspect}"
+            if post_params[:working_days]
+              Rails.logger.info "Post #{index} working_days: #{post_params[:working_days].inspect}"
+              Rails.logger.info "Post #{index} working_days class: #{post_params[:working_days].class}"
+              # Дополнительная отладка значений working_days
+              post_params[:working_days].each do |day, value|
+                Rails.logger.info "  #{day}: #{value} (#{value.class})"
+              end
+            end
+          end
+        end
+        
         old_values = @service_point.as_json
         
         begin

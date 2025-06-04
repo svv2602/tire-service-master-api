@@ -13,6 +13,9 @@ class ServicePost < ApplicationRecord
             numericality: { greater_than: 15, less_than_or_equal_to: 480,
                            message: "Длительность слота должна быть от 15 минут до 8 часов" }
   
+  # Колбэки
+  before_save :normalize_working_days_values
+  
   # Валидации для индивидуального расписания
   validate :validate_working_days_format, if: :has_custom_schedule?
   validate :validate_custom_hours_format, if: :has_custom_schedule?
@@ -31,7 +34,9 @@ class ServicePost < ApplicationRecord
     return true unless has_custom_schedule?
     return true if working_days.blank?
     
-    working_days[day_key.to_s] == true
+    # Обрабатываем как булевые значения, так и строковые из FormData
+    value = working_days[day_key.to_s]
+    value == true || value == 'true'
   end
   
   # Получает время начала работы поста для указанного дня
@@ -70,7 +75,8 @@ class ServicePost < ApplicationRecord
   def working_days_list
     return [] unless has_custom_schedule? && working_days.present?
     
-    working_days.select { |_, is_working| is_working }.keys
+    # Обрабатываем как булевые значения, так и строковые из FormData
+    working_days.select { |_, is_working| is_working == true || is_working == 'true' }.keys
   end
   
   # Метод для получения длительности в секундах
@@ -147,7 +153,9 @@ class ServicePost < ApplicationRecord
         errors.add(:working_days, "содержит недопустимый день недели: #{day}")
       end
       
-      unless [true, false].include?(value)
+      # Принимаем как булевые значения, так и их строковые представления из FormData
+      valid_values = [true, false, 'true', 'false']
+      unless valid_values.include?(value)
         errors.add(:working_days, "значение для #{day} должно быть true или false")
       end
     end
@@ -188,11 +196,46 @@ class ServicePost < ApplicationRecord
   
   # Проверка что выбран хотя бы один рабочий день
   def at_least_one_working_day
+    Rails.logger.info "=== at_least_one_working_day валидация ==="
+    Rails.logger.info "working_days present?: #{working_days.present?}"
+    Rails.logger.info "working_days class: #{working_days.class}"
+    Rails.logger.info "working_days value: #{working_days.inspect}"
+    
     return unless working_days.present?
     return unless working_days.is_a?(Hash) # Проверяем что это хэш перед вызовом values
     
-    unless working_days.values.any? { |v| v == true }
+    Rails.logger.info "working_days values: #{working_days.values.inspect}"
+    Rails.logger.info "working_days values classes: #{working_days.values.map(&:class)}"
+    
+    has_true_values = working_days.values.any? { |v| v == true }
+    Rails.logger.info "has true values: #{has_true_values}"
+    
+    # Попробуем разные варианты проверки
+    has_true_strings = working_days.values.any? { |v| v.to_s == 'true' }
+    has_truthy_values = working_days.values.any? { |v| v.present? && v != false && v != 'false' }
+    
+    Rails.logger.info "has true strings: #{has_true_strings}"
+    Rails.logger.info "has truthy values: #{has_truthy_values}"
+    
+    unless has_true_values || has_true_strings || has_truthy_values
+      Rails.logger.error "Валидация не прошла: нет рабочих дней"
       errors.add(:working_days, 'должен быть выбран хотя бы один рабочий день')
+    else
+      Rails.logger.info "Валидация прошла успешно"
+    end
+  end
+  
+  # Нормализация строковых значений working_days в булевые
+  def normalize_working_days_values
+    return unless working_days.present? && working_days.is_a?(Hash)
+    
+    # Преобразуем строковые значения в булевые
+    self.working_days = working_days.transform_values do |value|
+      case value
+      when 'true' then true
+      when 'false' then false
+      else value # Оставляем как есть если уже булевое
+      end
     end
   end
   
