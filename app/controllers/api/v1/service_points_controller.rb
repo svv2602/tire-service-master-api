@@ -137,6 +137,70 @@ module Api
         render json: statuses
       end
       
+      # GET /api/v1/service_points/:id/schedule_preview?date=YYYY-MM-DD
+      # Предварительный просмотр слотов с учетом индивидуальных интервалов постов
+      def schedule_preview
+        date = Date.parse(params[:date]) rescue Date.current
+        
+        # Используем новый метод DynamicAvailabilityService
+        available_slots = DynamicAvailabilityService.available_slots_for_date(@service_point.id, date)
+        
+        # Группируем слоты по времени для удобного отображения
+        slots_by_time = available_slots.group_by { |slot| slot[:start_time] }
+        
+        # Формируем результат в формате подобном старому предварительному просмотру
+        preview_slots = []
+        
+        # Создаем список временных интервалов с 15-минутным шагом для совместимости
+        day_key = date.strftime('%A').downcase
+        working_hours = @service_point.working_hours
+        
+        if working_hours && working_hours[day_key] && (working_hours[day_key]['is_working_day'] == 'true' || working_hours[day_key]['is_working_day'] == true)
+          day_schedule = working_hours[day_key]
+          start_time = Time.parse("#{date} #{day_schedule['start']}")
+          end_time = Time.parse("#{date} #{day_schedule['end']}")
+          
+          current_time = start_time
+          while current_time < end_time
+            time_str = current_time.strftime('%H:%M')
+            
+            # Находим все слоты, которые начинаются в это время
+            slots_at_time = slots_by_time[time_str] || []
+            
+            # Подсчитываем общую доступность на это время
+            available_posts_count = slots_at_time.length
+            total_posts = @service_point.service_posts.active.count
+            
+            preview_slots << {
+              time: time_str,
+              available_posts: available_posts_count,
+              total_posts: total_posts,
+              is_available: available_posts_count > 0,
+              post_details: slots_at_time.map do |slot|
+                {
+                  name: slot[:post_name],
+                  number: slot[:post_number],
+                  duration_minutes: slot[:duration_minutes],
+                  end_time: slot[:end_time]
+                }
+              end
+            }
+            
+            current_time += 15.minutes
+          end
+        end
+        
+        render json: {
+          service_point_id: @service_point.id,
+          date: date,
+          day_key: day_key,
+          is_working_day: working_hours && working_hours[day_key] && (working_hours[day_key]['is_working_day'] == 'true' || working_hours[day_key]['is_working_day'] == true),
+          preview_slots: preview_slots,
+          total_active_posts: @service_point.service_posts.active.count,
+          raw_available_slots: available_slots # Оригинальные слоты с учетом индивидуальных интервалов
+        }
+      end
+      
       # GET /api/v1/service_points/:id/basic
       # Получение базовой информации о сервисной точке
       def basic
