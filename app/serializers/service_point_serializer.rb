@@ -2,7 +2,7 @@ class ServicePointSerializer < ActiveModel::Serializer
   attributes :id, :name, :description, :address, :latitude, :longitude, :contact_phone, 
              :is_active, :work_status, :status_display, :post_count, :default_slot_duration, 
              :rating, :total_clients_served, :average_rating, :cancellation_rate, :created_at, :updated_at,
-             :posts_count, :service_posts_summary, :service_posts, :services
+             :posts_count, :service_posts_summary, :service_posts, :services, :working_hours
   
   belongs_to :partner
   belongs_to :city
@@ -77,5 +77,21 @@ class ServicePointSerializer < ActiveModel::Serializer
         icon: amenity.icon
       }
     end
+  end
+  
+  def working_hours
+    return {} unless object.working_hours
+    
+    normalized = {}
+    object.working_hours.each do |day, hours|
+      if hours.is_a?(Hash)
+        normalized[day] = {
+          start: hours['start'],
+          end: hours['end'],
+          is_working_day: hours['is_working_day'] == true || hours['is_working_day'] == 'true'
+        }
+      end
+    end
+    normalized
   end
 end
