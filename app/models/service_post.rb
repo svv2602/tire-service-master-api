@@ -196,32 +196,14 @@ class ServicePost < ApplicationRecord
   
   # Проверка что выбран хотя бы один рабочий день
   def at_least_one_working_day
-    Rails.logger.info "=== at_least_one_working_day валидация ==="
-    Rails.logger.info "working_days present?: #{working_days.present?}"
-    Rails.logger.info "working_days class: #{working_days.class}"
-    Rails.logger.info "working_days value: #{working_days.inspect}"
-    
     return unless working_days.present?
-    return unless working_days.is_a?(Hash) # Проверяем что это хэш перед вызовом values
+    return unless working_days.is_a?(Hash)
     
-    Rails.logger.info "working_days values: #{working_days.values.inspect}"
-    Rails.logger.info "working_days values classes: #{working_days.values.map(&:class)}"
+    # Проверяем как булевые значения, так и строковые
+    has_working_day = working_days.values.any? { |v| v == true || v == 'true' }
     
-    has_true_values = working_days.values.any? { |v| v == true }
-    Rails.logger.info "has true values: #{has_true_values}"
-    
-    # Попробуем разные варианты проверки
-    has_true_strings = working_days.values.any? { |v| v.to_s == 'true' }
-    has_truthy_values = working_days.values.any? { |v| v.present? && v != false && v != 'false' }
-    
-    Rails.logger.info "has true strings: #{has_true_strings}"
-    Rails.logger.info "has truthy values: #{has_truthy_values}"
-    
-    unless has_true_values || has_true_strings || has_truthy_values
-      Rails.logger.error "Валидация не прошла: нет рабочих дней"
+    unless has_working_day
       errors.add(:working_days, 'должен быть выбран хотя бы один рабочий день')
-    else
-      Rails.logger.info "Валидация прошла успешно"
     end
   end
   
