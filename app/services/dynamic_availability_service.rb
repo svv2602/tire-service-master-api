@@ -2,10 +2,87 @@
 # Сервис для динамического расчета доступности без создания физических слотов
 
 class DynamicAvailabilityService
-  # Интервал проверки в минутах (например, каждые 15 минут)
-  TIME_INTERVAL = 15
+  # Минимальный интервал проверки в минутах (для обратной совместимости)
+  MIN_TIME_INTERVAL = 15
 
-  # Получение доступных временных интервалов для точки на дату
+  # Получение доступных временных слотов с учетом индивидуальных интервалов постов
+  def self.available_slots_for_date(service_point_id, date)
+    service_point = ServicePoint.find(service_point_id)
+    
+    # Получаем рабочие часы для данной даты
+    schedule_info = get_schedule_for_date(service_point, date)
+    return [] unless schedule_info[:is_working]
+    
+    # Определяем день недели
+    day_key = date.strftime('%A').downcase
+    
+    available_slots = []
+    
+    # Проходим по всем активным постам
+    service_point.service_posts.active.ordered_by_post_number.each do |service_post|
+      # Проверяем, работает ли пост в этот день
+      next unless service_post.working_on_day?(day_key)
+      
+      # Определяем время работы поста
+      start_time_str = service_post.start_time_for_day(day_key)
+      end_time_str = service_post.end_time_for_day(day_key)
+      
+      start_time = Time.parse("#{date} #{start_time_str}")
+      end_time = Time.parse("#{date} #{end_time_str}")
+      
+      # Генерируем слоты с индивидуальной длительностью
+      current_time = start_time
+      while current_time + service_post.slot_duration.minutes <= end_time
+        slot_end_time = current_time + service_post.slot_duration.minutes
+        
+        # Проверяем доступность слота
+        is_available = !is_slot_occupied?(service_point_id, service_post.id, date, current_time, slot_end_time)
+        
+        if is_available
+          available_slots << {
+            service_post_id: service_post.id,
+            post_number: service_post.post_number,
+            post_name: service_post.name,
+            start_time: current_time.strftime('%H:%M'),
+            end_time: slot_end_time.strftime('%H:%M'),
+            duration_minutes: service_post.slot_duration,
+            datetime: current_time
+          }
+        end
+        
+        current_time = slot_end_time
+      end
+    end
+    
+    # Сортируем по времени
+    available_slots.sort_by { |slot| slot[:datetime] }
+  end
+  
+  # Проверяет, занят ли слот для конкретного поста
+  def self.is_slot_occupied?(service_point_id, service_post_id, date, start_time, end_time)
+    # Проверяем если есть слот в базе данных и он занят
+    slot = ScheduleSlot.find_by(
+      service_point_id: service_point_id,
+      service_post_id: service_post_id,
+      slot_date: date,
+      start_time: start_time.strftime('%H:%M:%S'),
+      end_time: end_time.strftime('%H:%M:%S')
+    )
+    
+    # Если слота нет в базе, считаем что он недоступен
+    return true unless slot
+    
+    # Если слот отмечен как недоступный
+    return true unless slot.is_available
+    
+    # Проверяем наличие бронирований в это время
+    Booking.where(service_point_id: service_point_id, booking_date: date)
+           .where("start_time < ? AND end_time > ?", end_time.strftime('%H:%M:%S'), start_time.strftime('%H:%M:%S'))
+           .where.not(status_id: BookingStatus.canceled_statuses)
+           .exists?
+  end
+  
+  # Обратная совместимость: старый метод с фиксированным интервалом
   def self.available_times_for_date(service_point_id, date, min_duration_minutes = nil)
     service_point = ServicePoint.find(service_point_id)
     
@@ -43,7 +120,7 @@ class DynamicAvailabilityService
         end
       end
       
-      current_time += TIME_INTERVAL.minutes
+      current_time += MIN_TIME_INTERVAL.minutes
     end
     
     available_slots
@@ -87,7 +164,7 @@ class DynamicAvailabilityService
         }
       end
       
-      current_time += TIME_INTERVAL.minutes
+      current_time += MIN_TIME_INTERVAL.minutes
     end
     
     {
@@ -150,7 +227,7 @@ class DynamicAvailabilityService
         occupancy_rate: total_posts > 0 ? (occupied_posts.to_f / total_posts * 100).round(1) : 0
       }
       
-      current_time += TIME_INTERVAL.minutes
+      current_time += MIN_TIME_INTERVAL.minutes
     end
     
     {
@@ -165,27 +242,25 @@ class DynamicAvailabilityService
 
   private
 
-  # Получение рабочих часов для даты с учетом шаблонов и исключений
+  # Получение рабочих часов для даты с учетом working_hours
   def self.get_schedule_for_date(service_point, date)
-    # Проверяем исключения (праздники, особые дни)
-    exception = service_point.schedule_exceptions.find_by(exception_date: date)
-    if exception
-      return {
-        is_working: !exception.is_closed,
-        opening_time: exception.opening_time,
-        closing_time: exception.closing_time
-      }
+    # Определяем день недели
+    day_key = date.strftime('%A').downcase # monday, tuesday, etc.
+    
+    # Проверяем рабочие часы сервисной точки
+    working_hours = service_point.working_hours
+    if working_hours.blank? || working_hours[day_key].blank?
+      return { is_working: false }
     end
     
-    # Получаем шаблон для дня недели
-    weekday = Weekday.find_by(sort_order: date.wday == 0 ? 7 : date.wday)
-    template = service_point.schedule_templates.find_by(weekday: weekday)
+    day_schedule = working_hours[day_key]
+    is_working_day = day_schedule['is_working_day'] == 'true' || day_schedule['is_working_day'] == true
     
-    if template && template.is_working_day
+    if is_working_day
       {
         is_working: true,
-        opening_time: template.opening_time,
-        closing_time: template.closing_time
+        opening_time: Time.parse("2024-01-01 #{day_schedule['start']}"),
+        closing_time: Time.parse("2024-01-01 #{day_schedule['end']}")
       }
     else
       { is_working: false }
@@ -214,10 +289,10 @@ class DynamicAvailabilityService
     current_time = start_time
     
     while current_time < end_time
-      availability = check_availability_at_time(service_point_id, date, current_time, TIME_INTERVAL)
+      availability = check_availability_at_time(service_point_id, date, current_time, MIN_TIME_INTERVAL)
       return false unless availability[:available]
       
-      current_time += TIME_INTERVAL.minutes
+      current_time += MIN_TIME_INTERVAL.minutes
     end
     
     true

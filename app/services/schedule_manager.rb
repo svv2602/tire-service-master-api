@@ -11,35 +11,27 @@ class ScheduleManager
       return
     end
     
-    # Преобразуем wday (0-воскресенье, 1-6 пн-сб) в sort_order (1-7 пн-вс)
-    sort_order = date.wday == 0 ? 7 : date.wday
-    weekday = Weekday.find_by(sort_order: sort_order)
+    # Определяем день недели
+    day_key = date.strftime('%A').downcase # monday, tuesday, etc.
     
-    # Проверяем, если на указанную дату есть исключение из расписания
-    exception = ScheduleException.find_by(service_point_id: service_point_id, exception_date: date)
-    
-    if exception
-      if exception.is_working_day
-        # Для рабочего дня исключения используем особое расписание
-        generate_slots_from_exception(service_point, date, exception)
-      else
-        # Для нерабочего дня просто удаляем все существующие неиспользуемые слоты
-        delete_unused_slots(service_point_id, date)
-      end
-      return
-    end
-    
-    # Находим шаблон расписания для указанного дня недели
-    template = ScheduleTemplate.find_by(service_point_id: service_point_id, weekday_id: weekday.id)
-    
-    # Если шаблона нет или день нерабочий, удаляем все неиспользуемые слоты и выходим
-    if template.nil? || !template.is_working_day
+    # Проверяем рабочие часы сервисной точки
+    working_hours = service_point.working_hours
+    if working_hours.blank? || working_hours[day_key].blank?
       delete_unused_slots(service_point_id, date)
       return
     end
     
-    # Генерируем слоты на основе шаблона с учетом индивидуальных постов
-    generate_slots_from_template_with_posts(service_point, date, template)
+    day_schedule = working_hours[day_key]
+    is_working_day = day_schedule['is_working_day'] == 'true' || day_schedule['is_working_day'] == true
+    
+    # Если день нерабочий, удаляем слоты
+    unless is_working_day
+      delete_unused_slots(service_point_id, date)
+      return
+    end
+    
+    # Генерируем слоты для каждого активного поста
+    generate_slots_from_working_hours(service_point, date, day_key)
   end
   
   # Генерирует слоты расписания на указанный период для указанной сервисной точки
@@ -84,6 +76,28 @@ class ScheduleManager
   end
   
   private
+  
+  # Генерирует слоты на основе working_hours с учетом индивидуальных постов
+  def self.generate_slots_from_working_hours(service_point, date, day_key)
+    # Сначала удаляем все неиспользуемые слоты для этой даты
+    delete_unused_slots(service_point.id, date)
+    
+    # Получаем активные посты
+    active_posts = service_point.service_posts.active.ordered_by_post_number
+    
+    # Для каждого поста проверяем, работает ли он в этот день
+    active_posts.each do |service_post|
+      # Проверяем, работает ли пост в этот день недели
+      next unless service_post.working_on_day?(day_key)
+      
+      # Определяем время работы поста
+      post_start_time = service_post.start_time_for_day(day_key)
+      post_end_time = service_post.end_time_for_day(day_key)
+      
+      # Генерируем слоты для этого поста в его рабочие часы
+      generate_slots_for_post(service_point, date, post_start_time, post_end_time, service_post)
+    end
+  end
   
   # Генерирует слоты на основе шаблона расписания с учетом индивидуальных постов
   def self.generate_slots_from_template_with_posts(service_point, date, template)
