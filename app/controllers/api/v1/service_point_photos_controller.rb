@@ -73,19 +73,22 @@ module Api
       end
       
       def photo_params
-        params.permit(:sort_order)
+        params.permit(:sort_order, :description, :is_main)
       end
       
       def photo_update_params
-        params.permit(:sort_order)
+        params.permit(:sort_order, :description, :is_main)
       end
       
       def photo_json(photo)
         {
           id: photo.id,
-          photo_url: photo.file.attached? ? url_for(photo.file) : nil,
+          url: photo.file.attached? ? url_for(photo.file) : nil,
+          description: photo.description,
+          is_main: photo.is_main,
           sort_order: photo.sort_order,
-          created_at: photo.created_at
+          created_at: photo.created_at,
+          updated_at: photo.updated_at
         }
       end
     end

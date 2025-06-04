@@ -69,8 +69,12 @@ class ServicePointSerializer < ActiveModel::Serializer
     object.photos.sorted.map do |photo|
       {
         id: photo.id,
-        url: photo.photo_url,
-        sort_order: photo.sort_order
+        url: photo.file.attached? ? Rails.application.routes.url_helpers.url_for(photo.file) : nil,
+        description: photo.description,
+        is_main: photo.is_main,
+        sort_order: photo.sort_order,
+        created_at: photo.created_at,
+        updated_at: photo.updated_at
       }
     end
   end
