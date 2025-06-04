@@ -77,11 +77,11 @@ Rails.application.routes.draw do
         
         # Новое API для динамической доступности
         member do
+          get 'availability/week', to: 'availability#week_overview', as: 'week_overview'
           get 'availability/:date', to: 'availability#available_times', as: 'availability_times'
           post 'availability/check', to: 'availability#check_time'
           get 'availability/:date/next', to: 'availability#next_available', as: 'next_available'
           get 'availability/:date/details', to: 'availability#day_details', as: 'day_details'
-          get 'availability/week', to: 'availability#week_overview', as: 'week_overview'
         end
         
         resources :schedule_templates, only: [:index, :show, :create, :update, :destroy]

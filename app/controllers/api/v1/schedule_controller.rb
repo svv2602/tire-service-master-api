@@ -91,7 +91,7 @@ module Api
             is_working = !exception.is_closed
             start_time = exception.opening_time
             end_time = exception.closing_time
-          elsif template
+                         elsif template
             is_working = template.is_working_day
             start_time = template.opening_time
             end_time = template.closing_time
@@ -106,13 +106,13 @@ module Api
             available_count = 0
           end
           
-          days_schedule << {
-            date: date.strftime('%Y-%m-%d'),
-            weekday: weekday.name,
+            days_schedule << {
+              date: date.strftime('%Y-%m-%d'),
+              weekday: weekday.name,
             is_working_day: is_working,
             working_hours: is_working ? {
-              start: start_time&.strftime('%H:%M'),
-              end: end_time&.strftime('%H:%M')
+                start: start_time&.strftime('%H:%M'),
+                end: end_time&.strftime('%H:%M')
             } : nil,
             available_slots_count: available_count,
             is_fully_booked: available_count == 0

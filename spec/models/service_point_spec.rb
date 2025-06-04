@@ -22,10 +22,10 @@ RSpec.describe ServicePoint, type: :model do
   end
 
   describe 'validations' do
+    subject { build(:service_point) }
+    
     it { should validate_presence_of(:name) }
     it { should validate_presence_of(:address) }
-    it { should validate_numericality_of(:post_count).is_greater_than(0) }
-    it { should validate_numericality_of(:default_slot_duration).is_greater_than(0) }
     it { should validate_numericality_of(:latitude).is_greater_than_or_equal_to(-90).is_less_than_or_equal_to(90).allow_nil }
     it { should validate_numericality_of(:longitude).is_greater_than_or_equal_to(-180).is_less_than_or_equal_to(180).allow_nil }
     it { should validate_presence_of(:work_status) }

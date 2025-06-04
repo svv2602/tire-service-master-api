@@ -45,9 +45,11 @@ RSpec.describe 'Service Point Photos API', type: :request do
             properties: {
               id: { type: :integer },
               url: { type: :string },
-              description: { type: :string },
+              description: { type: [:string, :null] },
+              is_main: { type: :boolean },
               sort_order: { type: :integer },
-              created_at: { type: :string, format: :date_time }
+              created_at: { type: :string, format: :date_time },
+              updated_at: { type: :string, format: :date_time }
             }
           }
         
@@ -106,7 +108,7 @@ RSpec.describe 'Service Point Photos API', type: :request do
             message: { type: :string, example: "Доступ запрещен" }
           }
         # Create a service point owned by a different partner
-        let(:other_partner) { create(:partner) }
+        let(:other_partner) { create(:partner, :with_new_user) }
         let(:service_point) { create(:service_point, partner: other_partner) }
         let(:service_point_id) { service_point.id }
         let(:file) { Rack::Test::UploadedFile.new(mock_photo_path, 'image/jpeg') }
@@ -157,9 +159,11 @@ RSpec.describe 'Service Point Photos API', type: :request do
           properties: {
             id: { type: :integer },
             url: { type: :string },
-            description: { type: :string },
+            description: { type: [:string, :null] },
+            is_main: { type: :boolean },
             sort_order: { type: :integer },
-            created_at: { type: :string, format: :date_time }
+            created_at: { type: :string, format: :date_time },
+            updated_at: { type: :string, format: :date_time }
           }
         
         let(:service_point) { create(:service_point, :with_photos, photos_count: 1) }
@@ -220,7 +224,7 @@ RSpec.describe 'Service Point Photos API', type: :request do
           properties: {
             message: { type: :string, example: "Доступ запрещен" }
           }
-        let(:other_partner) { create(:partner) }
+        let(:other_partner) { create(:partner, :with_new_user) }
         let(:service_point) { create(:service_point, :with_photos, photos_count: 1, partner: other_partner) }
         let(:service_point_id) { service_point.id }
         let(:id) { service_point.photos.first.id }
@@ -302,7 +306,7 @@ RSpec.describe 'Service Point Photos API', type: :request do
           properties: {
             message: { type: :string, example: "Доступ запрещен" }
           }
-        let(:other_partner) { create(:partner) }
+        let(:other_partner) { create(:partner, :with_new_user) }
         let(:service_point) { create(:service_point, :with_photos, photos_count: 1, partner: other_partner) }
         let(:service_point_id) { service_point.id }
         let(:id) { service_point.photos.first.id }

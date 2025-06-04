@@ -140,7 +140,7 @@ RSpec.describe 'API V1 ServicePoints Working Tests', type: :request do
                headers: partner_headers
         }.to change(ServicePoint, :count).by(1)
         
-        expect(response).to have_http_status(200)
+        expect(response).to have_http_status(201)
         
         created_point = ServicePoint.last
         expect(created_point.name).to eq('Новая точка обслуживания')

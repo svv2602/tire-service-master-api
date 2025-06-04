@@ -1,7 +1,7 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :update, :create]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses]
       before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses]
       
       # GET /api/v1/service_points
@@ -53,7 +53,7 @@ module Api
       # POST /api/v1/partners/:partner_id/service_points
       def create
         @partner = Partner.find(params[:partner_id])
-        # authorize @partner, :create_service_point? # Временно отключаем авторизацию
+        authorize @partner, :create_service_point?
         
         # Отладочное логирование
         Rails.logger.info "=== Параметры создания сервисной точки ==="
@@ -65,7 +65,7 @@ module Api
         
         if @service_point.save
           log_action('create', 'service_point', @service_point.id, {}, @service_point.as_json)
-          render json: @service_point
+          render json: @service_point, status: :created
         else
           Rails.logger.error "Ошибки при сохранении сервисной точки: #{@service_point.errors.full_messages}"
           render json: { errors: @service_point.errors }, status: :unprocessable_entity
@@ -74,7 +74,7 @@ module Api
       
       # PATCH/PUT /api/v1/partners/:partner_id/service_points/:id
       def update
-        # authorize @service_point
+        authorize @service_point
         
         # Детальное логирование для диагностики
         Rails.logger.info "=== UPDATE SERVICE POINT ==="

@@ -417,7 +417,7 @@ RSpec.describe 'Service Points API', type: :request do
             message: { type: :string, example: "Доступ запрещен" }
           }
         let(:partner_id) { partner.id }
-        let(:other_partner) { create(:partner) }
+        let(:other_partner) { create(:partner, :with_new_user) }
         let(:service_point_obj) { create(:service_point, partner_id: other_partner.id) }
         let(:id) { service_point_obj.id }
         let(:service_point) { { service_point: { name: 'Updated Service Point' } } }
@@ -479,7 +479,7 @@ RSpec.describe 'Service Points API', type: :request do
             message: { type: :string, example: "Доступ запрещен" }
           }
         let(:partner_id) { partner.id }
-        let(:other_partner) { create(:partner) }
+        let(:other_partner) { create(:partner, :with_new_user) }
         let(:service_point_obj) { create(:service_point, partner_id: other_partner.id) }
         let(:id) { service_point_obj.id }
         

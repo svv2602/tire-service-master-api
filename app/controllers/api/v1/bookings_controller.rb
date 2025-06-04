@@ -549,9 +549,6 @@ module Api
               @booking.update(cancellation_reason_id: reason_id, cancellation_comment: comment)
             end
             
-            # Убираем ссылку на slot - больше не используется
-            # @booking.slot&.update(is_available: true)
-            
             # Обновляем метрики сервисной точки
             if @booking.service_point.respond_to?(:recalculate_metrics!)
               @booking.service_point.recalculate_metrics!
@@ -688,7 +685,7 @@ module Api
         # Получаем параметры из запроса
         permitted_params = params.require(:booking).permit(
           :service_point_id, :car_id, :car_type_id, :booking_date, :start_time, :end_time,
-          :payment_method, :notes, :slot_id, :status_id, :payment_status_id
+          :payment_method, :notes, :status_id, :payment_status_id
         )
         
         # Явно конвертируем status_id и payment_status_id в integer, если они присутствуют
@@ -774,21 +771,10 @@ module Api
       
       # Резервирование слота в расписании
       def reserve_schedule_slot
-        # Используем существующий слот расписания вместо создания нового
-        return if @booking.slot_id.present?
-        
-        # Если слот не указан, создаем новый
-        slot = @booking.service_point.schedule_slots.create!(
-          slot_date: @booking.booking_date,
-          start_time: @booking.start_time,
-          end_time: @booking.end_time,
-          is_available: false,
-          post_number: 1, # Добавляем номер поста
-          status: 'booked',
-          booking_id: @booking.id
-        )
-        
-        @booking.update(slot_id: slot.id)
+        # В новой динамической системе бронирований мы не создаем физические слоты
+        # Бронирование само по себе является "резервированием времени"
+        # Этот метод оставлен для совместимости, но больше ничего не делает
+        true
       end
       
       # Отмена бронирования с указанием причины
@@ -808,9 +794,6 @@ module Api
               cancellation_reason: reason,
               cancellation_comment: comment
             )
-            
-            # Убираем ссылку на slot - больше не используется
-            # @booking.slot&.update(is_available: true)
             
             # Обновление метрик сервисной точки
             if @booking.service_point.respond_to?(:recalculate_metrics!)
@@ -929,7 +912,7 @@ module Api
           service_point_id: attributes[:service_point_id] || 1,
           car_id: attributes[:car_id],
           car_type_id: car_type_id,
-          slot_id: attributes[:slot_id] || 1,
+          
           booking_date: attributes[:booking_date] || Date.current + 1.day,
           start_time: attributes[:start_time] || "10:00",
           end_time: attributes[:end_time] || "11:00",

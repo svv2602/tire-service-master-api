@@ -9,29 +9,47 @@ class Api::V1::AvailabilityController < ApplicationController
   # Получение доступных временных интервалов на дату
   def available_times
     date = parse_date(params[:date])
-    min_duration = params[:min_duration_minutes]&.to_i
+    return if date.nil? # Если parse_date уже отрендерил ошибку, выходим
     
-    available_times = DynamicAvailabilityService.available_times_for_date(
-      @service_point.id, 
-      date, 
-      min_duration
-    )
+    min_duration = params[:min_duration_minutes]&.to_i || params[:duration]&.to_i
     
-    render json: {
-      service_point_id: @service_point.id,
-      date: date.strftime('%Y-%m-%d'),
-      min_duration_minutes: min_duration,
-      available_times: available_times,
-      total_intervals: available_times.count
-    }
+    begin
+      available_times = DynamicAvailabilityService.available_times_for_date(
+        @service_point.id, 
+        date, 
+        min_duration
+      )
+      
+      # Проверяем рабочий ли день
+      schedule_info = DynamicAvailabilityService.send(:get_schedule_for_date, @service_point, date)
+      
+      render json: {
+        service_point_id: @service_point.id,
+        date: date.strftime('%Y-%m-%d'),
+        duration: min_duration,
+        min_duration_minutes: min_duration,
+        is_working_day: schedule_info[:is_working],
+        available_times: available_times,
+        total_intervals: available_times.count
+      }
+    rescue => e
+      render json: { error: "Внутренняя ошибка сервера: #{e.message}" }, status: :internal_server_error
+    end
   end
   
   # POST /api/v1/service_points/:service_point_id/availability/check
   # Проверка доступности конкретного времени
   def check_time
     date = parse_date(params[:date])
+    return if date.nil? # Если parse_date уже отрендерил ошибку, выходим
+    
     time_str = params[:time] # "14:30"
     duration_minutes = params[:duration_minutes]&.to_i || 60
+    
+    # Проверяем наличие обязательных параметров
+    if time_str.blank?
+      return render json: { error: 'Параметр time обязателен' }, status: :bad_request
+    end
     
     begin
       time = Time.parse("#{date} #{time_str}")
@@ -59,8 +77,10 @@ class Api::V1::AvailabilityController < ApplicationController
   # Поиск ближайшего доступного времени
   def next_available
     date = parse_date(params[:date])
+    return if date.nil? # Если parse_date уже отрендерил ошибку, выходим
+    
     after_time_str = params[:after_time] # "14:30" или nil
-    duration_minutes = params[:duration_minutes]&.to_i || 60
+    duration_minutes = params[:duration_minutes]&.to_i || params[:duration]&.to_i || 60
     
     after_time = if after_time_str
                    begin
@@ -86,7 +106,7 @@ class Api::V1::AvailabilityController < ApplicationController
         requested_after_time: after_time_str,
         duration_minutes: duration_minutes,
         found: true,
-        next_available: next_slot
+        next_available_time: next_slot
       }
     else
       render json: {
@@ -95,7 +115,8 @@ class Api::V1::AvailabilityController < ApplicationController
         requested_after_time: after_time_str,
         duration_minutes: duration_minutes,
         found: false,
-        message: 'Свободное время не найдено в ближайшие 30 дней'
+        next_available_time: nil,
+        message: 'Нет доступных времён в ближайшие 30 дней'
       }
     end
   end
@@ -104,15 +125,20 @@ class Api::V1::AvailabilityController < ApplicationController
   # Детальная информация о загрузке на день
   def day_details
     date = parse_date(params[:date])
+    return if date.nil? # Если parse_date уже отрендерил ошибку, выходим
     
-    details = DynamicAvailabilityService.day_occupancy_details(@service_point.id, date)
-    
-    render json: {
-      service_point_id: @service_point.id,
-      service_point_name: @service_point.name,
-      date: date.strftime('%Y-%m-%d'),
-      **details
-    }
+    begin
+      details = DynamicAvailabilityService.day_occupancy_details(@service_point.id, date)
+      
+      render json: {
+        service_point_id: @service_point.id,
+        service_point_name: @service_point.name,
+        date: date.strftime('%Y-%m-%d'),
+        **details
+      }
+    rescue => e
+      render json: { error: "Внутренняя ошибка сервера: #{e.message}" }, status: :internal_server_error
+    end
   end
   
   # GET /api/v1/service_points/:service_point_id/availability/week
@@ -155,7 +181,7 @@ class Api::V1::AvailabilityController < ApplicationController
   def parse_date(date_string)
     Date.parse(date_string)
   rescue ArgumentError, TypeError
-    render json: { error: 'Неверный формат даты' }, status: :bad_request
+    render json: { error: 'Некорректный формат даты' }, status: :bad_request
     nil
   end
 end 

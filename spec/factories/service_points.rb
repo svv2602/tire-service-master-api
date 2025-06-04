@@ -6,8 +6,6 @@ FactoryBot.define do
     longitude { Faker::Address.longitude }
     contact_phone { Faker::PhoneNumber.cell_phone_in_e164 }
     description { Faker::Lorem.paragraph }
-    post_count { rand(1..5) }
-    default_slot_duration { 30 }
     is_active { true }
     work_status { 'working' }
     partner { association :partner, :with_new_user }
@@ -49,7 +47,20 @@ FactoryBot.define do
     
     trait :with_schedule do
       after(:create) do |service_point|
-        create(:schedule_template, service_point: service_point)
+        # Создаем расписание для всех дней недели
+        (1..7).each do |sort_order|
+          weekday = Weekday.find_or_create_by!(sort_order: sort_order) do |w|
+            w.name = Date::DAYNAMES[sort_order % 7]
+            w.short_name = Date::ABBR_DAYNAMES[sort_order % 7]
+          end
+          
+          create(:schedule_template, 
+                 service_point: service_point, 
+                 weekday: weekday,
+                 is_working_day: true,
+                 opening_time: '09:00:00',
+                 closing_time: '18:00:00')
+        end
       end
     end
   end

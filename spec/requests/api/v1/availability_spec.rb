@@ -19,8 +19,8 @@ RSpec.describe "Api::V1::Availability", type: :request do
       service_point: service_point,
       weekday: weekday,
       is_working_day: true,
-      opening_time: Time.parse('09:00'),
-      closing_time: Time.parse('18:00')
+      opening_time: '09:00:00',
+      closing_time: '18:00:00'
     )
   end
   
@@ -126,8 +126,8 @@ RSpec.describe "Api::V1::Availability", type: :request do
       let(:valid_params) do
         {
           date: test_date,
-          start_time: '10:00',
-          duration: 60
+          time: '10:00',
+          duration_minutes: 60
         }
       end
       
@@ -140,8 +140,8 @@ RSpec.describe "Api::V1::Availability", type: :request do
         expect(json['available']).to be true
         expect(json['total_posts']).to eq(3)
         expect(json['occupied_posts']).to eq(0)
-        expect(json['start_time']).to eq('10:00')
-        expect(json['duration']).to eq(60)
+        expect(json['time']).to eq('10:00')
+        expect(json['duration_minutes']).to eq(60)
       end
     end
     
@@ -166,8 +166,8 @@ RSpec.describe "Api::V1::Availability", type: :request do
       let(:busy_params) do
         {
           date: test_date,
-          start_time: '10:00',
-          duration: 60
+          time: '10:00',
+          duration_minutes: 60
         }
       end
       
@@ -186,8 +186,8 @@ RSpec.describe "Api::V1::Availability", type: :request do
       let(:invalid_time_params) do
         {
           date: test_date,
-          start_time: '08:00',
-          duration: 60
+          time: '08:00',
+          duration_minutes: 60
         }
       end
       
@@ -232,20 +232,35 @@ RSpec.describe "Api::V1::Availability", type: :request do
     
     context 'когда весь день занят' do
       before do
-        # Занимаем весь день
-        (9..17).each do |hour|
-          3.times do
-            create(:booking,
-              service_point: service_point,
-              client: client,
-              car_type: car_type,
-              status: pending_status,
-              booking_date: Date.parse(test_date),
-              start_time: DateTime.new(2025, 6, 3, hour, 0, 0),
-              end_time: DateTime.new(2025, 6, 3, hour + 1, 0, 0),
-              skip_availability_check: true,
-              skip_status_validation: true
-            )
+        # Создаем расписание для всех дней недели
+        (1..7).each do |day|
+          weekday = create(:weekday, name: "Day#{day}", sort_order: day)
+          create(:schedule_template,
+            service_point: service_point,
+            weekday: weekday,
+            is_working_day: true, # Все дни рабочие
+            opening_time: '09:00:00',
+            closing_time: '18:00:00'
+          )
+        end
+        
+        # Занимаем много дней подряд (текущий день + следующие 35 дней)
+        (0..35).each do |day_offset|
+          booking_date = Date.parse(test_date) + day_offset.days
+          (9..17).each do |hour|
+            3.times do
+              create(:booking,
+                service_point: service_point,
+                client: client,
+                car_type: car_type,
+                status: pending_status,
+                booking_date: booking_date,
+                start_time: DateTime.new(booking_date.year, booking_date.month, booking_date.day, hour, 0, 0),
+                end_time: DateTime.new(booking_date.year, booking_date.month, booking_date.day, hour + 1, 0, 0),
+                skip_availability_check: true,
+                skip_status_validation: true
+              )
+            end
           end
         end
       end
@@ -338,8 +353,8 @@ RSpec.describe "Api::V1::Availability", type: :request do
             service_point: service_point,
             weekday: weekday,
             is_working_day: day <= 5, # Пн-Пт рабочие дни
-            opening_time: Time.parse('09:00'),
-            closing_time: Time.parse('18:00')
+            opening_time: '09:00:00',
+            closing_time: '18:00:00'
           )
         end
       end
@@ -351,14 +366,14 @@ RSpec.describe "Api::V1::Availability", type: :request do
         json = JSON.parse(response.body)
         
         expect(json['service_point_id']).to eq(service_point.id)
-        expect(json['week_overview']).to be_an(Array)
-        expect(json['week_overview'].count).to eq(7)
+        expect(json['days']).to be_an(Array)
+        expect(json['days'].count).to eq(7)
         
         # Проверяем что рабочие дни помечены правильно
-        monday = json['week_overview'].find { |day| day['date'] == '2025-06-02' }
+        monday = json['days'].find { |day| day['date'] == '2025-06-02' }
         expect(monday['is_working']).to be true
         
-        saturday = json['week_overview'].find { |day| day['date'] == '2025-06-07' }
+        saturday = json['days'].find { |day| day['date'] == '2025-06-07' }
         expect(saturday['is_working']).to be false
       end
     end

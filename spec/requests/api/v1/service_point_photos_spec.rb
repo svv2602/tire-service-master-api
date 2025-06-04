@@ -57,7 +57,7 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
       end
 
       it 'returns photos with correct attributes' do
-        expect(json.first).to include('id', 'photo_url', 'sort_order')
+        expect(json.first).to include('id', 'url', 'sort_order')
       end
     end
     
@@ -123,7 +123,7 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
         end
         
         it 'creates a photo' do
-          expect(json['photo_url']).to be_present
+          expect(json['url']).to be_present
         end
         
         it 'returns status code 201' do
@@ -139,7 +139,7 @@ RSpec.describe 'API V1 ServicePointPhotos', type: :request do
         end
         
         it 'creates a photo' do
-          expect(json['photo_url']).to be_present
+          expect(json['url']).to be_present
         end
         
         it 'returns status code 201' do

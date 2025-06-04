@@ -34,14 +34,13 @@ RSpec.describe "Booking Integration", type: :model do
     booking.status_id = pending_status.id
     booking.payment_status_id = payment_pending.id
     booking.booking_date = Date.current + 1.day
-    booking.start_time = Time.parse('10:00')
-    booking.end_time = Time.parse('11:00')
+    booking.start_time = Time.current + 10.hours
+    booking.end_time = Time.current + 11.hours
     
     # Пропустим проверку других полей для фокусировки на car_type
     # Это будет работать, так как мы проверяем только логику car_type
     booking.client_id = 1
     booking.service_point_id = 1
-    booking.slot_id = 1
     
     # Проверяем связи
     expect(booking.car).to be_nil
