@@ -60,26 +60,20 @@ class DynamicAvailabilityService
   
   # Проверяет, занят ли слот для конкретного поста
   def self.is_slot_occupied?(service_point_id, service_post_id, date, start_time, end_time)
-    # Проверяем если есть слот в базе данных и он занят
-    slot = ScheduleSlot.find_by(
-      service_point_id: service_point_id,
-      service_post_id: service_post_id,
-      slot_date: date,
-      start_time: start_time.strftime('%H:%M:%S'),
-      end_time: end_time.strftime('%H:%M:%S')
-    )
+    # Проверяем наличие бронирований, которые пересекаются с этим слотом
+    Booking.where(
+      service_point_id: service_point_id, 
+      booking_date: date
+    ).where(
+      "start_time < ? AND end_time > ?", 
+      end_time.strftime('%H:%M:%S'), 
+      start_time.strftime('%H:%M:%S')
+    ).where.not(
+      status_id: BookingStatus.canceled_statuses
+    ).exists?
     
-    # Если слота нет в базе, считаем что он недоступен
-    return true unless slot
-    
-    # Если слот отмечен как недоступный
-    return true unless slot.is_available
-    
-    # Проверяем наличие бронирований в это время
-    Booking.where(service_point_id: service_point_id, booking_date: date)
-           .where("start_time < ? AND end_time > ?", end_time.strftime('%H:%M:%S'), start_time.strftime('%H:%M:%S'))
-           .where.not(status_id: BookingStatus.canceled_statuses)
-           .exists?
+    # Примечание: Убрали зависимость от schedule_slots, так как генерируем слоты динамически
+    # На основе рабочих часов постов. Проверяем только пересечения с бронированиями.
   end
   
   # Обратная совместимость: старый метод с фиксированным интервалом
