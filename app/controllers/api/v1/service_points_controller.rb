@@ -1,7 +1,7 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview]
       before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses]
       
       # GET /api/v1/service_points
@@ -145,29 +145,26 @@ module Api
         # Используем новый метод DynamicAvailabilityService
         available_slots = DynamicAvailabilityService.available_slots_for_date(@service_point.id, date)
         
-        # Группируем слоты по времени для удобного отображения
-        slots_by_time = available_slots.group_by { |slot| slot[:start_time] }
+        # Собираем все уникальные времена из доступных слотов
+        all_times = available_slots.map { |slot| slot[:start_time] }.uniq.sort
         
-        # Формируем результат в формате подобном старому предварительному просмотру
+        # Формируем результат на основе реальных временных интервалов постов
         preview_slots = []
         
-        # Создаем список временных интервалов с 15-минутным шагом для совместимости
+        # Проверяем рабочий день
         day_key = date.strftime('%A').downcase
         working_hours = @service_point.working_hours
+        is_working_day = working_hours && working_hours[day_key] && 
+                         (working_hours[day_key]['is_working_day'] == 'true' || 
+                          working_hours[day_key]['is_working_day'] == true)
         
-        if working_hours && working_hours[day_key] && (working_hours[day_key]['is_working_day'] == 'true' || working_hours[day_key]['is_working_day'] == true)
-          day_schedule = working_hours[day_key]
-          start_time = Time.parse("#{date} #{day_schedule['start']}")
-          end_time = Time.parse("#{date} #{day_schedule['end']}")
-          
-          current_time = start_time
-          while current_time < end_time
-            time_str = current_time.strftime('%H:%M')
-            
+        if is_working_day && all_times.any?
+          # Для каждого уникального времени создаем preview_slot
+          all_times.each do |time_str|
             # Находим все слоты, которые начинаются в это время
-            slots_at_time = slots_by_time[time_str] || []
+            slots_at_time = available_slots.select { |slot| slot[:start_time] == time_str }
             
-            # Подсчитываем общую доступность на это время
+            # Подсчитываем доступность на это время
             available_posts_count = slots_at_time.length
             total_posts = @service_point.service_posts.active.count
             
@@ -185,8 +182,6 @@ module Api
                 }
               end
             }
-            
-            current_time += 15.minutes
           end
         end
         
@@ -194,7 +189,7 @@ module Api
           service_point_id: @service_point.id,
           date: date,
           day_key: day_key,
-          is_working_day: working_hours && working_hours[day_key] && (working_hours[day_key]['is_working_day'] == 'true' || working_hours[day_key]['is_working_day'] == true),
+          is_working_day: is_working_day,
           preview_slots: preview_slots,
           total_active_posts: @service_point.service_posts.active.count,
           raw_available_slots: available_slots # Оригинальные слоты с учетом индивидуальных интервалов
