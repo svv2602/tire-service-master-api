@@ -90,22 +90,61 @@ class ScheduleManager
     # Сначала удаляем все неиспользуемые слоты для этой даты
     delete_unused_slots(service_point.id, date)
     
-    # Определяем время начала и окончания рабочего дня
-    start_time = template.opening_time
-    end_time = template.closing_time
+    # Определяем день недели для проверки индивидуальных расписаний
+    day_key = date.strftime('%A').downcase # monday, tuesday, etc.
     
-    # Получаем активные посты с их индивидуальными настройками
+    # Получаем активные посты
     active_posts = service_point.service_posts.active.ordered_by_post_number
     
-    # Для каждого поста генерируем слоты с его индивидуальной длительностью
+    # Для каждого поста проверяем, работает ли он в этот день
     active_posts.each do |service_post|
-      generate_slots_for_post(service_point, date, start_time, end_time, service_post)
+      # Проверяем, работает ли пост в этот день недели
+      next unless service_post.working_on_day?(day_key)
+      
+      # Определяем время работы поста
+      post_start_time = parse_time_for_post(service_post, day_key, 'start', template.opening_time)
+      post_end_time = parse_time_for_post(service_post, day_key, 'end', template.closing_time)
+      
+      # Генерируем слоты для этого поста в его рабочие часы
+      generate_slots_for_post(service_point, date, post_start_time, post_end_time, service_post)
     end
   end
   
+  # Определяет время начала или окончания работы поста
+  def self.parse_time_for_post(service_post, day_key, time_type, default_time)
+    if service_post.has_custom_schedule? && service_post.custom_hours.present?
+      time_string = service_post.custom_hours[time_type]
+      return Time.parse("2024-01-01 #{time_string}").strftime('%H:%M:%S') if time_string.present?
+    end
+    
+    # Если нет индивидуального времени, используем время точки обслуживания
+    if service_post.service_point.working_hours.present?
+      day_hours = service_post.service_point.working_hours[day_key]
+      if day_hours.is_a?(Hash) && day_hours[time_type].present?
+        return day_hours[time_type]
+      end
+    end
+    
+    # Если ничего не найдено, используем время по умолчанию из шаблона
+    default_time.strftime('%H:%M:%S')
+  end
+  
   # Генерирует слоты для конкретного поста с его индивидуальной длительностью
-  def self.generate_slots_for_post(service_point, date, start_time, end_time, service_post)
+  def self.generate_slots_for_post(service_point, date, start_time_str, end_time_str, service_post)
     slot_duration = service_post.slot_duration
+    
+    # Если переданы объекты Time, преобразуем их в строки времени
+    if start_time_str.is_a?(Time)
+      start_time_str = start_time_str.strftime('%H:%M:%S')
+    end
+    if end_time_str.is_a?(Time)
+      end_time_str = end_time_str.strftime('%H:%M:%S')
+    end
+    
+    # Парсим время из строки в объекты Time для данной даты
+    start_time = Time.parse("#{date} #{start_time_str}")
+    end_time = Time.parse("#{date} #{end_time_str}")
+    
     current_time = start_time
     
     while current_time + slot_duration.minutes <= end_time
@@ -116,21 +155,26 @@ class ScheduleManager
         service_point_id: service_point.id,
         service_post_id: service_post.id,
         slot_date: date,
-        start_time: current_time,
-        end_time: slot_end_time
+        start_time: current_time.strftime('%H:%M:%S'),
+        end_time: slot_end_time.strftime('%H:%M:%S')
       )
       
       # Если слота нет, создаем его
       unless slot
-        ScheduleSlot.create!(
-          service_point_id: service_point.id,
-          service_post_id: service_post.id,
-          slot_date: date,
-          start_time: current_time,
-          end_time: slot_end_time,
-          post_number: service_post.post_number,
-          is_available: true
-        )
+        begin
+          ScheduleSlot.create!(
+            service_point_id: service_point.id,
+            service_post_id: service_post.id,
+            slot_date: date,
+            start_time: current_time.strftime('%H:%M:%S'),
+            end_time: slot_end_time.strftime('%H:%M:%S'),
+            post_number: service_post.post_number,
+            is_available: true
+          )
+        rescue ActiveRecord::RecordNotUnique
+          # Игнорируем дублирующиеся слоты
+          Rails.logger.debug "Слот уже существует для поста #{service_post.post_number} в #{current_time}"
+        end
       end
       
       # Переходим к следующему временному слоту для этого поста
@@ -143,17 +187,35 @@ class ScheduleManager
     # Сначала удаляем все неиспользуемые слоты для этой даты
     delete_unused_slots(service_point.id, date)
     
-    # Определяем время начала и окончания рабочего дня
-    start_time = exception.start_time
-    end_time = exception.end_time
+    # Определяем день недели для проверки индивидуальных расписаний
+    day_key = date.strftime('%A').downcase # monday, tuesday, etc.
     
-    # Получаем активные посты с их индивидуальными настройками
+    # Получаем активные посты
     active_posts = service_point.service_posts.active.ordered_by_post_number
     
-    # Для каждого поста генерируем слоты с его индивидуальной длительностью
+    # Для каждого поста проверяем, работает ли он в этот день
     active_posts.each do |service_post|
-      generate_slots_for_post(service_point, date, start_time, end_time, service_post)
+      # Проверяем, работает ли пост в этот день недели
+      next unless service_post.working_on_day?(day_key)
+      
+      # Определяем время работы поста для исключения
+      post_start_time = parse_time_for_post_exception(service_post, day_key, 'start', exception.start_time)
+      post_end_time = parse_time_for_post_exception(service_post, day_key, 'end', exception.end_time)
+      
+      # Генерируем слоты для этого поста в его рабочие часы
+      generate_slots_for_post(service_point, date, post_start_time, post_end_time, service_post)
     end
+  end
+  
+  # Определяет время для исключения с учетом индивидуального расписания поста
+  def self.parse_time_for_post_exception(service_post, day_key, time_type, exception_time)
+    if service_post.has_custom_schedule? && service_post.custom_hours.present?
+      time_string = service_post.custom_hours[time_type]
+      return time_string if time_string.present?
+    end
+    
+    # Если нет индивидуального времени, используем время из исключения
+    exception_time.strftime('%H:%M:%S')
   end
   
   # Проверяет, доступен ли указанный временной интервал для бронирования

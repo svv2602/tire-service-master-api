@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_04_023440) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_04_084510) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -483,6 +483,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_023440) do
     t.text "description"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "has_custom_schedule", default: false, null: false, comment: "Использует ли пост индивидуальное расписание"
+    t.json "working_days", comment: "JSON с настройками рабочих дней поста (monday, tuesday, etc.)"
+    t.json "custom_hours", comment: "JSON с индивидуальным временем работы поста (start, end)"
     t.index ["service_point_id", "is_active"], name: "index_service_posts_on_service_point_and_active"
     t.index ["service_point_id", "post_number"], name: "index_service_posts_on_service_point_and_post_number", unique: true
     t.index ["service_point_id"], name: "index_service_posts_on_service_point_id"

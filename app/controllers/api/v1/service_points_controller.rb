@@ -224,7 +224,12 @@ module Api
             :saturday => [:start, :end, :is_working_day],
             :sunday => [:start, :end, :is_working_day]
           ],
-          service_posts_attributes: [:id, :name, :description, :slot_duration, :is_active, :post_number, :_destroy],
+          service_posts_attributes: [
+            :id, :name, :description, :slot_duration, :is_active, :post_number, :_destroy,
+            :has_custom_schedule,
+            working_days: [:monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday],
+            custom_hours: [:start, :end]
+          ],
           photos_attributes: [:id, :file, :description, :is_main, :sort_order, :_destroy],
           services_attributes: [:id, :service_id, :price, :duration, :is_available, :_destroy]
         )
