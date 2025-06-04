@@ -189,6 +189,7 @@ class ServicePost < ApplicationRecord
   # Проверка что выбран хотя бы один рабочий день
   def at_least_one_working_day
     return unless working_days.present?
+    return unless working_days.is_a?(Hash) # Проверяем что это хэш перед вызовом values
     
     unless working_days.values.any? { |v| v == true }
       errors.add(:working_days, 'должен быть выбран хотя бы один рабочий день')

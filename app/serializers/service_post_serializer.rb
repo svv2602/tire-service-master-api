@@ -17,6 +17,7 @@ class ServicePostSerializer < ActiveModel::Serializer
   
   # Возвращает список рабочих дней для удобства фронтенда
   def working_days_list
+    return [] unless object.has_custom_schedule?
     object.working_days_list
   end
   

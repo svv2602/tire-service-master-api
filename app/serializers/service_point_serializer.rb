@@ -31,17 +31,7 @@ class ServicePointSerializer < ActiveModel::Serializer
   
   def service_posts
     object.service_posts.order(:post_number).map do |post|
-      {
-        id: post.id,
-        service_point_id: post.service_point_id,
-        post_number: post.post_number,
-        name: post.name,
-        description: post.description,
-        slot_duration: post.slot_duration,
-        is_active: post.is_active,
-        created_at: post.created_at,
-        updated_at: post.updated_at
-      }
+      ServicePostSerializer.new(post).as_json
     end
   end
   
