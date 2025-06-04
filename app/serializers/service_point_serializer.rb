@@ -2,7 +2,7 @@ class ServicePointSerializer < ActiveModel::Serializer
   attributes :id, :name, :description, :address, :latitude, :longitude, :contact_phone, 
              :is_active, :work_status, :status_display, :post_count, :default_slot_duration, 
              :rating, :total_clients_served, :average_rating, :cancellation_rate, :created_at, :updated_at,
-             :posts_count, :service_posts_summary, :service_posts
+             :posts_count, :service_posts_summary, :service_posts, :services
   
   belongs_to :partner
   belongs_to :city
@@ -41,6 +41,26 @@ class ServicePointSerializer < ActiveModel::Serializer
         is_active: post.is_active,
         created_at: post.created_at,
         updated_at: post.updated_at
+      }
+    end
+  end
+  
+  def services
+    object.service_point_services.includes(:service).map do |service_point_service|
+      {
+        id: service_point_service.id,
+        service_id: service_point_service.service_id,
+        price: service_point_service.price,
+        duration: service_point_service.duration,
+        is_available: service_point_service.is_available,
+        service: {
+          id: service_point_service.service.id,
+          name: service_point_service.service.name,
+          category: service_point_service.service.category ? {
+            id: service_point_service.service.category.id,
+            name: service_point_service.service.category.name
+          } : nil
+        }
       }
     end
   end
