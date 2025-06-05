@@ -114,6 +114,7 @@ Rails.application.routes.draw do
           get 'weekly_occupancy', to: 'service_points#weekly_occupancy'
           get 'posts_schedule', to: 'service_points#posts_schedule'
           get 'schedule_preview', to: 'service_points#schedule_preview'
+          post 'calculate_schedule_preview', to: 'service_points#calculate_schedule_preview'
         end
         
         collection do
