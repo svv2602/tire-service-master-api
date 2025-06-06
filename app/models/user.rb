@@ -7,6 +7,7 @@ class User < ApplicationRecord
   has_one :partner, dependent: :destroy
   has_one :client, dependent: :destroy
   has_one :manager, dependent: :destroy
+  has_many :authored_articles, class_name: 'Article', foreign_key: 'author_id', dependent: :destroy
   # Ассоциация закомментирована, т.к. таблица не существует в базе данных
   # has_many :social_accounts, class_name: 'UserSocialAccount', dependent: :destroy
   has_many :system_logs, dependent: :nullify

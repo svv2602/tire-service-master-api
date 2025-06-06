@@ -157,6 +157,17 @@ Rails.application.routes.draw do
       resources :cancellation_reasons, only: [:index, :show]
       resources :amenities, only: [:index, :show]
       
+      # Статьи и контент
+      resources :articles do
+        collection do
+          get 'categories'
+          get 'popular'
+        end
+        member do
+          get 'related'
+        end
+      end
+      
       # Бронирования
       resources :bookings, only: [:index, :show] do
         member do

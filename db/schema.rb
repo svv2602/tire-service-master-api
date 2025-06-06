@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_04_084510) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_06_184823) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -56,6 +56,36 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_084510) do
     t.string "icon"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "articles", force: :cascade do |t|
+    t.string "title", limit: 255, null: false
+    t.text "content", null: false
+    t.text "excerpt"
+    t.string "category", limit: 50, default: "tips", null: false
+    t.string "status", limit: 20, default: "draft", null: false
+    t.boolean "featured", default: false
+    t.string "meta_title", limit: 60
+    t.text "meta_description"
+    t.string "slug", limit: 255
+    t.bigint "author_id", null: false
+    t.datetime "published_at"
+    t.integer "views_count", default: 0
+    t.integer "reading_time", default: 1
+    t.string "featured_image_url"
+    t.json "gallery_images"
+    t.boolean "allow_comments", default: true
+    t.json "tags"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["author_id"], name: "index_articles_on_author_id"
+    t.index ["category", "status"], name: "index_articles_on_category_and_status"
+    t.index ["category"], name: "index_articles_on_category"
+    t.index ["featured"], name: "index_articles_on_featured"
+    t.index ["published_at"], name: "index_articles_on_published_at"
+    t.index ["slug"], name: "index_articles_on_slug", unique: true
+    t.index ["status", "published_at"], name: "index_articles_on_status_and_published_at"
+    t.index ["status"], name: "index_articles_on_status"
   end
 
   create_table "booking_services", force: :cascade do |t|
@@ -565,6 +595,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_084510) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "administrators", "users"
+  add_foreign_key "articles", "users", column: "author_id"
   add_foreign_key "booking_services", "bookings"
   add_foreign_key "booking_services", "services"
   add_foreign_key "bookings", "booking_statuses", column: "status_id", on_delete: :restrict, validate: false
