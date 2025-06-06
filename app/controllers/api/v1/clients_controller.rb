@@ -12,11 +12,11 @@ module Api
         
         @clients = Client.includes(:user)
         
-        # Поиск по данным пользователя
+        # Поиск по данным пользователя (email, имени, фамилии или номеру телефона)
         if params[:query].present?
           @clients = @clients.joins(:user).where(
-            "users.email LIKE ? OR users.first_name LIKE ? OR users.last_name LIKE ?", 
-            "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%"
+            "users.email LIKE ? OR users.first_name LIKE ? OR users.last_name LIKE ? OR users.phone LIKE ?", 
+            "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%"
           )
         end
         

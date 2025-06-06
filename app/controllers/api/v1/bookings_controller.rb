@@ -958,6 +958,14 @@ module Api
       
       # Применение фильтров к запросу
       def apply_filters(bookings)
+        # Поиск по данным клиента (имя, фамилия, email или номер телефона)
+        if params[:query].present?
+          bookings = bookings.joins(client: :user).where(
+            "users.first_name LIKE ? OR users.last_name LIKE ? OR users.email LIKE ? OR users.phone LIKE ?",
+            "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%"
+          )
+        end
+        
         # Фильтрация по дате
         if params[:booking_date].present?
           date = Date.parse(params[:booking_date]) rescue Date.current

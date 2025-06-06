@@ -9,10 +9,12 @@ module Api
       def index
         @partners = Partner.includes(:user, :region, :city).all
         
-        # Поиск по имени компании или контактному лицу (регистронезависимый)
+        # Поиск по имени компании, контактному лицу или номеру телефона пользователя (регистронезависимый)
         if params[:query].present?
-          @partners = @partners.where("LOWER(company_name) LIKE LOWER(?) OR LOWER(contact_person) LIKE LOWER(?)", 
-                               "%#{params[:query]}%", "%#{params[:query]}%")
+          @partners = @partners.joins(:user).where(
+            "LOWER(partners.company_name) LIKE LOWER(?) OR LOWER(partners.contact_person) LIKE LOWER(?) OR users.phone LIKE ?", 
+            "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%"
+          )
         end
         
         # Пагинация

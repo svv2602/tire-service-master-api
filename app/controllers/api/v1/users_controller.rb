@@ -21,11 +21,11 @@ module Api
           @users = @users.where(is_active: params[:active] == 'true')
         end
         
-        # Поиск по email или имени
+        # Поиск по email, имени или номеру телефона
         if params[:query].present?
           query_downcase = params[:query].downcase
-          @users = @users.where("LOWER(email) LIKE ? OR LOWER(first_name) LIKE ? OR LOWER(last_name) LIKE ?", 
-                               "%#{query_downcase}%", "%#{query_downcase}%", "%#{query_downcase}%")
+          @users = @users.where("LOWER(email) LIKE ? OR LOWER(first_name) LIKE ? OR LOWER(last_name) LIKE ? OR phone LIKE ?", 
+                               "%#{query_downcase}%", "%#{query_downcase}%", "%#{query_downcase}%", "%#{params[:query]}%")
         end
         
         result = paginate(@users.order(created_at: :desc))
