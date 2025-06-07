@@ -520,3 +520,4 @@ GET /api/v1/cities
 ```
 GET /api/v1/cities?region_id=:region_id
 ```
+...
