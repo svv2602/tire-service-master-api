@@ -56,12 +56,23 @@ ServicePoint.all.each do |service_point|
       
       template.assign_attributes(
         is_working_day: is_working,
-        opening_time: is_working ? '09:00:00' : nil,
-        closing_time: is_working ? '18:00:00' : nil
+        opening_time: is_working ? '09:00:00' : '00:00:00',
+        closing_time: is_working ? '18:00:00' : '23:59:59'
       )
       
-      template.save!
-      puts "    Created schedule template for #{weekday.name} (#{is_working ? 'рабочий' : 'выходной'})"
+      begin
+        template.save!
+        puts "    Created schedule template for #{weekday.name} (#{is_working ? 'рабочий' : 'выходной'})"
+      rescue ActiveRecord::RecordInvalid => e
+        puts "    Error creating template for #{weekday.name}: #{e.message}"
+        # Для выходных дней попробуем создать с минимальными значениями
+        if !is_working
+          template.opening_time = '00:00:00'
+          template.closing_time = '00:00:00'
+          template.save!
+          puts "    Created template for #{weekday.name} with default times"
+        end
+      end
     else
       puts "    Template for #{weekday.name} already exists"
     end

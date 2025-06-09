@@ -236,25 +236,24 @@ class DynamicAvailabilityService
 
   private
 
-  # Получение рабочих часов для даты с учетом working_hours
+  # Получение рабочих часов для даты с учетом ScheduleTemplate
   def self.get_schedule_for_date(service_point, date)
-    # Определяем день недели
-    day_key = date.strftime('%A').downcase # monday, tuesday, etc.
+    # Определяем день недели (1 = понедельник, 7 = воскресенье)
+    wday = date.wday
+    wday = 7 if wday == 0 # Воскресенье = 7 вместо 0
     
-    # Проверяем рабочие часы сервисной точки
-    working_hours = service_point.working_hours
-    if working_hours.blank? || working_hours[day_key].blank?
-      return { is_working: false }
-    end
+    # Находим шаблон расписания для этого дня недели
+    weekday = Weekday.find_by(sort_order: wday)
+    return { is_working: false } unless weekday
     
-    day_schedule = working_hours[day_key]
-    is_working_day = day_schedule['is_working_day'] == 'true' || day_schedule['is_working_day'] == true
+    schedule_template = service_point.schedule_templates.find_by(weekday: weekday)
+    return { is_working: false } unless schedule_template
     
-    if is_working_day
+    if schedule_template.is_working_day
       {
         is_working: true,
-        opening_time: Time.parse("2024-01-01 #{day_schedule['start']}"),
-        closing_time: Time.parse("2024-01-01 #{day_schedule['end']}")
+        opening_time: schedule_template.opening_time,
+        closing_time: schedule_template.closing_time
       }
     else
       { is_working: false }

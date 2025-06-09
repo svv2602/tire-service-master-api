@@ -15,6 +15,10 @@ Rails.application.routes.draw do
       # Health check endpoint
       get 'health', to: 'health#index'
       
+      # Клиентский API доступности (упрощенный)
+      get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
+      post 'bookings/check_availability', to: 'availability#client_check_availability'
+      
       # Dashboard statistics
       get 'dashboard/stats', to: 'dashboard#stats'
       

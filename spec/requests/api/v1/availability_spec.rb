@@ -405,4 +405,282 @@ RSpec.describe "Api::V1::Availability", type: :request do
       expect(json['error']).to be_present
     end
   end
+  
+  # Новые клиентские endpoints
+  describe 'GET /api/v1/availability/:service_point_id/:date (client endpoint)' do
+    let(:path) { "/api/v1/availability/#{service_point.id}/#{test_date}" }
+    
+    context 'рабочий день без бронирований' do
+      it 'возвращает доступные слоты в клиентском формате' do
+        get path, headers: headers
+        
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body)
+        
+        expect(json['service_point_id']).to eq(service_point.id)
+        expect(json['service_point_name']).to eq(service_point.name)
+        expect(json['date']).to eq(test_date)
+        expect(json['is_working_day']).to be true
+        expect(json['available_slots']).to be_an(Array)
+        expect(json['total_slots']).to be > 0
+        
+        # Проверяем формат слотов
+        first_slot = json['available_slots'].first
+        expect(first_slot).to include('time', 'available_posts', 'total_posts', 'status')
+        expect(first_slot['status']).to eq('available')
+        expect(first_slot['total_posts']).to eq(3)
+      end
+    end
+    
+    context 'с существующими бронированиями' do
+      before do
+        create(:booking,
+          service_point: service_point,
+          client: client,
+          car_type: car_type,
+          status: pending_status,
+          booking_date: Date.parse(test_date),
+          start_time: DateTime.new(2025, 6, 3, 10, 0, 0),
+          end_time: DateTime.new(2025, 6, 3, 11, 0, 0),
+          skip_availability_check: true,
+          skip_status_validation: true
+        )
+      end
+      
+      it 'показывает уменьшенное количество доступных постов' do
+        get path, headers: headers
+        
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body)
+        
+        # В 10:00 должно быть 2 свободных поста (3 - 1 занятый)
+        slot_10_00 = json['available_slots'].find { |slot| slot['time'] == '10:00' }
+        expect(slot_10_00['available_posts']).to eq(2) if slot_10_00
+        
+        # В 09:00 должно быть 3 свободных поста
+        slot_09_00 = json['available_slots'].find { |slot| slot['time'] == '09:00' }
+        expect(slot_09_00['available_posts']).to eq(3) if slot_09_00
+      end
+    end
+    
+    context 'выходной день' do
+      let(:sunday_date) { '2025-06-01' } # Sunday
+      let(:sunday_path) { "/api/v1/availability/#{service_point.id}/#{sunday_date}" }
+      
+      it 'возвращает нерабочий день' do
+        get sunday_path, headers: headers
+        
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body)
+        
+        expect(json['is_working_day']).to be false
+        expect(json['available_slots']).to be_empty
+        expect(json['total_slots']).to eq(0)
+      end
+    end
+    
+    context 'прошедшее время в текущем дне' do
+      let(:today) { Date.current.strftime('%Y-%m-%d') }
+      let(:today_path) { "/api/v1/availability/#{service_point.id}/#{today}" }
+      
+      before do
+        # Создаем шаблон расписания для сегодняшнего дня
+        today_weekday = create(:weekday, 
+          name: Date.current.strftime('%A'), 
+          sort_order: Date.current.wday == 0 ? 7 : Date.current.wday
+        )
+        create(:schedule_template,
+          service_point: service_point,
+          weekday: today_weekday,
+          is_working_day: true,
+          opening_time: '09:00:00',
+          closing_time: '18:00:00'
+        )
+      end
+      
+      it 'фильтрует прошедшие слоты' do
+        get today_path, headers: headers
+        
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body)
+        
+        if json['is_working_day']
+          # Все слоты должны быть в будущем времени
+          json['available_slots'].each do |slot|
+            slot_time = Time.parse("#{today} #{slot['time']}")
+            expect(slot_time).to be >= Time.current.beginning_of_hour
+          end
+        end
+      end
+    end
+  end
+  
+  describe 'POST /api/v1/bookings/check_availability (client endpoint)' do
+    let(:path) { "/api/v1/bookings/check_availability" }
+    
+    context 'доступное время' do
+      let(:valid_params) do
+        {
+          service_point_id: service_point.id,
+          date: test_date,
+          time: '10:00',
+          duration_minutes: 60
+        }
+      end
+      
+      it 'возвращает подтверждение доступности' do
+        post path, params: valid_params.to_json, headers: headers
+        
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body)
+        
+        expect(json['service_point_id']).to eq(service_point.id)
+        expect(json['service_point_name']).to eq(service_point.name)
+        expect(json['date']).to eq(test_date)
+        expect(json['time']).to eq('10:00')
+        expect(json['available']).to be true
+        expect(json['total_posts']).to eq(3)
+        expect(json['occupied_posts']).to eq(0)
+      end
+    end
+    
+    context 'недоступное время' do
+      before do
+        # Занимаем все посты в 10:00
+        3.times do
+          create(:booking,
+            service_point: service_point,
+            client: client,
+            car_type: car_type,
+            status: pending_status,
+            booking_date: Date.parse(test_date),
+            start_time: DateTime.new(2025, 6, 3, 10, 0, 0),
+            end_time: DateTime.new(2025, 6, 3, 11, 0, 0),
+            skip_availability_check: true,
+            skip_status_validation: true
+          )
+        end
+      end
+      
+      let(:busy_params) do
+        {
+          service_point_id: service_point.id,
+          date: test_date,
+          time: '10:00',
+          duration_minutes: 60
+        }
+      end
+      
+      it 'возвращает недоступность с причиной' do
+        post path, params: busy_params.to_json, headers: headers
+        
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body)
+        
+        expect(json['available']).to be false
+        expect(json['reason']).to include('заняты')
+      end
+    end
+    
+    context 'время в прошлом' do
+      let(:past_params) do
+        {
+          service_point_id: service_point.id,
+          date: Date.current.strftime('%Y-%m-%d'),
+          time: (Time.current - 1.hour).strftime('%H:%M'),
+          duration_minutes: 60
+        }
+      end
+      
+      it 'возвращает ошибку для прошедшего времени' do
+        post path, params: past_params.to_json, headers: headers
+        
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body)
+        
+        expect(json['available']).to be false
+        expect(json['reason']).to include('прошедшее время')
+      end
+    end
+    
+    context 'вне рабочих часов' do
+      let(:outside_hours_params) do
+        {
+          service_point_id: service_point.id,
+          date: test_date,
+          time: '20:00',
+          duration_minutes: 60
+        }
+      end
+      
+      it 'возвращает недоступность' do
+        post path, params: outside_hours_params.to_json, headers: headers
+        
+        expect(response).to have_http_status(:ok)
+        json = JSON.parse(response.body)
+        
+        expect(json['available']).to be false
+        expect(json['reason']).to eq('Вне рабочих часов')
+      end
+    end
+    
+    context 'невалидные параметры' do
+      it 'возвращает ошибку при отсутствии service_point_id' do
+        post path, params: { date: test_date, time: '10:00' }.to_json, headers: headers
+        
+        expect(response).to have_http_status(:bad_request)
+        json = JSON.parse(response.body)
+        
+        expect(json['error']).to include('service_point_id обязательны')
+      end
+      
+      it 'возвращает ошибку при отсутствии времени' do
+        invalid_params = {
+          service_point_id: service_point.id,
+          date: test_date
+        }
+        
+        post path, params: invalid_params.to_json, headers: headers
+        
+        expect(response).to have_http_status(:bad_request)
+        json = JSON.parse(response.body)
+        
+        expect(json['error']).to include('time')
+      end
+      
+      it 'возвращает ошибку при некорректном формате даты' do
+        invalid_params = {
+          service_point_id: service_point.id,
+          date: 'invalid-date',
+          time: '10:00'
+        }
+        
+        post path, params: invalid_params.to_json, headers: headers
+        
+        expect(response).to have_http_status(:bad_request)
+        json = JSON.parse(response.body)
+        
+        expect(json['error']).to include('Некорректный формат даты')
+      end
+    end
+    
+    context 'несуществующая сервисная точка' do
+      let(:invalid_service_point_params) do
+        {
+          service_point_id: 99999,
+          date: test_date,
+          time: '10:00'
+        }
+      end
+      
+      it 'возвращает ошибку 404' do
+        post path, params: invalid_service_point_params.to_json, headers: headers
+        
+        expect(response).to have_http_status(:not_found)
+        json = JSON.parse(response.body)
+        
+        expect(json['error']).to include('не найдена')
+      end
+    end
+  end
 end 

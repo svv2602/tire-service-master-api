@@ -3520,6 +3520,173 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+  "/api/v1/availability/{service_point_id}/{date}":
+    parameters:
+    - name: service_point_id
+      in: path
+      description: ID сервисной точки
+      required: true
+      schema:
+        type: integer
+    - name: date
+      in: path
+      description: Дата в формате YYYY-MM-DD
+      required: true
+      schema:
+        type: string
+        format: date
+        example: "2025-06-10"
+    get:
+      summary: Получение доступных временных слотов для клиентов
+      tags:
+      - Availability
+      description: Возвращает список доступных временных слотов для записи на указанную дату. Фильтрует прошедшее время для текущего дня.
+      operationId: getClientAvailableSlots
+      responses:
+        '200':
+          description: Список доступных слотов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service_point_id:
+                    type: integer
+                    description: ID сервисной точки
+                  service_point_name:
+                    type: string
+                    description: Название сервисной точки
+                  date:
+                    type: string
+                    format: date
+                    description: Дата в формате YYYY-MM-DD
+                  is_working_day:
+                    type: boolean
+                    description: Является ли день рабочим
+                  available_slots:
+                    type: array
+                    description: Список доступных временных слотов
+                    items:
+                      type: object
+                      properties:
+                        time:
+                          type: string
+                          description: Время слота в формате HH:MM
+                          example: "10:00"
+                        available_posts:
+                          type: integer
+                          description: Количество свободных постов
+                        total_posts:
+                          type: integer
+                          description: Общее количество постов
+                        status:
+                          type: string
+                          enum: [available, limited, full]
+                          description: Статус слота (available - много мест, limited - мало мест, full - нет мест)
+                  total_slots:
+                    type: integer
+                    description: Общее количество доступных слотов
+        '404':
+          description: Сервисная точка не найдена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '400':
+          description: Некорректный формат даты
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/v1/bookings/check_availability":
+    post:
+      summary: Проверка доступности времени для записи
+      tags:
+      - Availability
+      description: Быстрая проверка доступности конкретного времени перед созданием записи
+      operationId: checkTimeAvailability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service_point_id:
+                  type: integer
+                  description: ID сервисной точки
+                date:
+                  type: string
+                  format: date
+                  description: Дата в формате YYYY-MM-DD
+                  example: "2025-06-10"
+                time:
+                  type: string
+                  description: Время в формате HH:MM
+                  example: "10:00"
+                duration_minutes:
+                  type: integer
+                  description: Продолжительность в минутах (по умолчанию 60)
+                  default: 60
+              required:
+              - service_point_id
+              - date
+              - time
+      responses:
+        '200':
+          description: Результат проверки доступности
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service_point_id:
+                    type: integer
+                    description: ID сервисной точки
+                  service_point_name:
+                    type: string
+                    description: Название сервисной точки
+                  date:
+                    type: string
+                    format: date
+                    description: Дата в формате YYYY-MM-DD
+                  time:
+                    type: string
+                    description: Время в формате HH:MM
+                  available:
+                    type: boolean
+                    description: Доступно ли время для записи
+                  total_posts:
+                    type: integer
+                    description: Общее количество постов
+                  occupied_posts:
+                    type: integer
+                    description: Количество занятых постов
+                  reason:
+                    type: string
+                    description: Причина недоступности (если available = false)
+                oneOf:
+                - properties:
+                    available:
+                      enum: [true]
+                - properties:
+                    available:
+                      enum: [false]
+                    reason:
+                      type: string
+                      example: "Все посты заняты"
+        '400':
+          description: Некорректные параметры запроса
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '404':
+          description: Сервисная точка не найдена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
 servers:
 - url: http://localhost:8000
   description: Development server
@@ -3563,6 +3730,8 @@ tags:
   description: Управление сервисными точками
 - name: Bookings
   description: Управление бронированиями
+- name: Availability
+  description: Проверка доступности и получение временных слотов
 - name: Photos
   description: Управление фотографиями сервисных точек
 - name: Catalogs

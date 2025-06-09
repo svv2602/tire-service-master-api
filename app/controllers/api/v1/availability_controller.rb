@@ -3,7 +3,53 @@
 
 class Api::V1::AvailabilityController < ApplicationController
   skip_before_action :authenticate_request
-  before_action :set_service_point
+  before_action :set_service_point, except: [:client_check_availability]
+  
+  # GET /api/v1/availability/:service_point_id/:date  
+  # Получение доступных временных слотов для клиентов (упрощенная версия)
+  def client_available_times
+    date = parse_date(params[:date])
+    return if date.nil? # Если parse_date уже отрендерил ошибку, выходим
+    
+    # Фильтруем прошедшее время для сегодняшней даты
+    current_time = Time.current
+    
+    begin
+      available_times = DynamicAvailabilityService.available_times_for_date(
+        @service_point.id, 
+        date
+      )
+      
+      # Убираем прошедшие слоты для сегодняшней даты
+      if date == Date.current
+        available_times = available_times.select do |slot|
+          slot[:datetime] > current_time
+        end
+      end
+      
+      # Проверяем рабочий ли день
+      schedule_info = DynamicAvailabilityService.send(:get_schedule_for_date, @service_point, date)
+      
+      render json: {
+        service_point_id: @service_point.id,
+        service_point_name: @service_point.name,
+        date: date.strftime('%Y-%m-%d'),
+        is_working_day: schedule_info[:is_working],
+        available_slots: available_times.map do |slot|
+          {
+            time: slot[:time],
+            available_posts: slot[:available_posts],
+            total_posts: slot[:total_posts],
+            status: slot[:available_posts] > 2 ? 'available' : 
+                   slot[:available_posts] > 0 ? 'limited' : 'full'
+          }
+        end,
+        total_slots: available_times.count
+      }
+    rescue => e
+      render json: { error: "Внутренняя ошибка сервера: #{e.message}" }, status: :internal_server_error
+    end
+  end
   
   # GET /api/v1/service_points/:service_point_id/availability/:date
   # Получение доступных временных интервалов на дату
@@ -168,6 +214,62 @@ class Api::V1::AvailabilityController < ApplicationController
       week_end: end_date.strftime('%Y-%m-%d'),
       days: week_data
     }
+  end
+  
+  # POST /api/v1/bookings/check_availability
+  # Быстрая проверка доступности времени перед созданием записи
+  def client_check_availability
+    date = parse_date(params[:date])
+    return if date.nil?
+    
+    time_str = params[:time] # "14:30" 
+    service_point_id = params[:service_point_id]
+    
+    # Проверяем наличие обязательных параметров
+    if service_point_id.blank?
+      return render json: { 
+        error: 'Параметры date, time и service_point_id обязательны' 
+      }, status: :bad_request
+    end
+    
+    if time_str.blank?
+      return render json: { 
+        error: 'Параметры date, time и service_point_id обязательны' 
+      }, status: :bad_request
+    end
+    
+    begin
+      service_point = ServicePoint.find(service_point_id)
+      time = Time.parse("#{date} #{time_str}")
+      
+      # Проверяем, что время не в прошлом
+      if date == Date.current && time <= Time.current
+        return render json: {
+          available: false,
+          reason: 'Нельзя записаться в прошедшее время'
+        }
+      end
+      
+      availability = DynamicAvailabilityService.check_availability_at_time(
+        service_point.id,
+        date,
+        time
+      )
+      
+      render json: {
+        service_point_id: service_point.id,
+        service_point_name: service_point.name,
+        date: date.strftime('%Y-%m-%d'),
+        time: time_str,
+        **availability
+      }
+    rescue ActiveRecord::RecordNotFound
+      render json: { error: 'Сервисная точка не найдена' }, status: :not_found
+    rescue ArgumentError
+      render json: { error: 'Неверный формат времени' }, status: :bad_request
+    rescue => e
+      render json: { error: "Внутренняя ошибка сервера: #{e.message}" }, status: :internal_server_error
+    end
   end
   
   private
