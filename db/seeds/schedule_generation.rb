@@ -61,8 +61,8 @@ ServicePoint.all.each do |service_point|
       )
       
       begin
-        template.save!
-        puts "    Created schedule template for #{weekday.name} (#{is_working ? 'рабочий' : 'выходной'})"
+      template.save!
+      puts "    Created schedule template for #{weekday.name} (#{is_working ? 'рабочий' : 'выходной'})"
       rescue ActiveRecord::RecordInvalid => e
         puts "    Error creating template for #{weekday.name}: #{e.message}"
         # Для выходных дней попробуем создать с минимальными значениями

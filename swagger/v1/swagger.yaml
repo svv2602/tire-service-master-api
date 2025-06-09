@@ -3687,6 +3687,238 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
+  "/api/v1/service_points/search":
+    get:
+      summary: Клиентский поиск сервисных точек
+      tags:
+      - Service Points (Client)
+      description: Поиск доступных для записи сервисных точек по названию города с дополнительными фильтрами
+      operationId: clientSearchServicePoints
+      parameters:
+      - name: city
+        in: query
+        required: false
+        description: Название города для поиска
+        schema:
+          type: string
+          example: "Київ"
+      - name: query
+        in: query
+        required: false
+        description: Поиск по названию или адресу сервисной точки
+        schema:
+          type: string
+          example: "Экспресс"
+      - name: latitude
+        in: query
+        required: false
+        description: Широта для расчета расстояния
+        schema:
+          type: number
+          format: float
+      - name: longitude
+        in: query
+        required: false
+        description: Долгота для расчета расстояния
+        schema:
+          type: number
+          format: float
+      responses:
+        '200':
+          description: Список доступных сервисных точек
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        address:
+                          type: string
+                        city:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                            region:
+                              type: string
+                        partner:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                        contact_phone:
+                          type: string
+                        average_rating:
+                          type: number
+                          format: float
+                        reviews_count:
+                          type: integer
+                        posts_count:
+                          type: integer
+                        can_accept_bookings:
+                          type: boolean
+                        work_status:
+                          type: string
+                        distance:
+                          type: number
+                          format: float
+                          nullable: true
+                  total:
+                    type: integer
+                    description: Общее количество найденных точек
+                  city_found:
+                    type: boolean
+                    description: Найден ли указанный город
+  "/api/v1/service_points/{id}/client_details":
+    get:
+      summary: Детальная информация о сервисной точке для клиентов
+      tags:
+      - Service Points (Client)
+      description: Получение полной информации о сервисной точке включая услуги, удобства, фотографии и отзывы
+      operationId: getServicePointClientDetails
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID сервисной точки
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Детальная информация о сервисной точке
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  address:
+                    type: string
+                  city:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      region:
+                        type: string
+                  partner:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                  contact_phone:
+                    type: string
+                  latitude:
+                    type: string
+                  longitude:
+                    type: string
+                  average_rating:
+                    type: number
+                    format: float
+                  reviews_count:
+                    type: integer
+                  total_clients_served:
+                    type: integer
+                  posts_count:
+                    type: integer
+                  can_accept_bookings:
+                    type: boolean
+                  work_status:
+                    type: string
+                  is_working_today:
+                    type: boolean
+                  amenities:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        icon:
+                          type: string
+                  photos:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        url:
+                          type: string
+                        description:
+                          type: string
+                          nullable: true
+                  services_available:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        category:
+                          type: string
+                          nullable: true
+                  recent_reviews:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        rating:
+                          type: integer
+                        comment:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date
+                        client_name:
+                          type: string
+        '403':
+          description: Сервисная точка недоступна для записи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Сервисная точка недоступна для записи"
+                  reason:
+                    type: string
+                    example: "Техническое обслуживание"
+        '404':
+          description: Сервисная точка не найдена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
 servers:
 - url: http://localhost:8000
   description: Development server

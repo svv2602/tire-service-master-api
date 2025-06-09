@@ -19,6 +19,9 @@ Rails.application.routes.draw do
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
       post 'bookings/check_availability', to: 'availability#client_check_availability'
       
+      # Клиентский API поиска сервисных точек  
+      get 'service_points/search', to: 'service_points#client_search'
+      
       # Dashboard statistics
       get 'dashboard/stats', to: 'dashboard#stats'
       
@@ -77,6 +80,7 @@ Rails.application.routes.draw do
         member do
           get 'basic', to: 'service_points#basic'
           get 'schedule', to: 'schedule#day'
+          get 'client_details', to: 'service_points#client_details'
         end
         
         # Новое API для динамической доступности

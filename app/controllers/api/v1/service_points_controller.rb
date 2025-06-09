@@ -1,8 +1,8 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview]
-      before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details]
+      before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses, :client_search]
       
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points
@@ -133,6 +133,153 @@ module Api
         @service_points = ServicePoint.active.near(latitude, longitude, distance)
         
         render json: paginate(@service_points)
+      end
+      
+      # GET /api/v1/service_points/search?city=:city_name
+      # Клиентский поиск сервисных точек по названию города
+      def client_search
+        city_name = params[:city]
+        query = params[:query] # поиск по названию/адресу точки
+        
+        # Базовая выборка - только доступные для бронирования точки
+        @service_points = ServicePoint.available_for_booking
+        
+        # Фильтрация по городу (поиск по названию)
+        if city_name.present?
+          city = City.joins(:region).where("LOWER(cities.name) LIKE LOWER(?)", "%#{city_name}%").first
+          if city
+            @service_points = @service_points.where(city_id: city.id)
+          else
+            # Если город не найден, возвращаем пустой результат
+            @service_points = ServicePoint.none
+          end
+        end
+        
+        # Поиск по названию или адресу точки
+        if query.present?
+          @service_points = @service_points.where(
+            "LOWER(service_points.name) LIKE LOWER(?) OR LOWER(service_points.address) LIKE LOWER(?)", 
+            "%#{query}%", "%#{query}%"
+          )
+        end
+        
+        # Сортировка по рейтингу (лучшие сначала)
+        @service_points = @service_points.includes(:city, :partner, :reviews)
+                                       .order(average_rating: :desc, name: :asc)
+        
+        # Возвращаем данные с дополнительной информацией для клиентов
+        render json: {
+          data: @service_points.map do |point|
+            {
+              id: point.id,
+              name: point.name,
+              address: point.address,
+              city: {
+                id: point.city.id,
+                name: point.city.name,
+                region: point.city.region.name
+              },
+              partner: {
+                id: point.partner.id,
+                name: point.partner.company_name
+              },
+              contact_phone: point.contact_phone,
+              average_rating: point.average_rating&.round(1) || 0.0,
+              reviews_count: point.reviews.count,
+              posts_count: point.posts_count,
+              can_accept_bookings: point.can_accept_bookings?,
+              work_status: point.display_status,
+              distance: params[:latitude] && params[:longitude] ? 
+                calculate_distance(params[:latitude].to_f, params[:longitude].to_f, point.latitude, point.longitude) : nil
+            }
+          end,
+          total: @service_points.count,
+          city_found: city_name.blank? || @service_points.any?
+        }
+      end
+      
+      # GET /api/v1/service_points/:id/client_details  
+      # Детальная информация о сервисной точке для клиентов
+      def client_details
+        # Проверяем, что точка доступна для бронирования
+        unless @service_point.can_accept_bookings?
+          return render json: { 
+            error: 'Сервисная точка недоступна для записи',
+            reason: @service_point.display_status
+          }, status: :forbidden
+        end
+        
+        render json: {
+          id: @service_point.id,
+          name: @service_point.name,
+          description: @service_point.description,
+          address: @service_point.address,
+          city: {
+            id: @service_point.city.id,
+            name: @service_point.city.name,
+            region: @service_point.city.region.name
+          },
+          partner: {
+            id: @service_point.partner.id,
+            name: @service_point.partner.company_name
+          },
+          contact_phone: @service_point.contact_phone,
+          latitude: @service_point.latitude,
+          longitude: @service_point.longitude,
+          
+          # Метрики и рейтинги
+          average_rating: @service_point.average_rating&.round(1) || 0.0,
+          reviews_count: @service_point.reviews.count,
+          total_clients_served: @service_point.total_clients_served || 0,
+          
+          # Информация о постах и работе
+          posts_count: @service_point.posts_count,
+          can_accept_bookings: @service_point.can_accept_bookings?,
+          work_status: @service_point.display_status,
+          is_working_today: working_today?(@service_point),
+          
+          # Удобства
+          amenities: @service_point.amenities.map do |amenity|
+            {
+              id: amenity.id,
+              name: amenity.name,
+              icon: amenity.icon
+            }
+          end,
+          
+          # Фотографии
+          photos: @service_point.photos.order(:sort_order, :created_at).map do |photo|
+            {
+              id: photo.id,
+              url: photo.url,
+              description: photo.description
+            }
+          end,
+          
+          # Услуги (базовая информация)
+          services_available: @service_point.services.active.map do |service|
+            {
+              id: service.id,
+              name: service.name,
+              category: service.service_category&.name
+            }
+          end,
+          
+          # Последние отзывы (топ-3)
+          recent_reviews: @service_point.reviews
+                                       .includes(:client)
+                                       .order(created_at: :desc)
+                                       .limit(3)
+                                       .map do |review|
+            {
+              id: review.id,
+              rating: review.rating,
+              comment: review.comment,
+              created_at: review.created_at.strftime('%d.%m.%Y'),
+              client_name: review.client&.user&.first_name || 'Анонимный'
+            }
+          end
+        }
       end
       
       # GET /api/v1/service_point_statuses
@@ -492,34 +639,59 @@ module Api
       # @return [Hash] хэш с данными и информацией о пагинации
       def paginate(collection)
         page = (params[:page] || 1).to_i
-        per_page = (params[:per_page] || 25).to_i
+        per_page = (params[:per_page] || 10).to_i
+        per_page = [per_page, 100].min # ограничиваем максимальным значением
+        
         offset = (page - 1) * per_page
+        total_count = collection.count
         
-        # Исправляем проблему с count, который может возвращать хэш при группировке
-        total_count = collection.is_a?(ActiveRecord::Relation) ? collection.count(:all) : collection.count
-        total_count = total_count.is_a?(Hash) ? total_count.values.sum : total_count
-        
-        # Загружаем связанные данные о городах и регионах для избежания N+1 запросов
-        paginated_collection = collection.includes(city: :region).offset(offset).limit(per_page)
+        paginated_collection = collection.offset(offset).limit(per_page)
         
         {
           data: paginated_collection.as_json(
-            include: { 
-              partner: { only: [:id, :company_name] },
-              # Включаем данные о городе и вложенные данные о регионе
-              city: { 
-                only: [:id, :name], 
-                include: { region: { only: [:id, :name] } } 
-              }
+            only: [:id, :name, :address, :latitude, :longitude, :contact_phone, :average_rating, :total_clients_served, :cancellation_rate, :post_count],
+            include: {
+              city: { only: [:id, :name] },
+              partner: { only: [:id, :company_name] }
             }
           ),
           pagination: {
-            total_count: total_count,
-            total_pages: (total_count.to_f / per_page).ceil,
             current_page: page,
+            total_pages: (total_count.to_f / per_page).ceil,
+            total_count: total_count,
             per_page: per_page
           }
         }
+      end
+      
+      # Вспомогательные методы для клиентских endpoints
+      
+      # Проверяет, работает ли точка сегодня
+      def working_today?(service_point)
+        today = Date.current
+        
+        # Упрощенная логика - считаем что работает пн-сб  
+        !today.sunday?
+      end
+      
+      # Расчет расстояния между двумя точками (упрощенный)
+      def calculate_distance(lat1, lon1, lat2, lon2)
+        return nil if lat2.nil? || lon2.nil?
+        
+        # Формула гаверсинуса для расчета расстояния
+        earth_radius = 6371 # км
+        
+        dlat = (lat2 - lat1) * Math::PI / 180
+        dlon = (lon2 - lon1) * Math::PI / 180
+        
+        a = Math.sin(dlat / 2) * Math.sin(dlat / 2) +
+            Math.cos(lat1 * Math::PI / 180) * Math.cos(lat2 * Math::PI / 180) *
+            Math.sin(dlon / 2) * Math.sin(dlon / 2)
+        
+        c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        distance = earth_radius * c
+        
+        distance.round(2)
       end
     end
   end
