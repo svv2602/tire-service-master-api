@@ -121,7 +121,7 @@ class DynamicAvailabilityService
   end
 
   # Проверка доступности конкретного времени
-  def self.check_availability_at_time(service_point_id, date, time, duration_minutes = 60)
+  def self.check_availability_at_time(service_point_id, date, time, duration_minutes = 60, exclude_booking_id: nil)
     service_point = ServicePoint.find(service_point_id)
     
     # Проверяем рабочие часы
@@ -148,13 +148,16 @@ class DynamicAvailabilityService
     # Проверяем доступность на весь период бронирования
     current_time = check_time
     while current_time < end_time
-      occupied_posts = count_occupied_posts_at_time(service_point_id, date, current_time)
+      occupied_posts = count_occupied_posts_at_time(service_point_id, date, current_time, exclude_booking_id: exclude_booking_id)
       available_posts = total_posts - occupied_posts
       
       if available_posts <= 0
         return { 
           available: false, 
-          reason: "Все посты заняты в #{current_time.strftime('%H:%M')}"
+          reason: "Все посты заняты в #{current_time.strftime('%H:%M')}",
+          total_posts: total_posts,
+          occupied_posts: occupied_posts,
+          available_posts: available_posts
         }
       end
       
@@ -164,7 +167,8 @@ class DynamicAvailabilityService
     {
       available: true,
       total_posts: total_posts,
-      occupied_posts: count_occupied_posts_at_time(service_point_id, date, check_time)
+      occupied_posts: count_occupied_posts_at_time(service_point_id, date, check_time, exclude_booking_id: exclude_booking_id),
+      available_posts: total_posts - count_occupied_posts_at_time(service_point_id, date, check_time, exclude_booking_id: exclude_booking_id)
     }
   end
 
@@ -261,19 +265,23 @@ class DynamicAvailabilityService
   end
 
   # Подсчет занятых постов в конкретное время
-  def self.count_occupied_posts_at_time(service_point_id, date, time)
+  def self.count_occupied_posts_at_time(service_point_id, date, time, exclude_booking_id: nil)
     # Преобразуем время в строковый формат для сравнения с полями времени в БД
     time_string = time.strftime('%H:%M:%S')
     
-    # Считаем бронирования, которые пересекаются с указанным временем
-    # Используем EXTRACT для получения времени из datetime полей и сравниваем
-    Booking.where(service_point_id: service_point_id)
-           .where(booking_date: date)
-           .where("EXTRACT(hour FROM start_time) * 60 + EXTRACT(minute FROM start_time) <= ? AND EXTRACT(hour FROM end_time) * 60 + EXTRACT(minute FROM end_time) > ?", 
-                  time.hour * 60 + time.min, 
-                  time.hour * 60 + time.min)
-           .where.not(status_id: BookingStatus.canceled_statuses)
-           .count
+    query = Booking.where(
+      service_point_id: service_point_id,
+      booking_date: date
+    ).where(
+      "start_time <= ? AND end_time > ?",
+      time_string,
+      time_string
+    ).where.not(status_id: BookingStatus.canceled_statuses)
+    
+    # Исключаем конкретное бронирование если указано
+    query = query.where.not(id: exclude_booking_id) if exclude_booking_id.present?
+    
+    query.count
   end
 
   # Проверка наличия непрерывного времени для бронирования

@@ -22,6 +22,17 @@ Rails.application.routes.draw do
       # Клиентский API поиска сервисных точек  
       get 'service_points/search', to: 'service_points#client_search'
       
+      # Клиентский API записей (включая гостевые записи)
+      resources :client_bookings, only: [:create, :show, :update, :destroy] do
+        member do
+          delete :cancel, to: 'client_bookings#cancel'
+          post :reschedule, to: 'client_bookings#reschedule'
+        end
+        collection do
+          post :check_availability_for_booking, to: 'client_bookings#check_availability_for_booking'
+        end
+      end
+      
       # Dashboard statistics
       get 'dashboard/stats', to: 'dashboard#stats'
       

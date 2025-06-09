@@ -236,12 +236,20 @@ class Booking < ApplicationRecord
     return if skip_availability_check
     return unless service_point_id && booking_date && start_time && end_time
     
+    # Преобразуем время в правильный формат для проверки
+    start_datetime = if start_time.is_a?(String)
+      Time.parse("#{booking_date} #{start_time}")
+    else
+      Time.parse("#{booking_date} #{start_time.strftime('%H:%M')}")
+    end
+    
     # Проверяем что время в рабочих часах
     availability = DynamicAvailabilityService.check_availability_at_time(
       service_point_id,
       booking_date,
-      start_time,
-      total_duration_minutes
+      start_datetime,
+      total_duration_minutes,
+      exclude_booking_id: persisted? ? id : nil
     )
     
     unless availability[:available]

@@ -10,6 +10,7 @@ class ClientCar < ApplicationRecord
   # Валидации
   validates :brand_id, presence: true
   validates :model_id, presence: true
+  validates :license_plate, presence: true
   validates :year, numericality: { only_integer: true, greater_than: 1900, less_than_or_equal_to: -> { Date.current.year + 1 } }, allow_nil: true
   
   # Уникальность primary для клиента
