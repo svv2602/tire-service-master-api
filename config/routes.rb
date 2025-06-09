@@ -33,6 +33,14 @@ Rails.application.routes.draw do
         end
       end
       
+      # Клиентская авторизация (опциональная)
+      scope 'clients' do
+        post 'register', to: 'client_auth#register'
+        post 'login', to: 'client_auth#login'
+        post 'logout', to: 'client_auth#logout'
+        get 'me', to: 'client_auth#me'
+      end
+      
       # Dashboard statistics
       get 'dashboard/stats', to: 'dashboard#stats'
       

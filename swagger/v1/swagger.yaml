@@ -13,51 +13,12 @@ info:
     name: MIT
     url: https://opensource.org/licenses/MIT
 paths:
-  "/api/v1/health":
-    get:
-      summary: Health check endpoint
-      tags:
-      - System
-      description: Проверка состояния API
-      responses:
-        '200':
-          description: API работает
-  "/api/v1/auth/login":
-    post:
-      summary: Authenticates user and returns JWT token
-      tags:
-      - Authentication
-      parameters: []
-      responses:
-        '200':
-          description: authentication successful
-        '401':
-          description: Invalid credentials
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                auth:
-                  type: object
-                  properties:
-                    email:
-                      type: string
-                      example: user@example.com
-                    password:
-                      type: string
-                      example: password
-                  required:
-                  - email
-                  - password
-              required:
-              - auth
   "/api/v1/clients/register":
     post:
       summary: Регистрирует нового клиента
       tags:
       - Clients
+      description: Регистрация нового клиента в системе
       parameters: []
       responses:
         '201':
@@ -118,6 +79,215 @@ paths:
                   - password_confirmation
                   - first_name
                   - last_name
+  "/api/v1/clients/login":
+    post:
+      summary: Вход клиента в систему
+      tags:
+      - Клиентская авторизация
+      description: Авторизация существующего клиента по email или телефону
+      parameters: []
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      first_name:
+                        type: string
+                      last_name:
+                        type: string
+                      phone:
+                        type: string
+                  client:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      preferred_notification_method:
+                        type: string
+                      total_bookings:
+                        type: integer
+                      completed_bookings:
+                        type: integer
+                  tokens:
+                    type: object
+                    properties:
+                      access:
+                        type: string
+                      refresh:
+                        type: string
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Неверный пароль
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auth:
+                  type: object
+                  properties:
+                    login:
+                      type: string
+                      example: ivan@example.com
+                      description: Email или телефон
+                    password:
+                      type: string
+                      example: password123
+                  required:
+                  - login
+                  - password
+              required:
+              - auth
+  "/api/v1/clients/me":
+    get:
+      summary: Информация о текущем клиенте
+      tags:
+      - Клиентская авторизация
+      description: Получение информации о текущем авторизованном клиенте
+      security:
+      - Bearer: {}
+      responses:
+        '200':
+          description: Информация о клиенте
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      first_name:
+                        type: string
+                      last_name:
+                        type: string
+                      phone:
+                        type: string
+                      email_verified:
+                        type: boolean
+                      phone_verified:
+                        type: boolean
+                  client:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      preferred_notification_method:
+                        type: string
+                      total_bookings:
+                        type: integer
+                      completed_bookings:
+                        type: integer
+                      average_rating_given:
+                        type: number
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Доступ запрещен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/clients/logout":
+    post:
+      summary: Выход из системы
+      tags:
+      - Клиентская авторизация
+      description: Выход клиента из системы (на стороне клиента удаляется токен)
+      security:
+      - Bearer: {}
+      responses:
+        '200':
+          description: Успешный выход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  "/api/v1/health":
+    get:
+      summary: Health check endpoint
+      tags:
+      - System
+      description: Проверка состояния API
+      responses:
+        '200':
+          description: API работает
+  "/api/v1/auth/login":
+    post:
+      summary: Authenticates user and returns JWT token
+      tags:
+      - Authentication
+      parameters: []
+      responses:
+        '200':
+          description: authentication successful
+        '401':
+          description: Invalid credentials
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auth:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                      example: user@example.com
+                    password:
+                      type: string
+                      example: password
+                  required:
+                  - email
+                  - password
+              required:
+              - auth
   "/api/v1/clients/{client_id}/bookings":
     get:
       summary: Получает все бронирования для текущего пользователя
@@ -1077,6 +1247,503 @@ paths:
                   "$ref": "#/components/schemas/CarBrandRequest"
               required:
               - car_brand
+  "/api/v1/client_bookings":
+    post:
+      summary: Создание записи клиентом
+      tags:
+      - Client Bookings
+      description: Создание новой записи на обслуживание клиентом (включая гостевые
+        записи)
+      parameters: []
+      responses:
+        '201':
+          description: Запись успешно создана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    description: ID записи
+                  booking_date:
+                    type: string
+                    format: date
+                    description: Дата записи
+                  start_time:
+                    type: string
+                    format: time
+                    description: Время начала
+                  end_time:
+                    type: string
+                    format: time
+                    description: Время окончания
+                  status:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                        example: pending
+                  service_point:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                  client:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        example: Иван Иванов
+                      phone:
+                        type: string
+                        example: "+380671234567"
+                  car_info:
+                    type: object
+                    properties:
+                      license_plate:
+                        type: string
+                        example: АА1234ВВ
+                      type:
+                        type: string
+                        example: Toyota Camry
+                  total_price:
+                    type: string
+                    example: '0.0'
+                  notes:
+                    type: string
+        '422':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Описание ошибки
+                  details:
+                    type: array
+                    items:
+                      type: string
+                    description: Детали ошибок валидации
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client:
+                  type: object
+                  properties:
+                    first_name:
+                      type: string
+                      description: Имя клиента
+                      example: Иван
+                    last_name:
+                      type: string
+                      description: Фамилия клиента
+                      example: Иванов
+                    phone:
+                      type: string
+                      description: Телефон клиента
+                      example: "+380671234567"
+                    email:
+                      type: string
+                      description: Email клиента (опционально)
+                      example: ivan@example.com
+                  required:
+                  - first_name
+                  - last_name
+                  - phone
+                car:
+                  type: object
+                  properties:
+                    license_plate:
+                      type: string
+                      description: Номер автомобиля
+                      example: АА1234ВВ
+                    car_brand:
+                      type: string
+                      description: Марка автомобиля
+                      example: Toyota
+                    car_model:
+                      type: string
+                      description: Модель автомобиля
+                      example: Camry
+                    year:
+                      type: integer
+                      description: Год выпуска
+                      example: 2020
+                  required:
+                  - license_plate
+                booking:
+                  type: object
+                  properties:
+                    service_point_id:
+                      type: integer
+                      description: ID сервисной точки
+                      example: 1
+                    booking_date:
+                      type: string
+                      format: date
+                      description: Дата записи
+                      example: '2025-01-27'
+                    start_time:
+                      type: string
+                      format: time
+                      description: Время начала
+                      example: '10:00'
+                    notes:
+                      type: string
+                      description: Заметки к записи
+                      example: Замена летней резины
+                  required:
+                  - service_point_id
+                  - booking_date
+                  - start_time
+              required:
+              - client
+              - car
+              - booking
+  "/api/v1/client_bookings/check_availability_for_booking":
+    post:
+      summary: Проверка доступности времени для записи
+      tags:
+      - Client Bookings
+      description: Проверяет доступность указанного времени для создания записи
+      parameters: []
+      responses:
+        '200':
+          description: Информация о доступности
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+                    description: Доступно ли время
+                  total_posts:
+                    type: integer
+                    description: Общее количество постов
+                  occupied_posts:
+                    type: integer
+                    description: Количество занятых постов
+                  available_posts:
+                    type: integer
+                    description: Количество доступных постов
+                  reason:
+                    type: string
+                    description: Причина недоступности (если available = false)
+        '400':
+          description: Неверные параметры
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Описание ошибки
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service_point_id:
+                  type: integer
+                  description: ID сервисной точки
+                  example: 1
+                date:
+                  type: string
+                  format: date
+                  description: Дата для проверки
+                  example: '2025-01-27'
+                time:
+                  type: string
+                  format: time
+                  description: Время для проверки
+                  example: '10:00'
+                duration_minutes:
+                  type: integer
+                  description: Длительность в минутах
+                  example: 60
+              required:
+              - service_point_id
+              - date
+              - time
+              - duration_minutes
+  "/api/v1/client_bookings/{id}":
+    parameters:
+    - name: id
+      in: path
+      description: ID записи
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Получение информации о записи
+      tags:
+      - Client Bookings
+      description: Получает подробную информацию о записи по ID
+      responses:
+        '200':
+          description: Информация о записи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  booking_date:
+                    type: string
+                    format: date
+                  start_time:
+                    type: string
+                    format: time
+                  end_time:
+                    type: string
+                    format: time
+                  status:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                  service_point:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      address:
+                        type: string
+                      contact_phone:
+                        type: string
+                  client:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      phone:
+                        type: string
+                  car_info:
+                    type: object
+                    properties:
+                      license_plate:
+                        type: string
+                      type:
+                        type: string
+                  total_price:
+                    type: string
+                  notes:
+                    type: string
+        '404':
+          description: Запись не найдена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Запись не найдена
+    put:
+      summary: Обновление записи
+      tags:
+      - Client Bookings
+      description: Обновляет существующую запись (только в статусе pending)
+      parameters: []
+      responses:
+        '200':
+          description: Запись успешно обновлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  booking_date:
+                    type: string
+                    format: date
+                  start_time:
+                    type: string
+                    format: time
+                  end_time:
+                    type: string
+                    format: time
+                  notes:
+                    type: string
+        '403':
+          description: Запрещено изменять запись
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Причина запрета
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                booking:
+                  type: object
+                  properties:
+                    booking_date:
+                      type: string
+                      format: date
+                      description: Новая дата записи
+                    start_time:
+                      type: string
+                      format: time
+                      description: Новое время начала
+                    notes:
+                      type: string
+                      description: Обновленные заметки
+  "/api/v1/client_bookings/{id}/cancel":
+    parameters:
+    - name: id
+      in: path
+      description: ID записи
+      required: true
+      schema:
+        type: integer
+    delete:
+      summary: Отмена записи клиентом
+      tags:
+      - Client Bookings
+      description: Отменяет запись клиентом (не позднее чем за 2 часа до времени записи)
+      responses:
+        '200':
+          description: Запись успешно отменена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  status:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                        example: canceled_by_client
+                  canceled_at:
+                    type: string
+                    format: datetime
+        '403':
+          description: Отмена запрещена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Причина запрета отмены
+                  reason:
+                    type: string
+                    description: Детальная причина
+  "/api/v1/client_bookings/{id}/reschedule":
+    parameters:
+    - name: id
+      in: path
+      description: ID записи
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Перенос записи на новое время
+      tags:
+      - Client Bookings
+      description: Переносит существующую запись на новую дату и время
+      parameters: []
+      responses:
+        '200':
+          description: Запись успешно перенесена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  booking_date:
+                    type: string
+                    format: date
+                  start_time:
+                    type: string
+                    format: time
+                  end_time:
+                    type: string
+                    format: time
+                  old_date:
+                    type: string
+                    format: date
+                    description: Предыдущая дата
+                  old_time:
+                    type: string
+                    format: time
+                    description: Предыдущее время
+        '422':
+          description: Новое время недоступно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Новое время недоступно
+                  reason:
+                    type: string
+                    description: Причина недоступности
+        '400':
+          description: Неверные параметры
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Описание ошибки
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_date:
+                  type: string
+                  format: date
+                  description: Новая дата записи
+                  example: '2025-01-28'
+                new_time:
+                  type: string
+                  format: time
+                  description: Новое время записи
+                  example: '14:00'
+              required:
+              - new_date
+              - new_time
   "/api/v1/clients":
     get:
       summary: Получает список всех клиентов
@@ -3520,405 +4187,6 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/ErrorResponse"
-  "/api/v1/availability/{service_point_id}/{date}":
-    parameters:
-    - name: service_point_id
-      in: path
-      description: ID сервисной точки
-      required: true
-      schema:
-        type: integer
-    - name: date
-      in: path
-      description: Дата в формате YYYY-MM-DD
-      required: true
-      schema:
-        type: string
-        format: date
-        example: "2025-06-10"
-    get:
-      summary: Получение доступных временных слотов для клиентов
-      tags:
-      - Availability
-      description: Возвращает список доступных временных слотов для записи на указанную дату. Фильтрует прошедшее время для текущего дня.
-      operationId: getClientAvailableSlots
-      responses:
-        '200':
-          description: Список доступных слотов
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  service_point_id:
-                    type: integer
-                    description: ID сервисной точки
-                  service_point_name:
-                    type: string
-                    description: Название сервисной точки
-                  date:
-                    type: string
-                    format: date
-                    description: Дата в формате YYYY-MM-DD
-                  is_working_day:
-                    type: boolean
-                    description: Является ли день рабочим
-                  available_slots:
-                    type: array
-                    description: Список доступных временных слотов
-                    items:
-                      type: object
-                      properties:
-                        time:
-                          type: string
-                          description: Время слота в формате HH:MM
-                          example: "10:00"
-                        available_posts:
-                          type: integer
-                          description: Количество свободных постов
-                        total_posts:
-                          type: integer
-                          description: Общее количество постов
-                        status:
-                          type: string
-                          enum: [available, limited, full]
-                          description: Статус слота (available - много мест, limited - мало мест, full - нет мест)
-                  total_slots:
-                    type: integer
-                    description: Общее количество доступных слотов
-        '404':
-          description: Сервисная точка не найдена
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-        '400':
-          description: Некорректный формат даты
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-  "/api/v1/bookings/check_availability":
-    post:
-      summary: Проверка доступности времени для записи
-      tags:
-      - Availability
-      description: Быстрая проверка доступности конкретного времени перед созданием записи
-      operationId: checkTimeAvailability
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                service_point_id:
-                  type: integer
-                  description: ID сервисной точки
-                date:
-                  type: string
-                  format: date
-                  description: Дата в формате YYYY-MM-DD
-                  example: "2025-06-10"
-                time:
-                  type: string
-                  description: Время в формате HH:MM
-                  example: "10:00"
-                duration_minutes:
-                  type: integer
-                  description: Продолжительность в минутах (по умолчанию 60)
-                  default: 60
-              required:
-              - service_point_id
-              - date
-              - time
-      responses:
-        '200':
-          description: Результат проверки доступности
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  service_point_id:
-                    type: integer
-                    description: ID сервисной точки
-                  service_point_name:
-                    type: string
-                    description: Название сервисной точки
-                  date:
-                    type: string
-                    format: date
-                    description: Дата в формате YYYY-MM-DD
-                  time:
-                    type: string
-                    description: Время в формате HH:MM
-                  available:
-                    type: boolean
-                    description: Доступно ли время для записи
-                  total_posts:
-                    type: integer
-                    description: Общее количество постов
-                  occupied_posts:
-                    type: integer
-                    description: Количество занятых постов
-                  reason:
-                    type: string
-                    description: Причина недоступности (если available = false)
-                oneOf:
-                - properties:
-                    available:
-                      enum: [true]
-                - properties:
-                    available:
-                      enum: [false]
-                    reason:
-                      type: string
-                      example: "Все посты заняты"
-        '400':
-          description: Некорректные параметры запроса
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-        '404':
-          description: Сервисная точка не найдена
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
-  "/api/v1/service_points/search":
-    get:
-      summary: Клиентский поиск сервисных точек
-      tags:
-      - Service Points (Client)
-      description: Поиск доступных для записи сервисных точек по названию города с дополнительными фильтрами
-      operationId: clientSearchServicePoints
-      parameters:
-      - name: city
-        in: query
-        required: false
-        description: Название города для поиска
-        schema:
-          type: string
-          example: "Київ"
-      - name: query
-        in: query
-        required: false
-        description: Поиск по названию или адресу сервисной точки
-        schema:
-          type: string
-          example: "Экспресс"
-      - name: latitude
-        in: query
-        required: false
-        description: Широта для расчета расстояния
-        schema:
-          type: number
-          format: float
-      - name: longitude
-        in: query
-        required: false
-        description: Долгота для расчета расстояния
-        schema:
-          type: number
-          format: float
-      responses:
-        '200':
-          description: Список доступных сервисных точек
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        name:
-                          type: string
-                        address:
-                          type: string
-                        city:
-                          type: object
-                          properties:
-                            id:
-                              type: integer
-                            name:
-                              type: string
-                            region:
-                              type: string
-                        partner:
-                          type: object
-                          properties:
-                            id:
-                              type: integer
-                            name:
-                              type: string
-                        contact_phone:
-                          type: string
-                        average_rating:
-                          type: number
-                          format: float
-                        reviews_count:
-                          type: integer
-                        posts_count:
-                          type: integer
-                        can_accept_bookings:
-                          type: boolean
-                        work_status:
-                          type: string
-                        distance:
-                          type: number
-                          format: float
-                          nullable: true
-                  total:
-                    type: integer
-                    description: Общее количество найденных точек
-                  city_found:
-                    type: boolean
-                    description: Найден ли указанный город
-  "/api/v1/service_points/{id}/client_details":
-    get:
-      summary: Детальная информация о сервисной точке для клиентов
-      tags:
-      - Service Points (Client)
-      description: Получение полной информации о сервисной точке включая услуги, удобства, фотографии и отзывы
-      operationId: getServicePointClientDetails
-      parameters:
-      - name: id
-        in: path
-        required: true
-        description: ID сервисной точки
-        schema:
-          type: integer
-      responses:
-        '200':
-          description: Детальная информация о сервисной точке
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: integer
-                  name:
-                    type: string
-                  description:
-                    type: string
-                    nullable: true
-                  address:
-                    type: string
-                  city:
-                    type: object
-                    properties:
-                      id:
-                        type: integer
-                      name:
-                        type: string
-                      region:
-                        type: string
-                  partner:
-                    type: object
-                    properties:
-                      id:
-                        type: integer
-                      name:
-                        type: string
-                  contact_phone:
-                    type: string
-                  latitude:
-                    type: string
-                  longitude:
-                    type: string
-                  average_rating:
-                    type: number
-                    format: float
-                  reviews_count:
-                    type: integer
-                  total_clients_served:
-                    type: integer
-                  posts_count:
-                    type: integer
-                  can_accept_bookings:
-                    type: boolean
-                  work_status:
-                    type: string
-                  is_working_today:
-                    type: boolean
-                  amenities:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        name:
-                          type: string
-                        icon:
-                          type: string
-                  photos:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        url:
-                          type: string
-                        description:
-                          type: string
-                          nullable: true
-                  services_available:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        name:
-                          type: string
-                        category:
-                          type: string
-                          nullable: true
-                  recent_reviews:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        rating:
-                          type: integer
-                        comment:
-                          type: string
-                        created_at:
-                          type: string
-                          format: date
-                        client_name:
-                          type: string
-        '403':
-          description: Сервисная точка недоступна для записи
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: "Сервисная точка недоступна для записи"
-                  reason:
-                    type: string
-                    example: "Техническое обслуживание"
-        '404':
-          description: Сервисная точка не найдена
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/ErrorResponse"
 servers:
 - url: http://localhost:8000
   description: Development server
@@ -3962,8 +4230,6 @@ tags:
   description: Управление сервисными точками
 - name: Bookings
   description: Управление бронированиями
-- name: Availability
-  description: Проверка доступности и получение временных слотов
 - name: Photos
   description: Управление фотографиями сервисных точек
 - name: Catalogs
