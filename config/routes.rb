@@ -230,6 +230,25 @@ Rails.application.routes.draw do
       get 'health', to: 'health#index'
       
       resources :service_point_statuses, only: [:index]
+
+      # Универсальная авторизация для всех ролей
+      scope :auth do
+        post 'login', to: 'auth#login'
+        post 'logout', to: 'auth#logout'
+        get 'me', to: 'auth#me'
+      end
+      
+      # Клиентская авторизация (специализированная)
+      scope :clients do
+        post 'register', to: 'client_auth#register'
+        post 'login', to: 'client_auth#login'
+        post 'logout', to: 'client_auth#logout'
+        get 'me', to: 'client_auth#me'
+      end
+      
+      # Существующие маршруты авторизации (старая система)
+      post 'authenticate', to: 'auth#login'
+      post 'refresh', to: 'auth#refresh'
     end
   end
 end
