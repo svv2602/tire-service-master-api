@@ -14,6 +14,7 @@ begin
   admin_role = UserRole.find_by(name: 'admin')
   manager_role = UserRole.find_by(name: 'manager')
   operator_role = UserRole.find_by(name: 'operator')
+  partner_role = UserRole.find_by(name: 'partner')
   client_role = UserRole.find_by(name: 'client')
 
   unless admin_role
@@ -84,6 +85,18 @@ begin
       last_name: 'Оператор',
       phone: '+380675550000',
       role_id: operator_role&.id || admin_role.id,
+      email_verified: true,
+      phone_verified: true
+    },
+    {
+      email: 'partner@test.com',  # Тестовый партнер
+      password: 'partner123',
+      password_confirmation: 'partner123',
+      is_active: true,
+      first_name: 'Тестовый',
+      last_name: 'Партнер',
+      phone: '+380677770000',
+      role_id: partner_role&.id || admin_role.id,
       email_verified: true,
       phone_verified: true
     },

@@ -28,6 +28,12 @@ roles_data = [
   },
   {
     id: 4,
+    name: 'partner',
+    description: 'Партнер з правами управління своїми сервісними точками',
+    is_active: true
+  },
+  {
+    id: 5,
     name: 'client',
     description: 'Клієнт системи',
     is_active: true
