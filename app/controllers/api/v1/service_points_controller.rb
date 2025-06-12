@@ -74,9 +74,16 @@ module Api
       
       # PATCH/PUT /api/v1/partners/:partner_id/service_points/:id
       def update
-        authorize @service_point
+        # Отладочное логирование для проверки авторизации
+        Rails.logger.info "=== Отладка авторизации для обновления сервисной точки ==="
+        Rails.logger.info "Текущий пользователь: #{current_user&.email} (ID: #{current_user&.id})"
+        Rails.logger.info "Роль пользователя: #{current_user&.role}"
+        Rails.logger.info "Partner ID пользователя: #{current_user&.partner&.id}"
+        Rails.logger.info "Сервисная точка ID: #{@service_point.id}"
+        Rails.logger.info "Partner ID сервисной точки: #{@service_point.partner_id}"
+        Rails.logger.info "Может ли пользователь редактировать: #{policy(@service_point).update?}"
         
-
+        authorize @service_point
         
         old_values = @service_point.as_json
         
@@ -649,9 +656,9 @@ module Api
         
         {
           data: paginated_collection.as_json(
-            only: [:id, :name, :address, :latitude, :longitude, :contact_phone, :average_rating, :total_clients_served, :cancellation_rate, :post_count],
+            only: [:id, :name, :address, :latitude, :longitude, :contact_phone, :average_rating, :total_clients_served, :cancellation_rate, :post_count, :partner_id, :city_id, :is_active, :work_status, :working_hours],
             include: {
-              city: { only: [:id, :name] },
+              city: { only: [:id, :name], include: { region: { only: [:id, :name] } } },
               partner: { only: [:id, :company_name] }
             }
           ),
