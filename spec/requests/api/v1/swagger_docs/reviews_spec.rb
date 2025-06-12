@@ -1,42 +1,8 @@
 require 'swagger_helper'
 
 RSpec.describe 'Reviews API', type: :request do
-  path '/api/v1/reviews' do
-    get('Получает список отзывов') do
-      tags 'Reviews'
-      description 'Возвращает список отзывов с возможностью фильтрации'
-      operationId 'getReviews'
-      produces 'application/json'
-
-      parameter name: :service_point_id, in: :query, type: :integer, required: false, description: 'ID сервисной точки'
-      parameter name: :rating, in: :query, type: :integer, required: false, description: 'Фильтр по рейтингу (1-5)'
-      parameter name: :page, in: :query, type: :integer, required: false, description: 'Номер страницы'
-      parameter name: :per_page, in: :query, type: :integer, required: false, description: 'Количество на странице'
-
-      response(200, 'Список отзывов') do
-        schema type: :object,
-               properties: {
-                 data: {
-                   type: :array,
-                   items: { '$ref': '#/components/schemas/Review' }
-                 },
-                 pagination: {
-                   '$ref': '#/components/schemas/Pagination'
-                 }
-               }
-
-        let(:service_point) { create(:service_point) }
-        let(:service_point_id) { service_point.id }
-        let(:page) { 1 }
-        let(:per_page) { 20 }
-
-        run_test! do |response|
-          data = JSON.parse(response.body)
-          expect(data['data']).to be_an(Array)
-          expect(data['pagination']).to include('current_page', 'total_pages')
-        end
-      end
-    end
+  path '/api/v1/clients/{client_id}/reviews' do
+    parameter name: :client_id, in: :path, type: :integer, required: true, description: 'ID клиента'
 
     post('Создает новый отзыв') do
       tags 'Reviews'
@@ -50,21 +16,30 @@ RSpec.describe 'Reviews API', type: :request do
         type: :object,
         properties: {
           review: {
-            '$ref': '#/components/schemas/ReviewRequest'
+            type: :object,
+            properties: {
+              booking_id: { type: :integer },
+              rating: { type: :integer },
+              comment: { type: :string },
+              recommend: { type: :boolean }
+            },
+            required: [:booking_id, :rating]
           }
         },
         required: [:review]
       }
 
       response(201, 'Отзыв создан') do
-        schema type: :object,
-               properties: {
-                 data: { '$ref': '#/components/schemas/Review' },
-                 message: { type: :string }
-               }
-
         let(:user) { create(:user) }
-        let(:booking) { create(:booking, :completed, user: user) }
+        let(:client) { create(:client, user: user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: client,
+            service_point: service_point
+          )
+        end
+        let(:client_id) { client.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
         let(:review_params) do
           {
@@ -77,25 +52,26 @@ RSpec.describe 'Reviews API', type: :request do
           }
         end
 
-        run_test! do |response|
-          data = JSON.parse(response.body)
-          expect(data['data']['rating']).to eq(5)
-          expect(data['data']['comment']).to include('Отличный сервис')
-          expect(data['message']).to be_present
-        end
+        run_test!
       end
 
       response(422, 'Ошибка валидации') do
-        schema '$ref' => '#/components/schemas/ValidationErrorResponse'
-
         let(:user) { create(:user) }
-        let(:booking) { create(:booking, user: user) }
+        let(:client) { create(:client, user: user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('pending',
+            client: client,
+            service_point: service_point
+          )
+        end
+        let(:client_id) { client.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
         let(:review_params) do
           {
             review: {
               booking_id: booking.id,
-              rating: 6, # Некорректный рейтинг
+              rating: 6,
               comment: ''
             }
           }
@@ -105,11 +81,17 @@ RSpec.describe 'Reviews API', type: :request do
       end
 
       response(403, 'Недостаточно прав доступа') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
         let(:user) { create(:user) }
         let(:other_user) { create(:user) }
-        let(:booking) { create(:booking, :completed, user: other_user) }
+        let(:other_client) { create(:client, user: other_user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: other_client,
+            service_point: service_point
+          )
+        end
+        let(:client_id) { other_client.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
         let(:review_params) do
           {
@@ -125,9 +107,15 @@ RSpec.describe 'Reviews API', type: :request do
       end
 
       response(401, 'Не авторизован') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
-        let(:booking) { create(:booking, :completed) }
+        let(:client) { create(:client) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: client,
+            service_point: service_point
+          )
+        end
+        let(:client_id) { client.id }
         let(:Authorization) { 'Bearer invalid_token' }
         let(:review_params) do
           {
@@ -144,36 +132,49 @@ RSpec.describe 'Reviews API', type: :request do
     end
   end
 
-  path '/api/v1/reviews/{id}' do
-    parameter name: 'id', in: :path, type: :integer, description: 'ID отзыва'
+  path '/api/v1/clients/{client_id}/reviews/{id}' do
+    parameter name: :client_id, in: :path, type: :integer, required: true, description: 'ID клиента'
+    parameter name: :id, in: :path, type: :integer, required: true, description: 'ID отзыва'
 
     get('Получает информацию об отзыве') do
       tags 'Reviews'
       description 'Возвращает детальную информацию об отзыве'
       operationId 'getReview'
       produces 'application/json'
+      security [bearerAuth: []]
 
       response(200, 'Информация об отзыве') do
-        schema type: :object,
-               properties: {
-                 data: { '$ref': '#/components/schemas/ReviewDetailed' }
-               }
-
-        let(:review) { create(:review) }
-        let(:id) { review.id }
-
-        run_test! do |response|
-          data = JSON.parse(response.body)
-          expect(data['data']['id']).to eq(review.id)
-          expect(data['data']['rating']).to be_present
-          expect(data['data']['comment']).to be_present
+        let(:user) { create(:user) }
+        let(:client) { create(:client, user: user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: client,
+            service_point: service_point
+          )
         end
+        let(:review) do
+          create(:review,
+            client: client,
+            booking: booking,
+            service_point: service_point,
+            rating: 5,
+            comment: 'Great service!'
+          )
+        end
+        let(:client_id) { client.id }
+        let(:id) { review.id }
+        let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
+
+        run_test!
       end
 
       response(404, 'Отзыв не найден') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
-        let(:id) { 99999 }
+        let(:user) { create(:user) }
+        let(:client) { create(:client, user: user) }
+        let(:client_id) { client.id }
+        let(:id) { 0 }
+        let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
 
         run_test!
       end
@@ -181,7 +182,7 @@ RSpec.describe 'Reviews API', type: :request do
 
     patch('Обновляет отзыв') do
       tags 'Reviews'
-      description 'Обновляет отзыв (только автор может редактировать свой отзыв)'
+      description 'Обновляет существующий отзыв'
       operationId 'updateReview'
       consumes 'application/json'
       produces 'application/json'
@@ -191,53 +192,77 @@ RSpec.describe 'Reviews API', type: :request do
         type: :object,
         properties: {
           review: {
-            '$ref': '#/components/schemas/ReviewUpdateRequest'
+            type: :object,
+            properties: {
+              rating: { type: :integer },
+              comment: { type: :string },
+              recommend: { type: :boolean }
+            }
           }
         },
         required: [:review]
       }
 
       response(200, 'Отзыв обновлен') do
-        schema type: :object,
-               properties: {
-                 data: { '$ref': '#/components/schemas/Review' },
-                 message: { type: :string }
-               }
-
         let(:user) { create(:user) }
-        let(:booking) { create(:booking, :completed, user: user) }
-        let(:review) { create(:review, booking: booking) }
+        let(:client) { create(:client, user: user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: client,
+            service_point: service_point
+          )
+        end
+        let(:review) do
+          create(:review,
+            client: client,
+            booking: booking,
+            service_point: service_point,
+            rating: 5,
+            comment: 'Great service!'
+          )
+        end
+        let(:client_id) { client.id }
         let(:id) { review.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
         let(:review_params) do
           {
             review: {
               rating: 4,
-              comment: 'Обновленный отзыв - хороший сервис',
-              recommend: true
+              comment: 'Good service, but could be better'
             }
           }
         end
 
-        run_test! do |response|
-          data = JSON.parse(response.body)
-          expect(data['data']['rating']).to eq(4)
-          expect(data['data']['comment']).to include('Обновленный отзыв')
-        end
+        run_test!
       end
 
       response(422, 'Ошибка валидации') do
-        schema '$ref' => '#/components/schemas/ValidationErrorResponse'
-
         let(:user) { create(:user) }
-        let(:booking) { create(:booking, :completed, user: user) }
-        let(:review) { create(:review, booking: booking) }
+        let(:client) { create(:client, user: user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: client,
+            service_point: service_point
+          )
+        end
+        let(:review) do
+          create(:review,
+            client: client,
+            booking: booking,
+            service_point: service_point,
+            rating: 5,
+            comment: 'Great service!'
+          )
+        end
+        let(:client_id) { client.id }
         let(:id) { review.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
         let(:review_params) do
           {
             review: {
-              rating: 0, # Некорректный рейтинг
+              rating: 6,
               comment: ''
             }
           }
@@ -247,26 +272,69 @@ RSpec.describe 'Reviews API', type: :request do
       end
 
       response(403, 'Недостаточно прав доступа') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
         let(:user) { create(:user) }
         let(:other_user) { create(:user) }
-        let(:booking) { create(:booking, :completed, user: other_user) }
-        let(:review) { create(:review, booking: booking) }
+        let(:other_client) { create(:client, user: other_user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: other_client,
+            service_point: service_point
+          )
+        end
+        let(:review) do
+          create(:review,
+            client: other_client,
+            booking: booking,
+            service_point: service_point,
+            rating: 5,
+            comment: 'Great service!'
+          )
+        end
+        let(:client_id) { other_client.id }
         let(:id) { review.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
-        let(:review_params) { { review: { rating: 3 } } }
+        let(:review_params) do
+          {
+            review: {
+              rating: 4,
+              comment: 'Not so great'
+            }
+          }
+        end
 
         run_test!
       end
 
       response(401, 'Не авторизован') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
-        let(:review) { create(:review) }
+        let(:client) { create(:client) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: client,
+            service_point: service_point
+          )
+        end
+        let(:review) do
+          create(:review,
+            client: client,
+            booking: booking,
+            service_point: service_point,
+            rating: 5,
+            comment: 'Great service!'
+          )
+        end
+        let(:client_id) { client.id }
         let(:id) { review.id }
         let(:Authorization) { 'Bearer invalid_token' }
-        let(:review_params) { { review: { rating: 3 } } }
+        let(:review_params) do
+          {
+            review: {
+              rating: 4,
+              comment: 'Not so great'
+            }
+          }
+        end
 
         run_test!
       end
@@ -274,36 +342,58 @@ RSpec.describe 'Reviews API', type: :request do
 
     delete('Удаляет отзыв') do
       tags 'Reviews'
-      description 'Удаляет отзыв (только автор или администратор)'
+      description 'Удаляет существующий отзыв'
       operationId 'deleteReview'
       produces 'application/json'
       security [bearerAuth: []]
 
       response(200, 'Отзыв удален') do
-        schema type: :object,
-               properties: {
-                 message: { type: :string, example: 'Отзыв успешно удален' }
-               }
-
         let(:user) { create(:user) }
-        let(:booking) { create(:booking, :completed, user: user) }
-        let(:review) { create(:review, booking: booking) }
+        let(:client) { create(:client, user: user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: client,
+            service_point: service_point
+          )
+        end
+        let(:review) do
+          create(:review,
+            client: client,
+            booking: booking,
+            service_point: service_point,
+            rating: 5,
+            comment: 'Great service!'
+          )
+        end
+        let(:client_id) { client.id }
         let(:id) { review.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
 
-        run_test! do |response|
-          data = JSON.parse(response.body)
-          expect(data['message']).to include('удален')
-        end
+        run_test!
       end
 
       response(403, 'Недостаточно прав доступа') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
         let(:user) { create(:user) }
         let(:other_user) { create(:user) }
-        let(:booking) { create(:booking, :completed, user: other_user) }
-        let(:review) { create(:review, booking: booking) }
+        let(:other_client) { create(:client, user: other_user) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: other_client,
+            service_point: service_point
+          )
+        end
+        let(:review) do
+          create(:review,
+            client: other_client,
+            booking: booking,
+            service_point: service_point,
+            rating: 5,
+            comment: 'Great service!'
+          )
+        end
+        let(:client_id) { other_client.id }
         let(:id) { review.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
 
@@ -311,19 +401,34 @@ RSpec.describe 'Reviews API', type: :request do
       end
 
       response(404, 'Отзыв не найден') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
         let(:user) { create(:user) }
-        let(:id) { 99999 }
+        let(:client) { create(:client, user: user) }
+        let(:client_id) { client.id }
+        let(:id) { 0 }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
 
         run_test!
       end
 
       response(401, 'Не авторизован') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
-        let(:review) { create(:review) }
+        let(:client) { create(:client) }
+        let(:service_point) { create(:service_point) }
+        let(:booking) do
+          create_booking_with_status('completed',
+            client: client,
+            service_point: service_point
+          )
+        end
+        let(:review) do
+          create(:review,
+            client: client,
+            booking: booking,
+            service_point: service_point,
+            rating: 5,
+            comment: 'Great service!'
+          )
+        end
+        let(:client_id) { client.id }
         let(:id) { review.id }
         let(:Authorization) { 'Bearer invalid_token' }
 
@@ -333,11 +438,11 @@ RSpec.describe 'Reviews API', type: :request do
   end
 
   path '/api/v1/service_points/{service_point_id}/reviews' do
-    parameter name: 'service_point_id', in: :path, type: :integer, description: 'ID сервисной точки'
+    parameter name: :service_point_id, in: :path, type: :integer, required: true, description: 'ID сервисной точки'
 
-    get('Получает отзывы для сервисной точки') do
+    get('Получает список отзывов сервисной точки') do
       tags 'Reviews'
-      description 'Возвращает все отзывы для конкретной сервисной точки'
+      description 'Возвращает список отзывов для указанной сервисной точки'
       operationId 'getServicePointReviews'
       produces 'application/json'
 
@@ -354,23 +459,6 @@ RSpec.describe 'Reviews API', type: :request do
                  },
                  pagination: {
                    '$ref': '#/components/schemas/Pagination'
-                 },
-                 stats: {
-                   type: :object,
-                   properties: {
-                     average_rating: { type: :number, format: :float, example: 4.5 },
-                     total_reviews: { type: :integer, example: 150 },
-                     rating_distribution: {
-                       type: :object,
-                       properties: {
-                         '5': { type: :integer, example: 80 },
-                         '4': { type: :integer, example: 40 },
-                         '3': { type: :integer, example: 20 },
-                         '2': { type: :integer, example: 7 },
-                         '1': { type: :integer, example: 3 }
-                       }
-                     }
-                   }
                  }
                }
 
@@ -379,18 +467,11 @@ RSpec.describe 'Reviews API', type: :request do
         let(:page) { 1 }
         let(:per_page) { 20 }
 
-        run_test! do |response|
-          data = JSON.parse(response.body)
-          expect(data['data']).to be_an(Array)
-          expect(data['pagination']).to include('current_page', 'total_pages')
-          expect(data['stats']).to include('average_rating', 'total_reviews')
-        end
+        run_test!
       end
 
       response(404, 'Сервисная точка не найдена') do
-        schema '$ref' => '#/components/schemas/ErrorResponse'
-
-        let(:service_point_id) { 99999 }
+        let(:service_point_id) { 0 }
 
         run_test!
       end

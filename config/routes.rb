@@ -45,12 +45,15 @@ Rails.application.routes.draw do
       get 'dashboard/stats', to: 'dashboard#stats'
       
       # Аутентификация
-      post 'auth/login', to: 'auth#login'
-      post 'auth/refresh', to: 'auth#refresh'
-      post 'auth/logout', to: 'auth#logout'
-      # Routes for authentication spec tests
-      post 'authenticate', to: 'auth#login'
-      post 'register', to: 'clients#register'
+      post 'auth/login', to: 'authentication#authenticate'
+      
+      # Клиентская регистрация и аутентификация
+      post 'clients/register', to: 'client_auth#register'
+      post 'clients/login', to: 'client_auth#login'
+      
+      # Партнерская регистрация и аутентификация
+      post 'partners/register', to: 'partner_auth#register'
+      post 'partners/login', to: 'partner_auth#login'
       
       # Профиль текущего пользователя
       get 'users/me', to: 'users#me'
@@ -226,9 +229,6 @@ Rails.application.routes.draw do
         post 'create_test_booking', to: 'data_generator#create_test_booking'
       end
       
-      # Добавляем health check эндпоинт
-      get 'health', to: 'health#index'
-      
       resources :service_point_statuses, only: [:index]
 
       # Универсальная авторизация для всех ролей
@@ -249,6 +249,39 @@ Rails.application.routes.draw do
       # Существующие маршруты авторизации (старая система)
       post 'authenticate', to: 'auth#login'
       post 'refresh', to: 'auth#refresh'
+
+      # Отзывы
+      resources :reviews
+      
+      # Клиентские ресурсы
+      resources :clients do
+        resources :reviews
+        resources :cars, controller: 'client_cars'
+        resources :bookings
+        resources :favorite_points, only: [:index, :create, :destroy]
+      end
+      
+      # Ресурсы сервисных точек
+      resources :service_points do
+        resources :reviews, only: [:index, :show]
+        resources :services
+        resources :bookings
+        resources :working_hours
+        resources :holidays
+        resources :availability, only: [:index]
+      end
+      
+      # Другие ресурсы
+      resources :car_brands
+      resources :car_models
+      resources :car_types
+      resources :service_categories
+      resources :service_types
+      resources :booking_statuses
+      resources :payment_statuses
+      resources :cancellation_reasons
+      resources :regions
+      resources :cities
     end
   end
 end

@@ -2,6 +2,7 @@ class ApplicationController < ActionController::API
   include ActionController::MimeResponds
   include Pundit::Authorization
   include RequestLogging
+  include ActionController::HttpAuthentication::Token::ControllerMethods
   
   # Обработка ошибок
   rescue_from ActiveRecord::RecordNotFound, with: :not_found
@@ -15,8 +16,27 @@ class ApplicationController < ActionController::API
   protected
   
   def authenticate_request
-    @current_user = AuthorizeApiRequest.new(request.headers).call
-    render json: { error: 'Unauthorized' }, status: :unauthorized unless @current_user
+    header = request.headers['Authorization']
+    token = header.split(' ').last if header
+    
+    if token.nil?
+      render json: { error: 'Токен не предоставлен' }, status: :unauthorized
+      return
+    end
+    
+    begin
+      decoded = Auth::JsonWebToken.decode(token)
+      if decoded.nil? || !decoded['user_id']
+        render json: { error: 'Неверный токен' }, status: :unauthorized
+        return
+      end
+      
+      @current_user = User.find(decoded['user_id'])
+    rescue JWT::DecodeError => e
+      render json: { error: 'Неверный токен' }, status: :unauthorized
+    rescue ActiveRecord::RecordNotFound => e
+      render json: { error: 'Пользователь не найден' }, status: :unauthorized
+    end
   end
   
   def current_ip
@@ -43,5 +63,9 @@ class ApplicationController < ActionController::API
   
   def forbidden
     render json: { error: 'Forbidden' }, status: :forbidden
+  end
+  
+  def json_request?
+    request.format.json?
   end
 end

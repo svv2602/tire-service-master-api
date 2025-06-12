@@ -1,7 +1,5 @@
 # Контроллер для аутентификации клиентов
 class Api::V1::ClientAuthController < ApplicationController
-  # Пропускаем проверку CSRF для API
-  skip_before_action :verify_authenticity_token, if: :json_request?
   # Не требуем авторизации для регистрации и входа
   skip_before_action :authenticate_request, only: [:register, :login]
 
@@ -22,29 +20,12 @@ class Api::V1::ClientAuthController < ApplicationController
       if user.save
         # Пользователь автоматически создаст связанный Client через коллбэк
         
-        # Генерируем JWT токены
-        access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id, role: user.role.name)
-        refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id, role: user.role.name)
+        # Генерируем JWT токен
+        token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
         
         render json: {
-          message: 'Регистрация прошла успешно',
-          user: {
-            id: user.id,
-            email: user.email,
-            first_name: user.first_name,
-            last_name: user.last_name,
-            phone: user.phone,
-            role: user.role.name,
-            is_active: user.is_active?
-          },
-          client: {
-            id: user.client.id,
-            preferred_notification_method: user.client.preferred_notification_method
-          },
-          tokens: {
-            access: access_token,
-            refresh: refresh_token
-          }
+          message: 'Account created successfully',
+          auth_token: token
         }, status: :created
       else
         render json: { 
@@ -91,31 +72,12 @@ class Api::V1::ClientAuthController < ApplicationController
       # Обновляем время последнего входа
       user.update_last_login!
 
-      # Генерируем JWT токены
-      access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id, role: user.role.name)
-      refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id, role: user.role.name)
+      # Генерируем JWT токен
+      token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
 
       render json: {
         message: 'Вход выполнен успешно',
-        user: {
-          id: user.id,
-          email: user.email,
-          first_name: user.first_name,
-          last_name: user.last_name,
-          phone: user.phone,
-          role: user.role.name,
-          is_active: user.is_active?
-        },
-        client: {
-          id: user.client.id,
-          preferred_notification_method: user.client.preferred_notification_method,
-          total_bookings: user.client.total_bookings,
-          completed_bookings: user.client.completed_bookings
-        },
-        tokens: {
-          access: access_token,
-          refresh: refresh_token
-        }
+        auth_token: token
       }, status: :ok
     rescue StandardError => e
       Rails.logger.error "Ошибка входа клиента: #{e.message}"
@@ -163,7 +125,7 @@ class Api::V1::ClientAuthController < ApplicationController
   private
 
   def user_params
-    params.require(:user).permit(:first_name, :last_name, :email, :phone, :password, :password_confirmation)
+    params.require(:client).permit(:first_name, :last_name, :email, :phone, :password, :password_confirmation)
   end
 
   def login_params
@@ -179,9 +141,5 @@ class Api::V1::ClientAuthController < ApplicationController
       normalized_phone = login.gsub(/[^\d+]/, '')
       User.find_by(phone: normalized_phone)
     end
-  end
-
-  def json_request?
-    request.format.json?
   end
 end 

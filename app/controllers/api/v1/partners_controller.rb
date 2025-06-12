@@ -3,7 +3,7 @@ module Api
     class PartnersController < ApiController
       before_action :set_partner, only: [:show, :update, :destroy, :toggle_active]
       before_action :authorize_admin, except: [:index, :show, :create, :create_test, :toggle_active]
-      skip_before_action :authenticate_request, only: [:index, :create_test]
+      skip_before_action :authenticate_request, only: [:index, :create_test, :create]
       
       # GET /api/v1/partners
       def index
@@ -104,6 +104,17 @@ module Api
             end
             
             Rails.logger.info("Партнер успешно создан с ID: #{@partner.id}")
+
+            # Если это регистрация (не админ создает партнера), генерируем JWT токен
+            if !current_user&.admin?
+              token = Auth::JsonWebToken.encode_access_token(user_id: @user.id)
+              render json: {
+                tokens: { access: token },
+                user: @user.as_json(only: [:id, :email, :first_name, :last_name, :role, :is_active]),
+                partner: @partner.as_json(only: [:id])
+              }, status: :created
+              return
+            end
           else
             # Если user_id указан, просто создаем партнера
             @partner = Partner.new(partner_params)

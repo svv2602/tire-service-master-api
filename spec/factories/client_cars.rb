@@ -5,6 +5,7 @@ FactoryBot.define do
     association :model, factory: :car_model
     association :car_type, factory: :car_type
     year { rand(2000..2024) }
+    sequence(:license_plate) { |n| "test#{n}" }
     # Убираем поля, которых нет в схеме
     # sequence(:registration_number) { |n| "AA#{n}BB" }
     # sequence(:vin) { |n| "VIN#{n}#{SecureRandom.hex(4).upcase}" }

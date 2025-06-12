@@ -60,38 +60,30 @@ module Api
       # POST /api/v1/clients/register
       # POST /api/v1/register
       def register
-        # Debug output to STDOUT for test environment
-        puts "Registration params: #{params.inspect}"
-        puts "Valid attributes from test: #{valid_registration_attributes.inspect}"
-        
-        # Use the valid test attributes directly for registration
-        # This ensures we're using the exact format expected by the tests
-        begin
-          User.transaction do
-            @user = User.new(valid_registration_attributes)
-            @user.role = UserRole.find_by(name: 'client')
+        ActiveRecord::Base.transaction do
+          user = User.new(
+            email: client_params[:email],
+            password: client_params[:password],
+            first_name: client_params[:first_name],
+            last_name: client_params[:last_name],
+            role: 'client'
+          )
+
+          if user.save
+            client = Client.create!(user: user)
+            token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
             
-            unless @user.save
-              puts "User validation errors: #{@user.errors.full_messages}"
-              raise ActiveRecord::RecordInvalid.new(@user)
-            end
-            
-            @client = Client.create!(user: @user)
+            render json: {
+              tokens: { access: token },
+              user: user.as_json(only: [:id, :email, :first_name, :last_name, :role, :is_active]),
+              client: client.as_json(only: [:id])
+            }, status: :created
+          else
+            render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
           end
-          
-          # Генерируем токен для нового пользователя
-          token = Auth::JsonWebToken.encode_access_token(user_id: @user.id)
-          render json: { 
-            auth_token: token,
-            message: 'Account created successfully'
-          }, status: :created
-        rescue ActiveRecord::RecordInvalid => e
-          puts "Validation error: #{e.record.errors.full_messages}"
-          render json: { message: 'Validation failed', errors: e.record.errors }, status: :unprocessable_entity
-        rescue => e
-          puts "Other error: #{e.message}"
-          render json: { message: "Error: #{e.message}" }, status: :unprocessable_entity
         end
+      rescue ActiveRecord::RecordInvalid => e
+        render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
       end
       
       # POST /api/v1/clients/social_auth
@@ -276,34 +268,11 @@ module Api
       end
       
       def client_params
-        params.require(:client).permit(:preferred_notification_method, :marketing_consent)
+        params.require(:client).permit(:email, :password, :first_name, :last_name)
       end
       
       def client_update_params
         params.fetch(:client, {}).permit(:preferred_notification_method, :marketing_consent)
-      end
-      
-      def client_registration_params
-        # Try to get params from :client key first (original format)
-        return params.require(:client).permit(:email, :phone, :password, :password_confirmation, :first_name, :last_name) if params[:client].present?
-        
-        # If :client key not present, assume parameters are at root level (test format)
-        params.permit(:email, :phone, :password, :password_confirmation, :first_name, :last_name)
-      end
-      
-      # Исправленный метод для получения валидных атрибутов регистрации
-      def valid_registration_attributes
-        # Получаем параметры из client объекта
-        client_params = params[:client] || {}
-        
-        {
-          email: client_params[:email],
-          password: client_params[:password],
-          password_confirmation: client_params[:password_confirmation],
-          first_name: client_params[:first_name],
-          last_name: client_params[:last_name],
-          phone: client_params[:phone]
-        }.compact # Убираем nil значения
       end
     end
   end

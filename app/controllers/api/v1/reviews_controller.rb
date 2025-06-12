@@ -45,7 +45,7 @@ module Api
       # POST /api/v1/clients/:client_id/reviews
       def create
         @client = Client.find(params[:client_id])
-        @booking = @client.bookings.find(params[:booking_id])
+        @booking = @client.bookings.find(review_params[:booking_id])
         
         # Проверяем, что бронирование выполнено
         unless @booking.status.name == "completed"
@@ -57,7 +57,7 @@ module Api
           return render json: { error: "Review for this booking already exists" }, status: :unprocessable_entity
         end
         
-        @review = Review.new(review_params)
+        @review = Review.new(review_params.except(:booking_id))
         @review.client = @client
         @review.booking = @booking
         @review.service_point = @booking.service_point
@@ -132,7 +132,7 @@ module Api
       end
       
       def review_params
-        params.require(:review).permit(:rating, :comment, :reply)
+        params.require(:review).permit(:booking_id, :rating, :comment, :reply, :recommend)
       end
     end
   end

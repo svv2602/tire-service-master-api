@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_09_191050) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_12_135905) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -372,8 +372,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_09_191050) do
     t.boolean "is_published", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "recommend", default: true, null: false
     t.index ["booking_id"], name: "index_reviews_on_booking_id"
     t.index ["client_id"], name: "index_reviews_on_client_id"
+    t.index ["recommend"], name: "index_reviews_on_recommend"
     t.index ["service_point_id"], name: "index_reviews_on_service_point_id"
     t.check_constraint "rating >= 1 AND rating <= 5", name: "check_rating_range"
   end

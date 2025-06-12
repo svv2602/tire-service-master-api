@@ -11,6 +11,11 @@ module AuthHelper
   def generate_token(user)
     Auth::JsonWebToken.encode_access_token(user_id: user.id)
   end
+
+  # Генерирует JWT токен для пользователя
+  def generate_jwt_token(user)
+    Auth::JsonWebToken.encode_access_token(user_id: user.id)
+  end
 end
 
 RSpec.configure do |config|

@@ -1,8 +1,21 @@
 FactoryBot.define do
   factory :review do
-    association :booking, factory: [:booking, :completed]
-    client { booking.client }
-    service_point { booking.service_point }
+    before(:build) do |review|
+      # Создаем клиента и сервисную точку, если они не заданы
+      review.client ||= create(:client)
+      review.service_point ||= create(:service_point)
+      
+      # Создаем бронирование со статусом "completed", если оно не задано
+      if review.booking.nil?
+        review.booking = create(:booking, :completed,
+          client: review.client,
+          service_point: review.service_point,
+          skip_status_validation: true,
+          skip_availability_check: true
+        )
+      end
+    end
+    
     rating { rand(1..5) }
     comment { Faker::Lorem.paragraph }
     is_published { true }
