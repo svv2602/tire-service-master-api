@@ -1,6 +1,9 @@
 class User < ApplicationRecord
   has_secure_password
   
+  # Атрибуты
+  attr_accessor :skip_role_specific_record
+  
   # Связи
   belongs_to :role, class_name: 'UserRole', foreign_key: 'role_id'
   has_one :administrator, dependent: :destroy
@@ -25,7 +28,7 @@ class User < ApplicationRecord
   
   # Коллбэки
   before_validation :normalize_email, :normalize_phone
-  after_create :create_role_specific_record
+  after_create :create_role_specific_record, unless: :skip_role_specific_record
   
   # Скоупы
   scope :active, -> { where(is_active: true) }
@@ -128,8 +131,10 @@ class User < ApplicationRecord
     when 'manager'
       create_manager! unless manager.present?
     when 'partner'
+      # Не создаем партнера автоматически, если он уже создается через контроллер
+      return if partner.present? || Partner.exists?(user_id: id)
       create_partner!(company_name: "#{first_name} #{last_name}", contact_person: full_name, 
-                     tax_number: "temp_#{id}", legal_address: 'Не указан') unless partner.present?
+                     tax_number: "temp_#{id}", legal_address: 'Не указан')
     when 'admin'
       create_administrator! unless administrator.present?
     end

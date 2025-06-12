@@ -8,8 +8,11 @@ class Partner < ApplicationRecord
   has_many :price_lists, dependent: :destroy
   has_many :promotions, dependent: :destroy
   
+  # Вложенные атрибуты
+  accepts_nested_attributes_for :user
+  
   # Валидации
-  validates :user_id, presence: true, uniqueness: true
+  validates :user_id, presence: true, uniqueness: true, unless: -> { user.present? && user.new_record? }
   validates :company_name, presence: true
   validates :contact_person, presence: true
   validates :tax_number, uniqueness: true, allow_blank: true

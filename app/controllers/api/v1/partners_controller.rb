@@ -63,38 +63,56 @@ module Api
       
       # POST /api/v1/partners
       def create
+        Rails.logger.info("Начало создания партнера с параметрами: #{params.inspect}")
+        
         ActiveRecord::Base.transaction do
           # Сначала создаем пользователя, если user_id не указан
-          if params[:user_id].blank? && params[:partner][:user].present?
-            user_data = user_params
+          if params[:user_id].blank? && params[:partner][:user_attributes].present?
+            user_data = params[:partner][:user_attributes].permit(:email, :password, :phone, :first_name, :last_name)
             
             # Генерируем пароль, если он не был предоставлен
             user_data[:password] ||= SecureRandom.hex(8)
             # Сохраняем пароль для возможной отправки по email
             generated_password = user_data[:password]
             
+            Rails.logger.info("Создание пользователя с данными: #{user_data.inspect}")
+            
             @user = User.new(user_data)
-            @user.role = UserRole.find_by(name: 'operator')
+            # Устанавливаем роль партнера (id: 4)
+            @user.role_id = 4
+            # Отключаем автоматическое создание партнера
+            @user.skip_role_specific_record = true
             
             unless @user.save
+              Rails.logger.error("Ошибка при создании пользователя: #{@user.errors.full_messages}")
               raise ActiveRecord::RecordInvalid.new(@user)
             end
             
-            user_id = @user.id
+            Rails.logger.info("Пользователь успешно создан с ID: #{@user.id}")
+            
+            # Создаем партнера с сохраненным пользователем
+            partner_data = partner_params.except(:user_attributes)
+            partner_data[:user_id] = @user.id
+            
+            Rails.logger.info("Создание партнера с данными: #{partner_data.inspect}")
+            
+            @partner = Partner.new(partner_data)
+            
+            unless @partner.save
+              Rails.logger.error("Ошибка при создании партнера: #{@partner.errors.full_messages}")
+              raise ActiveRecord::RecordInvalid.new(@partner)
+            end
+            
+            Rails.logger.info("Партнер успешно создан с ID: #{@partner.id}")
           else
-            user_id = params[:user_id]
+            # Если user_id указан, просто создаем партнера
+            @partner = Partner.new(partner_params)
+            @partner.user_id = params[:user_id]
+            
+            unless @partner.save
+              raise ActiveRecord::RecordInvalid.new(@partner)
+            end
           end
-          
-          # Затем создаем партнера
-          @partner = Partner.new(partner_params)
-          @partner.user_id = user_id
-          
-          unless @partner.save
-            raise ActiveRecord::RecordInvalid.new(@partner)
-          end
-          
-          # Здесь можно добавить логику отправки email с паролем,
-          # если он был сгенерирован автоматически
         end
         
         render json: @partner.as_json(include: { 
@@ -325,7 +343,8 @@ module Api
         permitted_params = params.require(:partner).permit(
           :company_name, :company_description, :contact_person, 
           :logo_url, :website, :tax_number, :legal_address,
-          :region_id, :city_id, :is_active
+          :region_id, :city_id, :is_active,
+          user_attributes: [:email, :password, :phone, :first_name, :last_name, :role_id]
         )
         
         # Проверка и установка значений по умолчанию
@@ -334,10 +353,6 @@ module Api
         permitted_params[:city_id] = nil if permitted_params[:city_id].blank?
         
         permitted_params
-      end
-      
-      def user_params
-        params.require(:partner).require(:user).permit(:email, :password, :phone, :first_name, :last_name)
       end
       
       def authorize_admin
