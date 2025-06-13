@@ -8,13 +8,18 @@ module Api
       # POST /api/v1/auth/login
       # Универсальный вход для всех ролей пользователей
       def login
-        user = User.find_by(email: auth_params[:login])
+        user = User.find_by(email: params[:email])
         
-        if user&.authenticate(auth_params[:password])
+        if user&.authenticate(params[:password])
           token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+          
+          # Создаем пользовательский JSON с добавлением роли
+          user_json = user.as_json(only: [:id, :email, :first_name, :last_name, :is_active])
+          user_json['role'] = user.role.name if user.role
+          
           render json: { 
             tokens: { access: token },
-            user: user.as_json(only: [:id, :email, :first_name, :last_name, :role, :is_active])
+            user: user_json
           }
         else
           render json: { error: 'Неверные учетные данные' }, status: :unauthorized
@@ -70,7 +75,7 @@ module Api
       private
       
       def auth_params
-        params.require(:auth).permit(:login, :password)
+        params.permit(:email, :password)
       end
 
       def get_role_permissions(role_name)
