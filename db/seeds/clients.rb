@@ -266,7 +266,6 @@ begin
           model_id: model.id,
           year: year,
           license_plate: plate,
-          vin: "WVWZZZ#{rand(10..99)}ZZZ#{rand(100000..999999)}",
           tire_size: ['205/55 R16', '195/65 R15', '225/45 R17', '215/60 R16', '235/55 R18'].sample,
           car_type_id: car_type.id, # Используем ID найденного типа автомобиля
           is_primary: (i == 0) # Первый автомобиль будет основным

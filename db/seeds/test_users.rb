@@ -30,8 +30,8 @@ begin
   test_users = [
     {
       email: 'admin@example.com',
-      password: 'password123',
-      password_confirmation: 'password123',
+      password: 'admin123',
+      password_confirmation: 'admin123',
       is_active: true,
       first_name: 'Системный',
       last_name: 'Администратор',
@@ -181,9 +181,7 @@ begin
   puts "Successfully created/updated #{test_users.length} test users!"
   puts ""
   puts "=== ТЕСТОВЫЕ УЧЕТНЫЕ ДАННЫЕ ДЛЯ ВХОДА ==="
-  puts "Админ 1: admin@example.com / password123"
-  puts "Админ 2: admin@test.com / admin123"  
-  puts "Тест:    test@test.com / test123"
+  puts "Админ:    admin@test.com / admin123"  
   puts "Менеджер: manager@test.com / manager123"
   puts "Оператор: operator@test.com / operator123"
   puts "Партнер:  partner@test.com / partner123"

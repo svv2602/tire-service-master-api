@@ -59,7 +59,7 @@ operator_role_id = operator_role.id
 # Создаем тестовых пользователей
 admin_user = User.find_or_initialize_by(email: 'admin@test.com')
 admin_user.assign_attributes(
-  password: 'password123',
+  password: 'admin123',
   first_name: 'Admin',
   last_name: 'Test',
   role: admin_role,
@@ -70,7 +70,7 @@ puts "Admin user created: #{admin_user.email}"
 
 partner_user = User.find_or_initialize_by(email: 'partner@test.com')
 partner_user.assign_attributes(
-  password: 'password123',
+  password: 'partner123',
   first_name: 'Partner',
   last_name: 'Test',
   role: partner_role,
@@ -81,7 +81,7 @@ puts "Partner user created: #{partner_user.email}"
 
 manager_user = User.find_or_initialize_by(email: 'manager@test.com')
 manager_user.assign_attributes(
-  password: 'password123',
+  password: 'manager123',
   first_name: 'Manager',
   last_name: 'Test',
   role: manager_role,
@@ -92,7 +92,7 @@ puts "Manager user created: #{manager_user.email}"
 
 client_user = User.find_or_initialize_by(email: 'client@test.com')
 client_user.assign_attributes(
-  password: 'password123',
+  password: 'client123',
   first_name: 'Client',
   last_name: 'Test',
   role: client_role,
