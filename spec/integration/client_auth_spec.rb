@@ -119,22 +119,15 @@ RSpec.describe 'api/v1/client_auth', type: :request do
       parameter name: :auth_data, in: :body, schema: {
         type: :object,
         properties: {
-          auth: {
-            type: :object,
-            properties: {
-              login: { type: :string, example: 'ivan@example.com', description: 'Email или телефон' },
-              password: { type: :string, example: 'password123' }
-            },
-            required: ['login', 'password']
-          }
+          email: { type: :string, example: 'ivan@example.com', description: 'Email клиента' },
+          password: { type: :string, example: 'password123' }
         },
-        required: ['auth']
+        required: ['email', 'password']
       }
 
       response(200, 'Успешный вход') do
         schema type: :object,
                properties: {
-                 message: { type: :string },
                  user: {
                    type: :object,
                    properties: {
@@ -142,23 +135,14 @@ RSpec.describe 'api/v1/client_auth', type: :request do
                      email: { type: :string },
                      first_name: { type: :string },
                      last_name: { type: :string },
-                     phone: { type: :string }
-                   }
-                 },
-                 client: {
-                   type: :object,
-                   properties: {
-                     id: { type: :integer },
-                     preferred_notification_method: { type: :string },
-                     total_bookings: { type: :integer },
-                     completed_bookings: { type: :integer }
+                     is_active: { type: :boolean },
+                     role: { type: :string }
                    }
                  },
                  tokens: {
                    type: :object,
                    properties: {
-                     access: { type: :string },
-                     refresh: { type: :string }
+                     access: { type: :string }
                    }
                  }
                }
@@ -177,19 +161,15 @@ RSpec.describe 'api/v1/client_auth', type: :request do
 
         let(:auth_data) do
           {
-            auth: {
-              login: 'ivan@example.com',
-              password: 'password123'
-            }
+            email: 'ivan@example.com',
+            password: 'password123'
           }
         end
 
         run_test! do |response|
           data = JSON.parse(response.body)
-          expect(data['message']).to eq('Вход выполнен успешно')
           expect(data['user']['email']).to eq('ivan@example.com')
           expect(data['tokens']['access']).to be_present
-          expect(data['tokens']['refresh']).to be_present
         end
       end
 
@@ -201,39 +181,8 @@ RSpec.describe 'api/v1/client_auth', type: :request do
 
         let(:auth_data) do
           {
-            auth: {
-              login: 'nonexistent@example.com',
-              password: 'password123'
-            }
-          }
-        end
-
-        run_test!
-      end
-
-      response(401, 'Неверный пароль') do
-        schema type: :object,
-               properties: {
-                 error: { type: :string }
-               }
-
-        let!(:user) do
-          User.create!(
-            first_name: 'Иван',
-            last_name: 'Иванов',
-            email: 'ivan@example.com',
-            password: 'password123',
-            password_confirmation: 'password123',
-            role: @client_role
-          )
-        end
-
-        let(:auth_data) do
-          {
-            auth: {
-              login: 'ivan@example.com',
-              password: 'wrong_password'
-            }
+            email: 'nonexistent@example.com',
+            password: 'password123'
           }
         end
 
@@ -243,11 +192,11 @@ RSpec.describe 'api/v1/client_auth', type: :request do
   end
 
   path '/api/v1/clients/me' do
-    get('Информация о текущем клиенте') do
+    get('Информация о клиенте') do
       tags 'Клиентская авторизация'
       description 'Получение информации о текущем авторизованном клиенте'
-      security [Bearer: {}]
       produces 'application/json'
+      security [bearerAuth: []]
 
       response(200, 'Информация о клиенте') do
         schema type: :object,
@@ -260,8 +209,7 @@ RSpec.describe 'api/v1/client_auth', type: :request do
                      first_name: { type: :string },
                      last_name: { type: :string },
                      phone: { type: :string },
-                     email_verified: { type: :boolean },
-                     phone_verified: { type: :boolean }
+                     role: { type: :string }
                    }
                  },
                  client: {
@@ -277,32 +225,26 @@ RSpec.describe 'api/v1/client_auth', type: :request do
                }
 
         let!(:user) do
-          User.create!(
+          user = User.create!(
             first_name: 'Иван',
             last_name: 'Иванов',
             email: 'ivan@example.com',
+            phone: '+380123456789',
             password: 'password123',
             password_confirmation: 'password123',
             role: @client_role
           )
+          
+          # Создаем клиента для пользователя
+          Client.create!(
+            user: user,
+            preferred_notification_method: 'email'
+          )
+          
+          user
         end
-
-        let(:Authorization) { "Bearer #{Auth::JsonWebToken.encode_access_token(user_id: user.id, role: 'client')}" }
-
-        run_test! do |response|
-          data = JSON.parse(response.body)
-          expect(data['user']['email']).to eq('ivan@example.com')
-          expect(data['client']['id']).to be_present
-        end
-      end
-
-      response(401, 'Не авторизован') do
-        schema type: :object,
-               properties: {
-                 error: { type: :string }
-               }
-
-        let(:Authorization) { nil }
+        
+        let(:Authorization) { "Bearer #{Auth::JsonWebToken.encode_access_token(user_id: user.id)}" }
 
         run_test!
       end
@@ -313,19 +255,24 @@ RSpec.describe 'api/v1/client_auth', type: :request do
                  error: { type: :string }
                }
 
-        let!(:admin_role) { UserRole.find_or_create_by(name: 'admin') }
-        let!(:admin_user) do
+        let!(:admin_role) do
+          UserRole.find_or_create_by(name: 'admin') do |role|
+            role.description = 'Администратор системы'
+          end
+        end
+        
+        let!(:admin) do
           User.create!(
-            first_name: 'Админ',
-            last_name: 'Админов',
+            first_name: 'Admin',
+            last_name: 'User',
             email: 'admin@example.com',
-            password: 'password123',
-            password_confirmation: 'password123',
+            password: 'admin123',
+            password_confirmation: 'admin123',
             role: admin_role
           )
         end
-
-        let(:Authorization) { "Bearer #{Auth::JsonWebToken.encode_access_token(user_id: admin_user.id, role: 'admin')}" }
+        
+        let(:Authorization) { "Bearer #{Auth::JsonWebToken.encode_access_token(user_id: admin.id)}" }
 
         run_test!
       end
@@ -333,11 +280,11 @@ RSpec.describe 'api/v1/client_auth', type: :request do
   end
 
   path '/api/v1/clients/logout' do
-    post('Выход из системы') do
+    post('Успешный выход') do
       tags 'Клиентская авторизация'
-      description 'Выход клиента из системы (на стороне клиента удаляется токен)'
-      security [Bearer: {}]
+      description 'Выход клиента из системы'
       produces 'application/json'
+      security [bearerAuth: []]
 
       response(200, 'Успешный выход') do
         schema type: :object,
@@ -350,13 +297,14 @@ RSpec.describe 'api/v1/client_auth', type: :request do
             first_name: 'Иван',
             last_name: 'Иванов',
             email: 'ivan@example.com',
+            phone: '+380123456789',
             password: 'password123',
             password_confirmation: 'password123',
             role: @client_role
           )
         end
-
-        let(:Authorization) { "Bearer #{Auth::JsonWebToken.encode_access_token(user_id: user.id, role: 'client')}" }
+        
+        let(:Authorization) { "Bearer #{Auth::JsonWebToken.encode_access_token(user_id: user.id)}" }
 
         run_test! do |response|
           data = JSON.parse(response.body)

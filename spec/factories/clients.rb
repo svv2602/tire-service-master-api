@@ -1,7 +1,24 @@
 FactoryBot.define do
   factory :client do
-    user
-    preferred_notification_method { ['push', 'email', 'sms'].sample }
+    association :user, factory: [:user, :client]
+    preferred_notification_method { 'email' }
+    marketing_consent { true }
+
+    trait :with_car do
+      after(:create) do |client|
+        create(:client_car, client: client)
+      end
+    end
+    
+    trait :with_multiple_cars do
+      after(:create) do |client|
+        create_list(:client_car, 3, client: client)
+      end
+    end
+    
+    trait :without_marketing_consent do
+      marketing_consent { false }
+    end
 
     trait :with_cars do
       transient do

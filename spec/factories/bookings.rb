@@ -5,6 +5,7 @@ FactoryBot.define do
     # Делаем car необязательным и nil по умолчанию
     car { nil }
     association :car_type, factory: :car_type
+    association :status, factory: :booking_status, name: 'pending'
     
     before(:build) do |booking|
       # Ensure all statuses exist
@@ -29,9 +30,10 @@ FactoryBot.define do
     end
     
     booking_date { Date.current + 1.day }
-    start_time { Time.parse('10:00') }
-    end_time { Time.parse('11:00') }
-    total_price { rand(1000..10000) }
+    start_time { "10:00" }
+    end_time { "11:00" }
+    total_price { 1000 }
+    notes { "Test booking" }
     
     # Пропускаем валидации доступности в тестах
     skip_availability_check { true }
@@ -45,6 +47,8 @@ FactoryBot.define do
     
     trait :past do
       booking_date { Date.current - 1.day }
+      start_time { "09:00" }
+      end_time { "10:00" }
     end
     
     trait :pending do
@@ -84,18 +88,14 @@ FactoryBot.define do
     end
     
     trait :completed do
-      before(:build) do |booking|
-        booking.status_id = BookingStatus.find_or_create_by(
-          name: 'completed',
-          description: 'Completed status',
-          color: '#8BC34A',
-          is_active: true,
-          sort_order: 4
-        ).id
-      end
+      association :status, factory: :booking_status, name: 'completed'
+      booking_date { Date.current - 1.day }
+      start_time { "10:00" }
+      end_time { "11:00" }
     end
     
     trait :canceled_by_client do
+      association :status, factory: :booking_status, name: 'canceled_by_client'
       before(:build) do |booking|
         booking.status_id = BookingStatus.find_or_create_by(
           name: 'canceled_by_client',
@@ -122,6 +122,7 @@ FactoryBot.define do
     end
     
     trait :no_show do
+      association :status, factory: :booking_status, name: 'no_show'
       before(:build) do |booking|
         booking.status_id = BookingStatus.find_or_create_by(
           name: 'no_show',
@@ -135,6 +136,8 @@ FactoryBot.define do
     
     trait :today do
       booking_date { Date.current }
+      start_time { "14:00" }
+      end_time { "15:00" }
     end
   end
 end

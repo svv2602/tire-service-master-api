@@ -2,11 +2,12 @@ FactoryBot.define do
   factory :user do
     sequence(:email) { |n| "user#{n}@example.com" }
     password { 'password123' }
+    password_confirmation { 'password123' }
     first_name { Faker::Name.first_name }
     last_name { Faker::Name.last_name }
+    phone { Faker::PhoneNumber.phone_number }
     is_active { true }
     email_verified { true }
-    phone { Faker::PhoneNumber.cell_phone_in_e164 }
     
     # Использует или создает роль 'client' по умолчанию
     after(:build) do |user|
@@ -109,35 +110,19 @@ FactoryBot.define do
     end
 
     trait :admin do
-      after(:build) do |user|
-        admin_role = UserRole.find_by(name: 'admin') || 
-                    FactoryBot.create(:user_role, name: 'admin', description: 'Administrator role with full access')
-        user.role_id = admin_role.id
-      end
+      role { UserRole.find_by(name: 'admin') || association(:user_role, name: 'admin') }
     end
 
     trait :manager do
-      after(:build) do |user|
-        manager_role = UserRole.find_by(name: 'manager') || 
-                      FactoryBot.create(:user_role, name: 'manager', description: 'Manager role for service point managers')
-        user.role_id = manager_role.id
-      end
+      role { UserRole.find_by(name: 'manager') || association(:user_role, name: 'manager') }
     end
 
     trait :client do
-      after(:build) do |user|
-        client_role = UserRole.find_by(name: 'client') || 
-                     FactoryBot.create(:user_role, name: 'client', description: 'Client role for users who book services')
-        user.role_id = client_role.id
-      end
+      role { UserRole.find_by(name: 'client') || association(:user_role, name: 'client') }
     end
 
     trait :partner do
-      after(:build) do |user|
-        partner_role = UserRole.find_by(name: 'partner') || 
-                      FactoryBot.create(:user_role, name: 'partner', description: 'Partner role for business owners')
-        user.role_id = partner_role.id
-      end
+      role { UserRole.find_by(name: 'partner') || association(:user_role, name: 'partner') }
     end
   end
 end

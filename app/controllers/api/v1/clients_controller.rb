@@ -60,30 +60,52 @@ module Api
       # POST /api/v1/clients/register
       # POST /api/v1/register
       def register
-        ActiveRecord::Base.transaction do
-          user = User.new(
-            email: client_params[:email],
-            password: client_params[:password],
-            first_name: client_params[:first_name],
-            last_name: client_params[:last_name],
-            role: 'client'
-          )
-
-          if user.save
-            client = Client.create!(user: user)
-            token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+        begin
+          ActiveRecord::Base.transaction do
+            client_role = UserRole.find_by(name: 'client')
             
-            render json: {
-              tokens: { access: token },
-              user: user.as_json(only: [:id, :email, :first_name, :last_name, :role, :is_active]),
-              client: client.as_json(only: [:id])
-            }, status: :created
-          else
-            render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
+            user = User.new(
+              email: register_params[:email],
+              password: register_params[:password],
+              password_confirmation: register_params[:password_confirmation],
+              first_name: register_params[:first_name],
+              last_name: register_params[:last_name],
+              phone: register_params[:phone],
+              role: client_role
+            )
+
+            if user.save
+              client = Client.create!(user: user)
+              token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+              
+              render json: {
+                message: 'Регистрация прошла успешно',
+                auth_token: token,
+                user: user.as_json(only: [:id, :email, :first_name, :last_name, :phone]),
+                client: client.as_json(only: [:id]),
+                tokens: {
+                  access: token,
+                  refresh: token # В данной реализации используем тот же токен для refresh
+                }
+              }, status: :created
+            else
+              render json: { 
+                message: 'Failed to create account',
+                errors: user.errors.full_messages 
+              }, status: :unprocessable_entity
+            end
           end
+        rescue ActiveRecord::RecordInvalid => e
+          render json: { 
+            message: 'Failed to create account',
+            errors: e.record.errors.full_messages 
+          }, status: :unprocessable_entity
+        rescue StandardError => e
+          render json: { 
+            error: 'Internal server error',
+            message: e.message 
+          }, status: :internal_server_error
         end
-      rescue ActiveRecord::RecordInvalid => e
-        render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
       end
       
       # POST /api/v1/clients/social_auth
@@ -268,11 +290,22 @@ module Api
       end
       
       def client_params
-        params.require(:client).permit(:email, :password, :first_name, :last_name)
+        params.require(:client).permit(
+          :email,
+          :password,
+          :password_confirmation,
+          :first_name,
+          :last_name,
+          :role_id
+        )
       end
       
       def client_update_params
         params.fetch(:client, {}).permit(:preferred_notification_method, :marketing_consent)
+      end
+      
+      def register_params
+        params.require(:user).permit(:email, :password, :password_confirmation, :first_name, :last_name, :phone)
       end
     end
   end

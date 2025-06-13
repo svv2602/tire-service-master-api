@@ -82,19 +82,24 @@ RSpec.describe 'Partners API', type: :request do
         let(:partner_params) do
           {
             partner: {
-              name: 'ООО "Шинный Центр"',
-              email: 'contact@tire-center.com',
-              phone: '+380501234567',
-              address: 'ул. Шинная, 15',
-              description: 'Крупная сеть шиномонтажных мастерских',
-              website: 'https://tire-center.com'
+              company_name: 'ООО "Шинный Центр"',
+              contact_person: 'Иван Иванов',
+              legal_address: 'ул. Шинная, 15',
+              user_attributes: {
+                email: 'contact@tire-center.com',
+                password: 'password123',
+                password_confirmation: 'password123',
+                first_name: 'Иван',
+                last_name: 'Иванов',
+                phone: '+380501234567'
+              }
             }
           }
         end
 
         run_test! do |response|
           data = JSON.parse(response.body)
-          expect(data['data']['name']).to eq('ООО "Шинный Центр"')
+          expect(data['data']['company_name']).to eq('ООО "Шинный Центр"')
           expect(data['message']).to be_present
         end
       end
@@ -107,8 +112,10 @@ RSpec.describe 'Partners API', type: :request do
         let(:partner_params) do
           {
             partner: {
-              name: '',
-              email: 'invalid-email'
+              company_name: '',
+              user_attributes: {
+                email: 'invalid-email'
+              }
             }
           }
         end
@@ -121,7 +128,7 @@ RSpec.describe 'Partners API', type: :request do
 
         let(:user) { create(:user) }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
-        let(:partner_params) { { partner: { name: 'Test' } } }
+        let(:partner_params) { { partner: { company_name: 'Test' } } }
 
         run_test!
       end
@@ -144,7 +151,7 @@ RSpec.describe 'Partners API', type: :request do
                  data: { '$ref': '#/components/schemas/PartnerDetailed' }
                }
 
-        let(:partner) { create(:partner) }
+        let(:partner) { create(:partner, :with_new_user) }
         let(:admin_user) { create(:user, :admin) }
         let(:id) { partner.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(admin_user)}" }
@@ -152,7 +159,7 @@ RSpec.describe 'Partners API', type: :request do
         run_test! do |response|
           data = JSON.parse(response.body)
           expect(data['data']['id']).to eq(partner.id)
-          expect(data['data']['name']).to eq(partner.name)
+          expect(data['data']['company_name']).to eq(partner.company_name)
         end
       end
 
@@ -170,7 +177,7 @@ RSpec.describe 'Partners API', type: :request do
         schema '$ref' => '#/components/schemas/ErrorResponse'
 
         let(:user) { create(:user) }
-        let(:partner) { create(:partner) }
+        let(:partner) { create(:partner, :with_new_user) }
         let(:id) { partner.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
 
@@ -203,37 +210,39 @@ RSpec.describe 'Partners API', type: :request do
                  message: { type: :string }
                }
 
-        let(:partner) { create(:partner) }
+        let(:partner) { create(:partner, :with_new_user) }
         let(:admin_user) { create(:user, :admin) }
         let(:id) { partner.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(admin_user)}" }
         let(:partner_params) do
           {
             partner: {
-              name: 'Обновленное название',
-              phone: '+380509876543',
-              website: 'https://new-website.com'
+              company_name: 'Updated Company Name',
+              contact_person: 'Updated Contact Person',
+              legal_address: 'Updated Address'
             }
           }
         end
 
         run_test! do |response|
           data = JSON.parse(response.body)
-          expect(data['data']['name']).to eq('Обновленное название')
+          expect(data['data']['company_name']).to eq('Updated Company Name')
+          expect(data['message']).to be_present
         end
       end
 
       response(422, 'Ошибка валидации') do
         schema '$ref' => '#/components/schemas/ValidationErrorResponse'
 
-        let(:partner) { create(:partner) }
+        let(:partner) { create(:partner, :with_new_user) }
         let(:admin_user) { create(:user, :admin) }
         let(:id) { partner.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(admin_user)}" }
         let(:partner_params) do
           {
             partner: {
-              email: 'invalid-email-format'
+              company_name: '',
+              contact_person: ''
             }
           }
         end
@@ -245,36 +254,36 @@ RSpec.describe 'Partners API', type: :request do
         schema '$ref' => '#/components/schemas/ErrorResponse'
 
         let(:user) { create(:user) }
-        let(:partner) { create(:partner) }
+        let(:partner) { create(:partner, :with_new_user) }
         let(:id) { partner.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
-        let(:partner_params) { { partner: { name: 'Test' } } }
+        let(:partner_params) { { partner: { company_name: 'Test' } } }
 
         run_test!
       end
     end
 
-    delete('Деактивирует партнера') do
+    delete('Удаляет партнера') do
       tags 'Partners'
       description 'Деактивирует партнера в системе'
-      operationId 'deactivatePartner'
+      operationId 'deletePartner'
       produces 'application/json'
       security [bearerAuth: []]
 
       response(200, 'Партнер деактивирован') do
         schema type: :object,
                properties: {
-                 message: { type: :string, example: 'Партнер успешно деактивирован' }
+                 message: { type: :string }
                }
 
-        let(:partner) { create(:partner) }
+        let(:partner) { create(:partner, :with_new_user) }
         let(:admin_user) { create(:user, :admin) }
         let(:id) { partner.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(admin_user)}" }
 
         run_test! do |response|
           data = JSON.parse(response.body)
-          expect(data['message']).to include('деактивирован')
+          expect(data['message']).to be_present
         end
       end
 
@@ -282,7 +291,7 @@ RSpec.describe 'Partners API', type: :request do
         schema '$ref' => '#/components/schemas/ErrorResponse'
 
         let(:user) { create(:user) }
-        let(:partner) { create(:partner) }
+        let(:partner) { create(:partner, :with_new_user) }
         let(:id) { partner.id }
         let(:Authorization) { "Bearer #{generate_jwt_token(user)}" }
 

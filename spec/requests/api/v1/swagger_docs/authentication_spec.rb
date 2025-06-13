@@ -16,22 +16,21 @@ RSpec.describe 'Authentication API', type: :request do
       parameter name: :credentials, in: :body, schema: {
         type: :object,
         properties: {
-          auth: {
-            type: :object,
-            properties: {
-              email: { type: :string, example: 'user@example.com' },
-              password: { type: :string, example: 'password' }
-            },
-            required: ['email', 'password']
-          }
+          email: { type: :string, example: 'user@example.com' },
+          password: { type: :string, example: 'password' }
         },
-        required: ['auth']
+        required: ['email', 'password']
       }
 
       response '200', 'authentication successful' do
         schema type: :object,
           properties: {
-            token: { type: :string },
+            tokens: {
+              type: :object,
+              properties: {
+                access: { type: :string }
+              }
+            },
             user: {
               type: :object,
               properties: {
@@ -39,32 +38,33 @@ RSpec.describe 'Authentication API', type: :request do
                 email: { type: :string },
                 first_name: { type: :string },
                 last_name: { type: :string },
-                role: { type: :string, enum: ['client', 'manager', 'admin'] }
+                role: { type: :string, enum: ['client', 'manager', 'admin', 'partner', 'operator'] },
+                is_active: { type: :boolean }
               }
             }
           }
         
         # Create the user before the test runs, making sure it's not cleaned out by database cleaner
         before do
-          @user = create(:user, email: 'user@example.com', password: 'password')
+          @user = create(:user, email: 'user@example.com', password: 'password', password_confirmation: 'password')
         end
         
-        let(:credentials) { { auth: { email: 'user@example.com', password: 'password' } } }
+        let(:credentials) { { email: 'user@example.com', password: 'password' } }
         run_test!
       end
 
       response '401', 'Invalid credentials' do
         schema type: :object,
           properties: {
-            error: { type: :string, example: 'Invalid email or password' }
+            error: { type: :string, example: 'Неверные учетные данные' }
           }
         # Create user with correct password
         before do
-          @user = create(:user, email: 'user@example.com', password: 'password')
+          @user = create(:user, email: 'user@example.com', password: 'password', password_confirmation: 'password')
         end
         
         # But try to auth with wrong password
-        let(:credentials) { { auth: { email: 'user@example.com', password: 'invalid' } } }
+        let(:credentials) { { email: 'user@example.com', password: 'invalid' } }
         run_test!
       end
     end
@@ -77,7 +77,7 @@ RSpec.describe 'Authentication API', type: :request do
       parameter name: :user, in: :body, schema: {
         type: :object,
         properties: {
-          client: {
+          user: {
             type: :object,
             properties: {
               email: { type: :string, example: 'new@example.com' },
@@ -89,39 +89,67 @@ RSpec.describe 'Authentication API', type: :request do
             required: ['email', 'password', 'password_confirmation', 'first_name', 'last_name']
           }
         },
-        required: ['client']
+        required: ['user']
       }
 
       response '201', 'user created' do
         schema type: :object,
           properties: {
-            auth_token: { type: :string },
-            message: { type: :string, example: 'Account created successfully' }
+            message: { type: :string, example: 'Регистрация прошла успешно' },
+            user: { 
+              type: :object,
+              properties: {
+                id: { type: :integer },
+                email: { type: :string },
+                first_name: { type: :string },
+                last_name: { type: :string },
+                phone: { type: :string, nullable: true }
+              }
+            },
+            client: {
+              type: :object,
+              properties: {
+                id: { type: :integer },
+                preferred_notification_method: { type: :string, nullable: true }
+              }
+            },
+            tokens: {
+              type: :object,
+              properties: {
+                access: { type: :string },
+                refresh: { type: :string }
+              }
+            }
           }
-        let(:user) { { client: { email: 'new@example.com', password: 'password123', password_confirmation: 'password123', first_name: 'John', last_name: 'Doe' } } }
+        let(:user) { { user: { email: 'new@example.com', password: 'password123', password_confirmation: 'password123', first_name: 'John', last_name: 'Doe' } } }
         run_test!
       end
 
       response '422', 'invalid request' do
         schema type: :object,
           properties: {
-            errors: { type: :object }
+            error: { type: :string },
+            details: { 
+              type: :array,
+              items: { type: :string }
+            }
           }
         # Use strongly invalid data that will definitely cause validation failures
-        let(:user) { { client: { email: '', password: 'a', password_confirmation: 'b', first_name: '', last_name: '' } } }
+        let(:user) { { user: { email: '', password: 'a', password_confirmation: 'b', first_name: '', last_name: '' } } }
         
         before do
           # Mock the controller to return a validation error for this test
-          allow_any_instance_of(Api::V1::ClientsController).to receive(:register) do |controller|
+          allow_any_instance_of(Api::V1::ClientAuthController).to receive(:register) do |controller|
             controller.instance_eval do
               render json: {
-                errors: {
-                  email: ["can't be blank"],
-                  password: ["is too short (minimum is 6 characters)"],
-                  password_confirmation: ["doesn't match Password"],
-                  first_name: ["can't be blank"],
-                  last_name: ["can't be blank"]
-                }
+                error: 'Ошибка регистрации',
+                details: [
+                  "Email can't be blank",
+                  "Password is too short (minimum is 6 characters)",
+                  "Password confirmation doesn't match Password",
+                  "First name can't be blank",
+                  "Last name can't be blank"
+                ]
               }, status: :unprocessable_entity
             end
           end

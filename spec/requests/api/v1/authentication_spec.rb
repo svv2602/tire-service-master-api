@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe 'API V1 Authentication', type: :request do
-  describe 'POST /api/v1/authenticate' do
+  describe 'POST /api/v1/auth/login' do
     let!(:user) { create(:user, email: 'test@example.com', password: 'password123') }
     let(:valid_credentials) do
       { 
@@ -17,10 +17,15 @@ RSpec.describe 'API V1 Authentication', type: :request do
     end
 
     context 'When request is valid' do
-      before { post '/api/v1/authenticate', params: valid_credentials }
+      before { post '/api/v1/auth/login', params: valid_credentials }
 
       it 'returns an authentication token' do
-        expect(json['auth_token']).not_to be_nil
+        expect(json['tokens']['access']).not_to be_nil
+      end
+
+      it 'returns user information' do
+        expect(json['user']).not_to be_nil
+        expect(json['user']['email']).to eq('test@example.com')
       end
 
       it 'returns status code 200' do
@@ -29,10 +34,10 @@ RSpec.describe 'API V1 Authentication', type: :request do
     end
 
     context 'When request is invalid' do
-      before { post '/api/v1/authenticate', params: invalid_credentials }
+      before { post '/api/v1/auth/login', params: invalid_credentials }
 
       it 'returns a failure message' do
-        expect(json['message']).to match(/Invalid credentials/)
+        expect(json['error']).to match(/Неверные учетные данные/)
       end
 
       it 'returns status code 401' do
@@ -41,7 +46,7 @@ RSpec.describe 'API V1 Authentication', type: :request do
     end
   end
   
-  describe 'POST /api/v1/register' do
+  describe 'POST /api/v1/clients/register' do
     let!(:client_role) do
       UserRole.find_by(name: 'client') || 
       create(:user_role, name: 'client', description: 'Client role for users who book services')
@@ -49,13 +54,12 @@ RSpec.describe 'API V1 Authentication', type: :request do
     
     let(:valid_attributes) do
       {
-        client: {
+        user: {
           email: 'new@example.com',
           password: 'password123',
           password_confirmation: 'password123',
           first_name: 'John',
-          last_name: 'Doe',
-          role_id: client_role.id
+          last_name: 'Doe'
         }
       }
     end
@@ -68,17 +72,17 @@ RSpec.describe 'API V1 Authentication', type: :request do
       end
 
       it 'returns success message' do
-        expect(json['message']).to match(/Account created successfully/)
+        expect(json['message']).to match(/Регистрация прошла успешно/)
       end
 
       it 'returns an authentication token' do
-        expect(json['auth_token']).not_to be_nil
+        expect(json['tokens']['access']).not_to be_nil
       end
     end
 
     context 'when request with missing fields' do
       let(:invalid_attributes) do
-        { client: { email: 'invalid', password: 'short', role_id: nil } }
+        { user: { email: 'invalid', password: 'short' } }
       end
       
       before { post '/api/v1/clients/register', params: invalid_attributes }
@@ -88,7 +92,7 @@ RSpec.describe 'API V1 Authentication', type: :request do
       end
 
       it 'returns validation error message' do
-        expect(json['message'] || json['errors'] || json['error']).to be_present
+        expect(json['error']).to be_present
       end
     end
   end

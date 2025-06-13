@@ -1,7 +1,7 @@
 FactoryBot.define do
   factory :user_role do
-    sequence(:name) { |n| ["admin#{n}", "client#{n}", "partner#{n}", "manager#{n}", "employee#{n}"][n % 5] }
-    description { Faker::Lorem.sentence }
+    sequence(:name) { |n| "role_#{n}" }
+    sequence(:description) { |n| "Role description #{n}" }
     is_active { true }
     
     trait :admin do
@@ -22,6 +22,10 @@ FactoryBot.define do
     trait :manager do
       name { 'manager' }
       description { 'Manager role for service point managers' }
+    end
+    
+    trait :inactive do
+      is_active { false }
     end
     
     # Фабрики для конкретных ролей
