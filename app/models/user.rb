@@ -5,23 +5,25 @@ class User < ApplicationRecord
   attr_accessor :skip_role_specific_record
   
   # Связи
-  belongs_to :role, class_name: 'UserRole', foreign_key: 'role_id'
+  belongs_to :role, class_name: 'UserRole', foreign_key: 'role_id', optional: true
   has_one :administrator, dependent: :destroy
   has_one :partner, dependent: :destroy
   has_one :client, dependent: :destroy
   has_one :manager, dependent: :destroy
+  has_one :operator, dependent: :destroy
   has_many :authored_articles, class_name: 'Article', foreign_key: 'author_id', dependent: :destroy
-  # Ассоциация закомментирована, т.к. таблица не существует в базе данных
-  # has_many :social_accounts, class_name: 'UserSocialAccount', dependent: :destroy
+  has_many :social_accounts, class_name: 'UserSocialAccount', dependent: :destroy
   has_many :system_logs, dependent: :nullify
+  has_many :notifications, dependent: :destroy
+  has_many :notification_settings, dependent: :destroy
   
   # Валидации
-  validates :email, presence: true, uniqueness: { case_sensitive: false }, format: { with: URI::MailTo::EMAIL_REGEXP }
-  validates :phone, uniqueness: true, allow_nil: true
+  validates :email, presence: true, uniqueness: { case_sensitive: false }, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: -> { phone.present? }
+  validates :phone, uniqueness: true, allow_blank: true
   validates :role_id, presence: true
   validates :first_name, presence: true, length: { minimum: 2, maximum: 50 }
   validates :last_name, presence: true, length: { minimum: 2, maximum: 50 }
-  validates :password, length: { minimum: 6 }, on: :create
+  validates :password, length: { minimum: 6 }, if: -> { password.present? }
   
   # Кастомная валидация для телефона
   validate :phone_format_valid
@@ -51,19 +53,23 @@ class User < ApplicationRecord
   
   # Методы ролей
   def admin?
-    role.name == 'admin'
+    role&.name == 'admin'
   end
   
   def partner?
-    role.name == 'partner'
+    role&.name == 'partner'
   end
   
   def manager?
-    role.name == 'manager'
+    role&.name == 'manager'
   end
   
   def client?
-    role.name == 'client'
+    role&.name == 'client'
+  end
+  
+  def operator?
+    role&.name == 'operator'
   end
   
   # Методы пользователя
@@ -84,7 +90,7 @@ class User < ApplicationRecord
   end
   
   def update_last_login!
-    update(last_login: Time.current)
+    update_column(:last_login, Time.current)
   end
   
   def activate!
@@ -125,18 +131,24 @@ class User < ApplicationRecord
   end
   
   def create_role_specific_record
+    return unless role
+    
     case role.name
     when 'client'
-      create_client!(preferred_notification_method: 'email') unless client.present?
-    when 'manager'
-      create_manager! unless manager.present?
-    when 'partner'
-      # Не создаем партнера автоматически, если он уже создается через контроллер
-      return if partner.present? || Partner.exists?(user_id: id)
-      create_partner!(company_name: "#{first_name} #{last_name}", contact_person: full_name, 
-                     tax_number: "temp_#{id}", legal_address: 'Не указан')
+      # Создаем запись клиента
+      Client.create!(user: self) unless client
     when 'admin'
-      create_administrator! unless administrator.present?
+      # Создаем запись администратора
+      Administrator.create!(user: self) unless administrator
+    when 'partner'
+      # Создаем запись партнера
+      Partner.create!(user: self) unless partner
+    when 'manager'
+      # Создаем запись менеджера
+      Manager.create!(user: self) unless manager
+    when 'operator'
+      # Создаем запись оператора
+      Operator.create!(user: self) unless operator
     end
   rescue ActiveRecord::RecordInvalid => e
     Rails.logger.warn "Не удалось создать связанную запись для пользователя #{id}: #{e.message}"

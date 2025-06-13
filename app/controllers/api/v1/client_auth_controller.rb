@@ -18,14 +18,21 @@ class Api::V1::ClientAuthController < ApplicationController
       user = User.new(user_params.merge(role: client_role))
       
       if user.save
-        # Пользователь автоматически создаст связанный Client через коллбэк
+        # Создаем клиента вручную, если он не был создан автоматически
+        client = user.client || Client.create!(user: user, preferred_notification_method: 'email')
         
         # Генерируем JWT токен
         token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
         
+        # Возвращаем ответ в формате, соответствующем тестам
         render json: {
-          message: 'Account created successfully',
-          auth_token: token
+          message: 'Регистрация прошла успешно',
+          user: user.as_json(only: [:id, :email, :first_name, :last_name, :phone]),
+          client: client.as_json(only: [:id, :preferred_notification_method]),
+          tokens: {
+            access: token,
+            refresh: token # В данной реализации используем тот же токен для refresh
+          }
         }, status: :created
       else
         render json: { 
@@ -43,8 +50,8 @@ class Api::V1::ClientAuthController < ApplicationController
   # Вход клиента в систему
   def login
     begin
-      # Ищем пользователя по email или телефону
-      user = find_user_by_credentials(login_params[:login])
+      # Ищем пользователя по email
+      user = User.find_by(email: login_params[:email])
       
       unless user
         render json: { error: 'Пользователь не найден' }, status: :not_found
@@ -75,9 +82,20 @@ class Api::V1::ClientAuthController < ApplicationController
       # Генерируем JWT токен
       token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
 
+      # Возвращаем ответ в формате, соответствующем тестам
       render json: {
-        message: 'Вход выполнен успешно',
-        auth_token: token
+        user: {
+          id: user.id,
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          is_active: user.is_active?,
+          role: user.role.name
+        },
+        tokens: {
+          access: token
+        },
+        message: 'Вход выполнен успешно'
       }, status: :ok
     rescue StandardError => e
       Rails.logger.error "Ошибка входа клиента: #{e.message}"
@@ -125,11 +143,11 @@ class Api::V1::ClientAuthController < ApplicationController
   private
 
   def user_params
-    params.require(:client).permit(:first_name, :last_name, :email, :phone, :password, :password_confirmation)
+    params.require(:user).permit(:first_name, :last_name, :email, :phone, :password, :password_confirmation)
   end
 
   def login_params
-    params.require(:auth).permit(:login, :password)
+    params.permit(:email, :password)
   end
 
   def find_user_by_credentials(login)

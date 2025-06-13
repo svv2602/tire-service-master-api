@@ -15,6 +15,13 @@ Rails.application.routes.draw do
       # Health check endpoint
       get 'health', to: 'health#index'
       
+      # Аутентификация
+      post 'auth/login', to: 'auth#login'
+      post 'auth/logout', to: 'auth#logout'
+      get 'auth/me', to: 'auth#me'
+      post 'authenticate', to: 'authentication#authenticate'
+      post 'auth/refresh', to: 'authentication#refresh'
+      
       # Клиентский API доступности (упрощенный)
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
       post 'bookings/check_availability', to: 'availability#client_check_availability'
@@ -43,13 +50,6 @@ Rails.application.routes.draw do
       
       # Dashboard statistics
       get 'dashboard/stats', to: 'dashboard#stats'
-      
-      # Аутентификация
-      post 'auth/login', to: 'authentication#authenticate'
-      
-      # Клиентская регистрация и аутентификация
-      post 'clients/register', to: 'client_auth#register'
-      post 'clients/login', to: 'client_auth#login'
       
       # Партнерская регистрация и аутентификация
       post 'partners/register', to: 'partner_auth#register'
@@ -165,8 +165,7 @@ Rails.application.routes.draw do
         end
       end
       
-      # Регистрация клиентов
-      post 'clients/register', to: 'clients#register'
+      # Создание тестовых клиентов и социальная авторизация
       post 'clients/social_auth', to: 'clients#social_auth'
       
       # Каталоги
@@ -231,21 +230,6 @@ Rails.application.routes.draw do
       
       resources :service_point_statuses, only: [:index]
 
-      # Универсальная авторизация для всех ролей
-      scope :auth do
-        post 'login', to: 'auth#login'
-        post 'logout', to: 'auth#logout'
-        get 'me', to: 'auth#me'
-      end
-      
-      # Клиентская авторизация (специализированная)
-      scope :clients do
-        post 'register', to: 'client_auth#register'
-        post 'login', to: 'client_auth#login'
-        post 'logout', to: 'client_auth#logout'
-        get 'me', to: 'client_auth#me'
-      end
-      
       # Существующие маршруты авторизации (старая система)
       post 'authenticate', to: 'auth#login'
       post 'refresh', to: 'auth#refresh'
