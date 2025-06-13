@@ -2,8 +2,8 @@
 module Api
   module V1
     class AuthController < BaseController
-      # Не требуем авторизации для входа
-      skip_before_action :authenticate_request, only: [:login]
+      # Не требуем авторизации для входа и обновления токена
+      skip_before_action :authenticate_request, only: [:login, :refresh]
       
       # POST /api/v1/auth/login
       # Универсальный вход для всех ролей пользователей
@@ -11,18 +11,41 @@ module Api
         user = User.find_by(email: params[:email])
         
         if user&.authenticate(params[:password])
-          token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+          access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+          refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
           
           # Создаем пользовательский JSON с добавлением роли
           user_json = user.as_json(only: [:id, :email, :first_name, :last_name, :is_active])
           user_json['role'] = user.role.name if user.role
           
           render json: { 
-            tokens: { access: token },
+            tokens: { 
+              access: access_token,
+              refresh: refresh_token
+            },
             user: user_json
           }
         else
           render json: { error: 'Неверные учетные данные' }, status: :unauthorized
+        end
+      end
+      
+      # POST /api/v1/auth/refresh
+      # Обновление токена доступа
+      def refresh
+        begin
+          refresh_token = request.headers['Refresh-Token'] || params[:refresh_token]
+          raise Auth::TokenInvalidError, 'Refresh token is required' if refresh_token.blank?
+          
+          access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
+          render json: { 
+            tokens: { 
+              access: access_token,
+              refresh: refresh_token
+            }
+          }
+        rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
+          render json: { error: e.message }, status: :unauthorized
         end
       end
       

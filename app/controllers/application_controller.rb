@@ -26,14 +26,25 @@ class ApplicationController < ActionController::API
     
     begin
       decoded = Auth::JsonWebToken.decode(token)
-      if decoded.nil? || !decoded['user_id']
-        render json: { error: 'Неверный токен' }, status: :unauthorized
+      
+      # Проверяем, что это access токен
+      unless decoded[:token_type] == 'access'
+        render json: { error: 'Неверный тип токена' }, status: :unauthorized
         return
       end
       
-      @current_user = User.find(decoded['user_id'])
-    rescue JWT::DecodeError => e
-      render json: { error: 'Неверный токен' }, status: :unauthorized
+      @current_user = User.find(decoded[:user_id])
+      
+      # Проверяем, что пользователь активен
+      unless @current_user.is_active
+        render json: { error: 'Учетная запись отключена' }, status: :forbidden
+        return
+      end
+      
+    rescue Auth::TokenExpiredError => e
+      render json: { error: 'Токен истек', code: 'token_expired' }, status: :unauthorized
+    rescue Auth::TokenInvalidError => e
+      render json: { error: 'Неверный токен', code: 'invalid_token' }, status: :unauthorized
     rescue ActiveRecord::RecordNotFound => e
       render json: { error: 'Пользователь не найден' }, status: :unauthorized
     end

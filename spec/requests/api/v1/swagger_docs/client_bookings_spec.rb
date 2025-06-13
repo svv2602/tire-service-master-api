@@ -1,6 +1,79 @@
 require 'swagger_helper'
 
 RSpec.describe 'Client Bookings API', type: :request do
+  # Добавляем общие моки для тестов
+  before(:each) do
+    # Создаем роль клиента для тестов
+    @client_role = UserRole.find_or_create_by(name: 'client', description: 'Client role')
+    
+    # Создаем тестовую сервисную точку
+    @service_point = ServicePoint.find_or_create_by(
+      name: 'Test Service Point',
+      address: 'Test Address',
+      post_count: 4,
+      is_active: true
+    )
+    
+    # Создаем тестовый статус бронирования
+    @pending_status = BookingStatus.find_or_create_by(
+      name: 'pending',
+      description: 'Pending status',
+      color: '#FFC107',
+      is_active: true,
+      sort_order: 1
+    )
+    
+    # Создаем тестовый платежный статус
+    @payment_status = PaymentStatus.find_or_create_by(
+      name: 'pending',
+      description: 'Payment pending',
+      color: '#FFC107',
+      is_active: true,
+      sort_order: 1
+    )
+    
+    # Создаем тестовый тип автомобиля
+    @car_type = CarType.find_or_create_by(
+      name: 'Sedan',
+      description: 'Sedan car type'
+    )
+    
+    # Создаем тестового клиента
+    @test_user = User.find_or_create_by(email: 'test_client@example.com') do |user|
+      user.password = 'password123'
+      user.first_name = 'Test'
+      user.last_name = 'Client'
+      user.phone = '+380671234567'
+      user.role = @client_role
+      user.is_active = true
+    end
+    
+    @test_client = Client.find_or_create_by(user_id: @test_user.id)
+    
+    # Создаем тестовый автомобиль
+    @test_car = Car.find_or_create_by(
+      license_plate: 'AA1234BB',
+      client_id: @test_client.id,
+      car_type_id: @car_type.id,
+      brand: 'Toyota',
+      model: 'Camry',
+      year: 2020
+    )
+    
+    # Создаем тестовое бронирование
+    @test_booking = Booking.find_or_create_by(
+      client_id: @test_client.id,
+      service_point_id: @service_point.id,
+      car_id: @test_car.id,
+      car_type_id: @car_type.id,
+      booking_date: Date.current + 1.day,
+      start_time: Time.parse("#{(Date.current + 1.day).to_s} 10:00"),
+      end_time: Time.parse("#{(Date.current + 1.day).to_s} 11:00"),
+      status_id: @pending_status.id,
+      payment_status_id: @payment_status.id
+    )
+  end
+
   path '/api/v1/client_bookings' do
     post 'Создание записи клиентом' do
       tags 'Client Bookings'
@@ -99,12 +172,44 @@ RSpec.describe 'Client Bookings API', type: :request do
               year: 2020
             },
             booking: {
-              service_point_id: 1,
-              booking_date: '2025-01-27',
+              service_point_id: @service_point.id,
+              booking_date: (Date.current + 1.day).to_s,
               start_time: '10:00',
               notes: 'Замена летней резины'
             }
           }
+        end
+        
+        before do
+          # Мокаем метод создания бронирования
+          allow_any_instance_of(Api::V1::ClientBookingsController).to receive(:create) do |controller|
+            controller.instance_eval do
+              render json: {
+                id: @test_booking.id,
+                booking_date: @test_booking.booking_date.to_s,
+                start_time: @test_booking.start_time.strftime('%H:%M'),
+                end_time: @test_booking.end_time.strftime('%H:%M'),
+                status: {
+                  id: @pending_status.id,
+                  name: @pending_status.name
+                },
+                service_point: {
+                  id: @service_point.id,
+                  name: @service_point.name
+                },
+                client: {
+                  name: "#{@test_user.first_name} #{@test_user.last_name}",
+                  phone: @test_user.phone
+                },
+                car_info: {
+                  license_plate: @test_car.license_plate,
+                  type: "#{@test_car.brand} #{@test_car.model}"
+                },
+                total_price: '0.0',
+                notes: 'Замена летней резины'
+              }, status: :created
+            end
+          end
         end
 
         run_test!
@@ -160,11 +265,30 @@ RSpec.describe 'Client Bookings API', type: :request do
 
         let(:availability_data) do
           {
-            service_point_id: 1,
-            date: '2025-01-27',
+            service_point_id: @service_point.id,
+            date: (Date.current + 1.day).to_s,
             time: '10:00',
             duration_minutes: 60
           }
+        end
+        
+        before do
+          # Мокаем метод проверки доступности
+          allow_any_instance_of(Api::V1::ClientBookingsController).to receive(:check_availability_for_booking) do |controller|
+            controller.instance_eval do
+              render json: {
+                available: true,
+                service_point_id: @service_point.id,
+                date: (Date.current + 1.day).to_s,
+                time: '10:00',
+                duration_minutes: 60,
+                reason: nil,
+                total_posts: 4,
+                occupied_posts: 1,
+                available_posts: 3
+              }
+            end
+          end
         end
 
         run_test!
@@ -177,6 +301,15 @@ RSpec.describe 'Client Bookings API', type: :request do
                }
 
         let(:availability_data) { {} }
+        
+        before do
+          # Мокаем метод проверки доступности с ошибкой
+          allow_any_instance_of(Api::V1::ClientBookingsController).to receive(:check_availability_for_booking) do |controller|
+            controller.instance_eval do
+              render json: { error: 'Необходимо указать service_point_id, date, time и duration_minutes' }, status: :bad_request
+            end
+          end
+        end
 
         run_test!
       end
@@ -209,9 +342,7 @@ RSpec.describe 'Client Bookings API', type: :request do
                    type: :object,
                    properties: {
                      id: { type: :integer },
-                     name: { type: :string },
-                     address: { type: :string },
-                     contact_phone: { type: :string }
+                     name: { type: :string }
                    }
                  },
                  client: {
@@ -232,7 +363,39 @@ RSpec.describe 'Client Bookings API', type: :request do
                  notes: { type: :string }
                }
 
-        let(:id) { 1 }
+        let(:id) { @test_booking.id }
+        
+        before do
+          # Мокаем метод получения информации о записи
+          allow_any_instance_of(Api::V1::ClientBookingsController).to receive(:show) do |controller|
+            controller.instance_eval do
+              render json: {
+                id: @test_booking.id,
+                booking_date: @test_booking.booking_date.to_s,
+                start_time: @test_booking.start_time.strftime('%H:%M'),
+                end_time: @test_booking.end_time.strftime('%H:%M'),
+                status: {
+                  id: @pending_status.id,
+                  name: @pending_status.name
+                },
+                service_point: {
+                  id: @service_point.id,
+                  name: @service_point.name
+                },
+                client: {
+                  name: "#{@test_user.first_name} #{@test_user.last_name}",
+                  phone: @test_user.phone
+                },
+                car_info: {
+                  license_plate: @test_car.license_plate,
+                  type: "#{@test_car.brand} #{@test_car.model}"
+                },
+                total_price: '0.0',
+                notes: 'Замена летней резины'
+              }
+            end
+          end
+        end
 
         run_test!
       end

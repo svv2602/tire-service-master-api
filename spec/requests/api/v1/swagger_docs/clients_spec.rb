@@ -434,7 +434,7 @@ RSpec.describe 'Clients API', type: :request do
       parameter name: :client, in: :body, schema: {
         type: :object,
         properties: {
-          client: {
+          user: {
             type: :object,
             properties: {
               email: { type: :string },
@@ -443,9 +443,7 @@ RSpec.describe 'Clients API', type: :request do
               first_name: { type: :string },
               last_name: { type: :string },
               middle_name: { type: :string },
-              phone: { type: :string },
-              preferred_notification_method: { type: :string, enum: ['email', 'phone', 'push'] },
-              marketing_consent: { type: :boolean }
+              phone: { type: :string }
             },
             required: ['email', 'password', 'password_confirmation', 'first_name', 'last_name']
           }
@@ -455,12 +453,35 @@ RSpec.describe 'Clients API', type: :request do
       response '201', 'Клиент создан' do
         schema type: :object,
           properties: {
-            auth_token: { type: :string },
-            message: { type: :string, example: 'Account created successfully' }
+            message: { type: :string, example: 'Регистрация прошла успешно' },
+            user: { 
+              type: :object,
+              properties: {
+                id: { type: :integer },
+                email: { type: :string },
+                first_name: { type: :string },
+                last_name: { type: :string },
+                phone: { type: :string, nullable: true }
+              }
+            },
+            client: {
+              type: :object,
+              properties: {
+                id: { type: :integer },
+                preferred_notification_method: { type: :string, nullable: true }
+              }
+            },
+            tokens: {
+              type: :object,
+              properties: {
+                access: { type: :string },
+                refresh: { type: :string }
+              }
+            }
           }
         
         let(:client) { { 
-          client: { 
+          user: { 
             email: 'new@example.com', 
             password: 'password123', 
             password_confirmation: 'password123', 
@@ -475,11 +496,15 @@ RSpec.describe 'Clients API', type: :request do
       response '422', 'Некорректные параметры' do
         schema type: :object,
           properties: {
-            errors: { type: :object }
+            error: { type: :string },
+            details: { 
+              type: :array,
+              items: { type: :string }
+            }
           }
         
         let(:client) { { 
-          client: { 
+          user: { 
             email: '', 
             password: 'a', 
             password_confirmation: 'b', 
@@ -490,16 +515,17 @@ RSpec.describe 'Clients API', type: :request do
         
         before do
           # Mock validation errors
-          allow_any_instance_of(Api::V1::ClientsController).to receive(:register) do |controller|
+          allow_any_instance_of(Api::V1::ClientAuthController).to receive(:register) do |controller|
             controller.instance_eval do
               render json: {
-                errors: {
-                  email: ["can't be blank"],
-                  password: ["is too short (minimum is 6 characters)"],
-                  password_confirmation: ["doesn't match Password"],
-                  first_name: ["can't be blank"],
-                  last_name: ["can't be blank"]
-                }
+                error: 'Ошибка регистрации',
+                details: [
+                  "Email can't be blank",
+                  "Password is too short (minimum is 6 characters)",
+                  "Password confirmation doesn't match Password",
+                  "First name can't be blank",
+                  "Last name can't be blank"
+                ]
               }, status: :unprocessable_entity
             end
           end

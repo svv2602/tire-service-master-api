@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_12_135905) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_13_050203) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -274,6 +274,16 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_12_135905) do
     t.index ["notification_type_id"], name: "index_notifications_on_notification_type_id"
     t.index ["recipient_type", "recipient_id"], name: "idx_notifications_recipient"
     t.index ["sent_at"], name: "index_notifications_on_sent_at"
+  end
+
+  create_table "operators", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "position"
+    t.integer "access_level"
+    t.boolean "is_active"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_operators_on_user_id"
   end
 
   create_table "partners", force: :cascade do |t|
@@ -623,6 +633,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_12_135905) do
   add_foreign_key "managers", "partners"
   add_foreign_key "managers", "users"
   add_foreign_key "notifications", "notification_types"
+  add_foreign_key "operators", "users"
   add_foreign_key "partners", "cities"
   add_foreign_key "partners", "regions"
   add_foreign_key "partners", "users"

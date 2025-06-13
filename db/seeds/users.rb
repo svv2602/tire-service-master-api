@@ -21,6 +21,63 @@ client_role_id = UserRole.find_by(name: 'client')&.id
 # Базовий пароль для тестових користувачів
 default_password = 'password123'
 
+# Создаем роли пользователей
+admin_role = UserRole.find_or_create_by!(name: 'admin', description: 'Администратор системы')
+partner_role = UserRole.find_or_create_by!(name: 'partner', description: 'Партнер')
+manager_role = UserRole.find_or_create_by!(name: 'manager', description: 'Менеджер')
+client_role = UserRole.find_or_create_by!(name: 'client', description: 'Клиент')
+operator_role = UserRole.find_or_create_by!(name: 'operator', description: 'Оператор')
+
+# Создаем тестовых пользователей
+admin_user = User.find_or_initialize_by(email: 'admin@test.com')
+admin_user.assign_attributes(
+  password: 'password123',
+  first_name: 'Admin',
+  last_name: 'Test',
+  role: admin_role,
+  is_active: true
+)
+admin_user.save!
+puts "Admin user created: #{admin_user.email}"
+
+partner_user = User.find_or_initialize_by(email: 'partner@test.com')
+partner_user.assign_attributes(
+  password: 'password123',
+  first_name: 'Partner',
+  last_name: 'Test',
+  role: partner_role,
+  is_active: true
+)
+partner_user.save!
+puts "Partner user created: #{partner_user.email}"
+
+manager_user = User.find_or_initialize_by(email: 'manager@test.com')
+manager_user.assign_attributes(
+  password: 'password123',
+  first_name: 'Manager',
+  last_name: 'Test',
+  role: manager_role,
+  is_active: true
+)
+manager_user.save!
+puts "Manager user created: #{manager_user.email}"
+
+client_user = User.find_or_initialize_by(email: 'client@test.com')
+client_user.assign_attributes(
+  password: 'password123',
+  first_name: 'Client',
+  last_name: 'Test',
+  role: client_role,
+  is_active: true
+)
+client_user.save!
+puts "Client user created: #{client_user.email}"
+
+# Создаем клиента для пользователя с ролью client
+client = Client.find_or_initialize_by(user_id: client_user.id)
+client.save!
+puts "Client record created for user: #{client_user.email}"
+
 # Дані користувачів
 users_data = [
   # Адміністратори

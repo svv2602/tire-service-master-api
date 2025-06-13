@@ -19,8 +19,7 @@ Rails.application.routes.draw do
       post 'auth/login', to: 'auth#login'
       post 'auth/logout', to: 'auth#logout'
       get 'auth/me', to: 'auth#me'
-      post 'authenticate', to: 'authentication#authenticate'
-      post 'auth/refresh', to: 'authentication#refresh'
+      post 'auth/refresh', to: 'auth#refresh'
       
       # Клиентский API доступности (упрощенный)
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
@@ -229,10 +228,6 @@ Rails.application.routes.draw do
       end
       
       resources :service_point_statuses, only: [:index]
-
-      # Существующие маршруты авторизации (старая система)
-      post 'authenticate', to: 'auth#login'
-      post 'refresh', to: 'auth#refresh'
 
       # Отзывы
       resources :reviews
