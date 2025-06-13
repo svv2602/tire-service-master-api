@@ -5,7 +5,7 @@ class User < ApplicationRecord
   attr_accessor :skip_role_specific_record
   
   # Связи
-  belongs_to :role, class_name: 'UserRole', foreign_key: 'role_id', optional: true
+  belongs_to :role, class_name: 'UserRole', foreign_key: 'role_id', required: true
   has_one :administrator, dependent: :destroy
   has_one :partner, dependent: :destroy
   has_one :client, dependent: :destroy
@@ -18,7 +18,7 @@ class User < ApplicationRecord
   has_many :notification_settings, dependent: :destroy
   
   # Валидации
-  validates :email, presence: true, uniqueness: { case_sensitive: false }, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: -> { phone.present? }
+  validates :email, presence: true, uniqueness: { case_sensitive: false }, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :phone, uniqueness: true, allow_blank: true
   validates :role_id, presence: true
   validates :first_name, presence: true, length: { minimum: 2, maximum: 50 }

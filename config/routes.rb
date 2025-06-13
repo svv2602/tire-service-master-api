@@ -49,6 +49,10 @@ Rails.application.routes.draw do
       
       # Dashboard statistics
       get 'dashboard/stats', to: 'dashboard#stats'
+      get 'dashboard/charts/bookings', to: 'dashboard#charts_bookings'
+      get 'dashboard/charts/revenue', to: 'dashboard#charts_revenue'
+      get 'dashboard/top-services', to: 'dashboard#top_services'
+      get 'dashboard/partner/:partner_id/stats', to: 'dashboard#partner_stats'
       
       # Партнерская регистрация и аутентификация
       post 'partners/register', to: 'partner_auth#register'
