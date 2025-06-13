@@ -99,8 +99,8 @@ ServicePoint.where("name LIKE 'Тестовая точка%'").destroy_all
 load 'db/seeds/service_points_improved.rb'
 
 # 6. Загружаем расписание для точек
-# Примечание: файл schedule_generation.rb уже будет загружен через основной процесс seeds.rb
-puts "\n--- Расписание для точек будет загружено через основной процесс ---"
+puts "\n--- Загрузка расписания для точек ---"
+load 'db/seeds/schedule_generation.rb'
 
 # 7. Загружаем клиентов и их автомобили
 puts "\n--- Загрузка клиентов и их автомобилей ---"

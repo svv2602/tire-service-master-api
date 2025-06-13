@@ -16,15 +16,34 @@ priority_seeds = [
   'schedule_generation.rb'   # Создаем шаблоны расписания
 ]
 
-# Сначала выполняем приоритетные сидеры
+# Сначала выполняем приоритетные сидеры в заданном порядке
 priority_seeds.each do |seed_name|
   seed_path = File.join(Rails.root, 'db', 'seeds', seed_name)
   if File.exist?(seed_path)
     puts "\n=== Загрузка приоритетного файла сидов: #{seed_name} ==="
-    load seed_path
+    begin
+      load seed_path
+    rescue => e
+      puts "Ошибка при загрузке #{seed_name}: #{e.message}"
+      puts e.backtrace.join("\n")
+    end
   else
-    puts "Предупреждение: Приоритетный файл сидов не найден: #{seed_name}"
+    puts "\n=== Файл #{seed_name} не найден, пропускаем ==="
   end
+end
+
+# Явно загружаем schedule_generation.rb для сервисных точек
+puts "\n=== Загрузка расписания для сервисных точек ==="
+schedule_path = File.join(Rails.root, 'db', 'seeds', 'schedule_generation.rb')
+if File.exist?(schedule_path)
+  begin
+    load schedule_path
+  rescue => e
+    puts "Ошибка при загрузке schedule_generation.rb: #{e.message}"
+    puts e.backtrace.join("\n")
+  end
+else
+  puts "Файл schedule_generation.rb не найден, пропускаем"
 end
 
 # Затем выполняем остальные сидеры
