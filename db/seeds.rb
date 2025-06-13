@@ -12,7 +12,8 @@ priority_seeds = [
   'partners.rb',             # Создаем партнеров
   'clients.rb',              # Создаем клиентов
   'car_types.rb',            # Создаем типы автомобилей
-  'car_brands_and_models.rb' # Создаем бренды и модели автомобилей
+  'car_brands_and_models.rb', # Создаем бренды и модели автомобилей
+  'schedule_generation.rb'   # Создаем шаблоны расписания
 ]
 
 # Сначала выполняем приоритетные сидеры

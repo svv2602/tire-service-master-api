@@ -3,6 +3,17 @@
 
 puts 'Creating schedule templates for dynamic availability system...'
 
+# Проверка, не были ли уже созданы шаблоны расписания
+if ScheduleTemplate.count > 0
+  puts "  Schedule templates already exist (#{ScheduleTemplate.count} found), skipping creation"
+  puts "  If you want to recreate schedule templates, run reset_db.sh script"
+  return
+end
+
+# Очищаем существующие шаблоны
+ScheduleTemplate.destroy_all
+puts "  Cleared existing schedule templates"
+
 # Проверяем, что у нас есть точки обслуживания и посты
 if ServicePoint.count.zero?
   puts "  No service points found, please run service_points seed first"
@@ -87,6 +98,13 @@ puts "\nSchedule templates creation completed!"
 puts "  Total service points: #{ServicePoint.count}"
 puts "  Total active posts: #{ServicePost.active.count}"
 puts "  Total schedule templates: #{ScheduleTemplate.count}"
+
+# Обновляем поле working_hours в таблице service_points
+puts "\nUpdating working_hours for service points..."
+ServicePoint.find_each do |service_point|
+  service_point.update_working_hours_from_templates
+  puts "  Updated working_hours for #{service_point.name}"
+end
 
 # Выводим сводку по рабочим часам каждой точки
 puts "\nWorking hours summary:"

@@ -88,6 +88,14 @@ module Api
         old_values = @service_point.as_json
         
         begin
+          # Проверяем, передаются ли данные о рабочих часах
+          if params[:service_point][:working_hours].present?
+            Rails.logger.info "Получены данные о рабочих часах: #{params[:service_point][:working_hours]}"
+            
+            # Обновляем шаблоны расписания на основе переданных рабочих часов
+            update_schedule_templates_from_working_hours
+          end
+          
           if @service_point.update(service_point_params)
             
             # Принудительное обновление timestamp для инвалидации кеша
@@ -699,6 +707,50 @@ module Api
         distance = earth_radius * c
         
         distance.round(2)
+      end
+      
+      # Обновляет шаблоны расписания на основе переданных рабочих часов
+      def update_schedule_templates_from_working_hours
+        working_hours = params[:service_point][:working_hours]
+        return unless working_hours.is_a?(Hash)
+        
+        # Маппинг дней недели
+        day_to_sort_order = {
+          'monday' => 1,
+          'tuesday' => 2,
+          'wednesday' => 3,
+          'thursday' => 4,
+          'friday' => 5,
+          'saturday' => 6,
+          'sunday' => 7
+        }
+        
+        # Обновляем шаблоны расписания для каждого дня недели
+        working_hours.each do |day_name, hours|
+          sort_order = day_to_sort_order[day_name.to_s]
+          next unless sort_order
+          
+          weekday = Weekday.find_by(sort_order: sort_order)
+          next unless weekday
+          
+          template = @service_point.schedule_templates.find_or_initialize_by(weekday: weekday)
+          
+          is_working_day = hours['is_working_day'].to_s == 'true'
+          
+          template.is_working_day = is_working_day
+          if is_working_day
+            template.opening_time = hours['start']
+            template.closing_time = hours['end']
+          else
+            template.opening_time = '00:00:00'
+            template.closing_time = '00:00:00'
+          end
+          
+          template.save
+        end
+        
+        # Обновляем поле working_hours в модели ServicePoint
+        @service_point.update_working_hours_from_templates
       end
     end
   end

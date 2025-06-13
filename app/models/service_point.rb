@@ -206,6 +206,42 @@ class ServicePoint < ApplicationRecord
     service_point_services.find_by(service_id: service_id)&.destroy
   end
   
+  # Метод для обновления рабочих часов из шаблонов расписания
+  def update_working_hours_from_templates
+    # Получаем все шаблоны расписания для этой точки
+    templates = self.schedule_templates.includes(:weekday)
+    
+    # Создаем хеш для рабочих часов
+    hours = {}
+    
+    # Дни недели на английском для соответствия формату working_hours
+    day_names = {
+      1 => 'monday',
+      2 => 'tuesday',
+      3 => 'wednesday',
+      4 => 'thursday',
+      5 => 'friday',
+      6 => 'saturday',
+      7 => 'sunday'
+    }
+    
+    # Заполняем хеш рабочими часами из шаблонов
+    templates.each do |template|
+      day_key = day_names[template.weekday.sort_order]
+      
+      hours[day_key] = {
+        'start' => template.is_working_day ? template.opening_time.strftime('%H:%M') : nil,
+        'end' => template.is_working_day ? template.closing_time.strftime('%H:%M') : nil,
+        'is_working_day' => template.is_working_day
+      }
+    end
+    
+    # Обновляем поле working_hours
+    update_column(:working_hours, hours)
+    
+    hours
+  end
+  
   private
   
   def calculate_cancellation_rate
