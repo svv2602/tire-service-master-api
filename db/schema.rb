@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_13_050203) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_13_055815) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -175,6 +175,23 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_13_050203) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_car_types_on_name", unique: true
+  end
+
+  create_table "cars", force: :cascade do |t|
+    t.bigint "client_id", null: false
+    t.bigint "car_type_id", null: false
+    t.string "brand"
+    t.string "model"
+    t.integer "year"
+    t.string "license_plate"
+    t.string "vin"
+    t.string "color"
+    t.text "notes"
+    t.boolean "is_active"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["car_type_id"], name: "index_cars_on_car_type_id"
+    t.index ["client_id"], name: "index_cars_on_client_id"
   end
 
   create_table "cities", force: :cascade do |t|
@@ -619,6 +636,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_13_050203) do
   add_foreign_key "bookings", "payment_statuses", on_delete: :restrict, validate: false
   add_foreign_key "bookings", "service_points"
   add_foreign_key "car_models", "car_brands", column: "brand_id"
+  add_foreign_key "cars", "car_types"
+  add_foreign_key "cars", "clients"
   add_foreign_key "cities", "regions"
   add_foreign_key "client_cars", "car_brands", column: "brand_id"
   add_foreign_key "client_cars", "car_models", column: "model_id"

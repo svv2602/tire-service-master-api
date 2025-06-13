@@ -1,27 +1,32 @@
 FactoryBot.define do
   factory :user_role do
     sequence(:name) { |n| "role_#{n}" }
-    sequence(:description) { |n| "Role description #{n}" }
+    description { "Тестовая роль" }
     is_active { true }
     
     trait :admin do
       name { 'admin' }
-      description { 'Administrator role with full access' }
-    end
-    
-    trait :client do
-      name { 'client' }
-      description { 'Client role for users who book services' }
-    end
-    
-    trait :partner do
-      name { 'partner' }
-      description { 'Partner role for business owners' }
+      description { 'Администратор системы' }
     end
     
     trait :manager do
       name { 'manager' }
-      description { 'Manager role for service point managers' }
+      description { 'Менеджер' }
+    end
+    
+    trait :operator do
+      name { 'operator' }
+      description { 'Оператор' }
+    end
+    
+    trait :partner do
+      name { 'partner' }
+      description { 'Партнер' }
+    end
+    
+    trait :client do
+      name { 'client' }
+      description { 'Клиент' }
     end
     
     trait :inactive do

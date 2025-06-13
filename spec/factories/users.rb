@@ -69,6 +69,18 @@ FactoryBot.define do
       end
     end
     
+    factory :operator_user do
+      after(:build) do |user|
+        operator_role = UserRole.find_by(name: 'operator') || 
+                      FactoryBot.create(:user_role, name: 'operator', description: 'Оператор сервисной точки')
+        user.role_id = operator_role.id
+      end
+      
+      after(:create) do |user|
+        create(:operator, user: user)
+      end
+    end
+    
     trait :with_admin_role do
       after(:build) do |user|
         admin_role = UserRole.find_by(name: 'admin') || 
@@ -101,6 +113,14 @@ FactoryBot.define do
       end
     end
     
+    trait :with_operator_role do
+      after(:build) do |user|
+        operator_role = UserRole.find_by(name: 'operator') || 
+                      FactoryBot.create(:user_role, name: 'operator', description: 'Оператор сервисной точки')
+        user.role_id = operator_role.id
+      end
+    end
+    
     trait :inactive do
       is_active { false }
     end
@@ -123,6 +143,10 @@ FactoryBot.define do
 
     trait :partner do
       role { UserRole.find_by(name: 'partner') || association(:user_role, name: 'partner') }
+    end
+    
+    trait :operator do
+      role { UserRole.find_by(name: 'operator') || association(:user_role, name: 'operator') }
     end
   end
 end

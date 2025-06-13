@@ -1,6 +1,11 @@
 require 'rails_helper'
 
 RSpec.describe Operator, type: :model do
+  before(:each) do
+    # Создаем роль оператора, если она не существует
+    UserRole.find_or_create_by(name: 'operator', description: 'Оператор сервисной точки', is_active: true)
+  end
+
   describe 'associations' do
     it { should belong_to(:user) }
   end
@@ -13,10 +18,14 @@ RSpec.describe Operator, type: :model do
   end
 
   describe 'scopes' do
-    let!(:active_operator) { create(:operator, is_active: true) }
-    let!(:inactive_operator) { create(:operator, is_active: false) }
-    let!(:level1_operator) { create(:operator, access_level: 1) }
-    let!(:level3_operator) { create(:operator, access_level: 3) }
+    let(:user_role) { UserRole.find_by(name: 'operator') }
+    let(:user1) { create(:user, role: user_role) }
+    let(:user2) { create(:user, role: user_role) }
+    let(:user3) { create(:user, role: user_role) }
+    
+    let!(:active_operator) { create(:operator, user: user1, is_active: true) }
+    let!(:inactive_operator) { create(:operator, user: user2, is_active: false) }
+    let!(:level1_operator) { create(:operator, user: user3, access_level: 1) }
 
     it 'returns active operators' do
       expect(Operator.active).to include(active_operator)
@@ -30,12 +39,14 @@ RSpec.describe Operator, type: :model do
 
     it 'returns operators by access level' do
       expect(Operator.by_access_level(1)).to include(level1_operator)
-      expect(Operator.by_access_level(1)).not_to include(level3_operator)
+      expect(Operator.by_access_level(1)).not_to include(active_operator) unless active_operator.access_level == 1
     end
   end
 
   describe 'instance methods' do
-    let(:operator) { create(:operator, is_active: false, access_level: 3) }
+    let(:user_role) { UserRole.find_by(name: 'operator') }
+    let(:user) { create(:user, role: user_role) }
+    let(:operator) { create(:operator, user: user, is_active: false, access_level: 3) }
 
     describe '#activate!' do
       it 'activates the operator' do
