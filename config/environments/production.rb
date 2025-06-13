@@ -87,4 +87,20 @@ Rails.application.configure do
   # Настройка URL для Active Storage
   Rails.application.routes.default_url_options[:host] = ENV['APP_HOST'] || 'https://api.tire-service.com'
   config.active_storage.default_url_options = { host: ENV['APP_HOST'] || 'https://api.tire-service.com' }
+
+  # Настройка Action Mailer для отправки писем
+  config.action_mailer.perform_caching = false
+  config.action_mailer.default_url_options = { host: ENV.fetch('HOST') }
+  
+  # Настройка SMTP для отправки писем
+  config.action_mailer.delivery_method = :smtp
+  config.action_mailer.smtp_settings = {
+    address: ENV.fetch('SMTP_ADDRESS'),
+    port: ENV.fetch('SMTP_PORT'),
+    domain: ENV.fetch('SMTP_DOMAIN'),
+    user_name: ENV.fetch('SMTP_USERNAME'),
+    password: ENV.fetch('SMTP_PASSWORD'),
+    authentication: 'plain',
+    enable_starttls_auto: true
+  }
 end

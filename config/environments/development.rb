@@ -35,10 +35,23 @@ Rails.application.configure do
   config.active_storage.default_url_options = { host: 'http://localhost:8000' }
 
   # Don't care if the mailer can't send.
-  config.action_mailer.raise_delivery_errors = false
+  config.action_mailer.raise_delivery_errors = true
 
-  # Make template changes take effect immediately.
+  # Настройка Action Mailer для отправки писем
   config.action_mailer.perform_caching = false
+  config.action_mailer.default_url_options = { host: ENV.fetch('HOST', 'localhost'), port: ENV.fetch('PORT', 3000) }
+  
+  # Настройка SMTP для отправки писем
+  config.action_mailer.delivery_method = :smtp
+  config.action_mailer.smtp_settings = {
+    address: ENV.fetch('SMTP_ADDRESS', 'smtp.gmail.com'),
+    port: ENV.fetch('SMTP_PORT', 587),
+    domain: ENV.fetch('SMTP_DOMAIN', 'localhost'),
+    user_name: ENV.fetch('SMTP_USERNAME', nil),
+    password: ENV.fetch('SMTP_PASSWORD', nil),
+    authentication: 'plain',
+    enable_starttls_auto: true
+  }
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log

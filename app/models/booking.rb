@@ -28,7 +28,11 @@ class Booking < ApplicationRecord
   validate :booking_time_available, on: :create, unless: -> { skip_availability_check }
   
   # Атрибуты для пропуска валидаций (нужны для тестов)
-  attr_accessor :skip_status_validation, :skip_availability_check
+  attr_accessor :skip_status_validation, :skip_availability_check, :skip_notifications
+  
+  # Коллбэки для отправки уведомлений
+  after_create :send_creation_notification, unless: -> { skip_notifications }
+  after_update :send_status_change_notification, if: -> { saved_change_to_status_id? && !skip_notifications }
   
   # Скоупы
   scope :upcoming, -> { where('booking_date >= ?', Date.current) }
@@ -262,6 +266,22 @@ class Booking < ApplicationRecord
       if available_posts <= 0
         errors.add(:base, "Все посты заняты на выбранное время")
       end
+    end
+  end
+  
+  # Методы для отправки уведомлений
+  def send_creation_notification
+    BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_created])
+  end
+  
+  def send_status_change_notification
+    case status.name
+    when 'confirmed'
+      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_confirmed])
+    when 'canceled_by_client', 'canceled_by_partner'
+      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_cancelled])
+    when 'completed'
+      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_completed])
     end
   end
 end
