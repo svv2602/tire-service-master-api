@@ -6,14 +6,15 @@ if UserRole.count == 0
   puts "Создаем роли пользователей..."
   
   roles = [
-    { name: 'admin', display_name: 'Администратор' },
-    { name: 'manager', display_name: 'Менеджер' },
-    { name: 'operator', display_name: 'Оператор' },
-    { name: 'client', display_name: 'Клиент' }
+    { name: 'admin', description: 'Администратор' },
+    { name: 'manager', description: 'Менеджер' },
+    { name: 'operator', description: 'Оператор' },
+    { name: 'partner', description: 'Партнер' },
+    { name: 'client', description: 'Клиент' }
   ]
   
   roles.each do |role|
-    UserRole.create!(name: role[:name], display_name: role[:display_name])
+    UserRole.create!(name: role[:name], description: role[:description])
   end
   
   puts "Создано #{UserRole.count} ролей пользователей"
@@ -93,9 +94,9 @@ end
 if ServicePointStatus.count == 0
   puts "Создаем статусы сервисных точек..."
   
-  ServicePointStatus.create!(name: 'active', display_name: 'Активный', color: '#4CAF50')
-  ServicePointStatus.create!(name: 'inactive', display_name: 'Неактивный', color: '#F44336')
-  ServicePointStatus.create!(name: 'maintenance', display_name: 'На обслуживании', color: '#FFC107')
+  ServicePointStatus.create!(name: 'active', description: 'Активный', color: '#4CAF50')
+  ServicePointStatus.create!(name: 'inactive', description: 'Неактивный', color: '#F44336')
+  ServicePointStatus.create!(name: 'maintenance', description: 'На обслуживании', color: '#FFC107')
   
   puts "Создано #{ServicePointStatus.count} статусов сервисных точек"
 end
@@ -115,8 +116,7 @@ if ServiceCategory.count == 0
   Service.create!(
     name: 'Замена шин R13-R15',
     description: 'Замена 4 шин размером от R13 до R15',
-    duration_minutes: 60,
-    price: 400.0,
+    default_duration: 60,
     category: tire_category,
     is_active: true
   )
@@ -124,8 +124,7 @@ if ServiceCategory.count == 0
   Service.create!(
     name: 'Замена шин R16-R17',
     description: 'Замена 4 шин размером от R16 до R17',
-    duration_minutes: 60,
-    price: 500.0,
+    default_duration: 60,
     category: tire_category,
     is_active: true
   )
@@ -141,8 +140,7 @@ if ServiceCategory.count == 0
   Service.create!(
     name: 'Балансировка R13-R15',
     description: 'Балансировка колес размером от R13 до R15',
-    duration_minutes: 40,
-    price: 300.0,
+    default_duration: 40,
     category: balance_category,
     is_active: true
   )
@@ -150,8 +148,7 @@ if ServiceCategory.count == 0
   Service.create!(
     name: 'Балансировка R16-R17',
     description: 'Балансировка колес размером от R16 до R17',
-    duration_minutes: 40,
-    price: 350.0,
+    default_duration: 40,
     category: balance_category,
     is_active: true
   )

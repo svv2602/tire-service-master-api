@@ -157,12 +157,23 @@ begin
       unless client
         Client.create!(
           user_id: user.id,
-          date_of_birth: Date.parse('1990-01-01'),
-          address: 'Тестовый адрес, 123',
-          city: 'Тестовый город',
-          postal_code: '12345'
+          preferred_notification_method: 'email'
         )
         puts "    ✓ Created client profile for #{user.email}"
+      end
+    end
+    
+    # Создаем оператора для тестового оператора
+    if user.role&.name == 'operator'
+      operator = Operator.find_by(user_id: user.id)
+      unless operator
+        Operator.create!(
+          user_id: user.id,
+          position: 'Тестовый оператор',
+          access_level: 3,
+          is_active: true
+        )
+        puts "    ✓ Created operator profile for #{user.email}"
       end
     end
   end
@@ -175,6 +186,7 @@ begin
   puts "Тест:    test@test.com / test123"
   puts "Менеджер: manager@test.com / manager123"
   puts "Оператор: operator@test.com / operator123"
+  puts "Партнер:  partner@test.com / partner123"
   puts "Клиент:   client@test.com / client123"
   puts "=========================================="
 

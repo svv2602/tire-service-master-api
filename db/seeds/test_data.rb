@@ -254,7 +254,23 @@ end
 puts "Генерация тестовых клиентов..."
 5.times do
   begin
-    Api::V1::Tests::DataGeneratorController.new.create_test_client_internal
+    # Проверяем, не превышено ли максимальное количество клиентов
+    if Client.count >= 15
+      puts "Достигнуто максимальное количество клиентов (15)"
+      break
+    end
+    
+    # Создаем уникальный email для клиента
+    random_suffix = SecureRandom.hex(4)
+    test_email = "test_client_#{random_suffix}@example.com"
+    
+    # Проверяем, существует ли уже пользователь с таким email
+    if User.exists?(email: test_email)
+      puts "Пропускаем создание клиента с email #{test_email} (уже существует)"
+      next
+    end
+    
+    Api::V1::Tests::DataGeneratorController.new.create_test_client_internal(test_email)
     print "."
   rescue => e
     puts "Ошибка при создании клиента: #{e.message}"
@@ -266,7 +282,24 @@ puts "\nСоздано клиентов: #{Client.count}"
 puts "Генерация тестовых партнеров..."
 3.times do
   begin
-    Api::V1::Tests::DataGeneratorController.new.create_test_partner_internal
+    # Проверяем, не превышено ли максимальное количество партнеров
+    if Partner.count >= 5
+      puts "Достигнуто максимальное количество партнеров (5)"
+      break
+    end
+    
+    # Создаем уникальный email и название компании для партнера
+    random_suffix = SecureRandom.hex(4)
+    test_email = "test_partner_#{random_suffix}@example.com"
+    company_name = "Тестовая компания #{random_suffix}"
+    
+    # Проверяем, существует ли уже пользователь с таким email
+    if User.exists?(email: test_email)
+      puts "Пропускаем создание партнера с email #{test_email} (уже существует)"
+      next
+    end
+    
+    Api::V1::Tests::DataGeneratorController.new.create_test_partner_internal(test_email, company_name)
     print "."
   rescue => e
     puts "Ошибка при создании партнера: #{e.message}"
@@ -294,7 +327,25 @@ Partner.all.each do |partner|
   service_points = partner.service_points
   if service_points.any?
     begin
-      Api::V1::Tests::DataGeneratorController.new.create_test_manager_internal(partner.id, service_points.first.id)
+      # Проверяем, не превышено ли максимальное количество менеджеров для этого партнера
+      if Manager.where(partner_id: partner.id).count >= 2
+        puts "Пропускаем создание менеджера для партнера #{partner.company_name} (уже достаточно)"
+        next
+      end
+      
+      # Создаем уникальный email для менеджера
+      random_suffix = SecureRandom.hex(4)
+      # Заменяем parameterize на преобразование имени компании в безопасный домен
+      company_domain = partner.company_name.downcase.gsub(/[^a-z0-9]/, '').presence || "company#{random_suffix}"
+      test_email = "test_manager_#{random_suffix}@#{company_domain}.com"
+      
+      # Проверяем, существует ли уже пользователь с таким email
+      if User.exists?(email: test_email)
+        puts "Пропускаем создание менеджера с email #{test_email} (уже существует)"
+        next
+      end
+      
+      Api::V1::Tests::DataGeneratorController.new.create_test_manager_internal(partner.id, service_points.first.id, test_email)
       print "."
     rescue => e
       puts "Ошибка при создании менеджера: #{e.message}"

@@ -22,11 +22,39 @@ client_role_id = UserRole.find_by(name: 'client')&.id
 default_password = 'password123'
 
 # Создаем роли пользователей
-admin_role = UserRole.find_or_create_by!(name: 'admin', description: 'Администратор системы')
-partner_role = UserRole.find_or_create_by!(name: 'partner', description: 'Партнер')
-manager_role = UserRole.find_or_create_by!(name: 'manager', description: 'Менеджер')
-client_role = UserRole.find_or_create_by!(name: 'client', description: 'Клиент')
-operator_role = UserRole.find_or_create_by!(name: 'operator', description: 'Оператор')
+admin_role = UserRole.find_by(name: 'admin')
+partner_role = UserRole.find_by(name: 'partner')
+manager_role = UserRole.find_by(name: 'manager')
+client_role = UserRole.find_by(name: 'client')
+operator_role = UserRole.find_by(name: 'operator')
+
+# Проверяем, что роли найдены, иначе создаем их
+if admin_role.nil?
+  admin_role = UserRole.create!(name: 'admin', description: 'Администратор системы')
+end
+
+if partner_role.nil?
+  partner_role = UserRole.create!(name: 'partner', description: 'Партнер')
+end
+
+if manager_role.nil?
+  manager_role = UserRole.create!(name: 'manager', description: 'Менеджер')
+end
+
+if client_role.nil?
+  client_role = UserRole.create!(name: 'client', description: 'Клиент')
+end
+
+if operator_role.nil?
+  operator_role = UserRole.create!(name: 'operator', description: 'Оператор')
+end
+
+# Получаем ID ролей
+admin_role_id = admin_role.id
+partner_role_id = partner_role.id
+manager_role_id = manager_role.id
+client_role_id = client_role.id
+operator_role_id = operator_role.id
 
 # Создаем тестовых пользователей
 admin_user = User.find_or_initialize_by(email: 'admin@test.com')
@@ -106,9 +134,9 @@ users_data = [
   },
   # Ще один простий адмін
   {
-    email: 'admin',  # Простой логин без домена для тестирования
-    phone: '+380 67 222 00 00',
-    password: 'admin',
+    email: 'admin123@example.com',  # Исправлен невалидный email 'admin' на валидный
+    phone: '+380 67 222 11 22',  # Изменен номер телефона, чтобы избежать дублирования
+    password: 'admin123',  # Пароль достаточной длины (минимум 6 символов)
     first_name: 'Простий',
     last_name: 'Адмін',
     role_id: admin_role_id,
@@ -227,7 +255,8 @@ users_data.each do |user_data|
   when manager_role_id
     # Знаходимо партнера за доменом email
     domain = user.email.split('@').last
-    partner = Partner.find_by("email LIKE ?", "%#{domain}")
+    # Ищем партнера по компании, а не по email
+    partner = Partner.joins(:user).where("users.email LIKE ?", "%#{domain}").first
     
     if partner
       manager = Manager.find_by(user_id: user.id)

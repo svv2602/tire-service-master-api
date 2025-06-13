@@ -172,10 +172,10 @@ module Api
         
         # Методы для создания тестовых данных (доступны для seed файлов)
         
-        def create_test_client_internal
+        def create_test_client_internal(email = nil)
           # Создаем пользователя для клиента
           user = User.create!(
-            email: "test_client_#{Time.now.to_i}@example.com",
+            email: email || "test_client_#{Time.now.to_i}@example.com",
             password: "password",
             password_confirmation: "password",
             first_name: "Тестовый",
@@ -198,39 +198,40 @@ module Api
           car_type = CarType.first || CarType.create!(name: "Test Type", is_active: true)
           
           # Создаем автомобиль
-          ClientCar.create!(
+          client_car = ClientCar.create!(
             client_id: client.id,
             brand_id: car_brand.id,
             model_id: car_model.id,
             car_type_id: car_type.id,
             year: 2020,
-            is_primary: true
+            is_primary: true,
+            license_plate: "AA #{rand(1000..9999)} #{('A'..'Z').to_a.sample(2).join}"
           )
           
           client
         end
         
-        def create_test_partner_internal
+        def create_test_partner_internal(email = nil, company_name = nil)
           # Создаем пользователя для партнера
           user = User.create!(
-            email: "test_partner_#{Time.now.to_i}@example.com",
+            email: email || "test_partner_#{Time.now.to_i}@example.com",
             password: "password",
             password_confirmation: "password",
             first_name: "Тестовый",
             last_name: "Партнер",
             phone: "+38067#{Random.rand(1000000..9999999)}",
-            role: UserRole.find_by(name: 'operator')
+            role: UserRole.find_by(name: 'partner')
           )
           
           # Создаем партнера
           Partner.create!(
             user_id: user.id,
-            company_name: "Тестовая компания #{Time.now.to_i}",
+            company_name: company_name || "Тестовая компания #{Time.now.to_i}",
             company_description: "Описание тестовой компании",
             contact_person: "Тестовый Партнер",
             logo_url: "https://via.placeholder.com/150",
             website: "http://test-company.com",
-            tax_number: "12345678",
+            tax_number: "#{Time.now.to_i}",
             legal_address: "ул. Тестовая, 123"
           )
         end
@@ -241,11 +242,6 @@ module Api
           unless city
             region = Region.create!(name: "Test Region", is_active: true)
             city = City.create!(region_id: region.id, name: "Test City", is_active: true)
-          end
-          
-          status = ServicePointStatus.find_by(name: 'active')
-          unless status
-            status = ServicePointStatus.create!(name: 'active', description: 'Active status', is_active: true)
           end
           
           # Создаем сервисную точку
@@ -260,7 +256,8 @@ module Api
             contact_phone: "+38067#{Random.rand(1000000..9999999)}",
             post_count: 3,
             default_slot_duration: 60,
-            status_id: status.id
+            is_active: true,
+            work_status: 'working'
           )
           
           # Добавляем услуги для сервисной точки
@@ -308,10 +305,10 @@ module Api
           service_point
         end
         
-        def create_test_manager_internal(partner_id, service_point_id)
+        def create_test_manager_internal(partner_id, service_point_id, email = nil)
           # Создаем пользователя для менеджера
           user = User.create!(
-            email: "test_manager_#{Time.now.to_i}@example.com",
+            email: email || "test_manager_#{Time.now.to_i}@example.com",
             password: "password",
             password_confirmation: "password",
             first_name: "Тестовый",
@@ -354,7 +351,8 @@ module Api
               model_id: car_model.id,
               car_type_id: car_type.id,
               year: 2020,
-              is_primary: true
+              is_primary: true,
+              license_plate: "AA #{rand(1000..9999)} #{('A'..'Z').to_a.sample(2).join}"
             )
           end
           

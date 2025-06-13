@@ -314,7 +314,7 @@ if Partner.count == 0
   
   operator_role = UserRole.find_by(name: 'operator')
   manager_role = UserRole.find_by(name: 'manager')
-  active_status = ServicePointStatus.find_by(name: 'active')
+  partner_role = UserRole.find_by(name: 'partner')
   
   # Создаем 3 партнера
   3.times do |i|
@@ -325,7 +325,7 @@ if Partner.count == 0
       phone: "+3805#{rand(10000000..99999999)}",
       first_name: ["Александр", "Николай", "Владимир"][i],
       last_name: ["Белый", "Черный", "Красный"][i],
-      role: operator_role,
+      role: partner_role,
       is_active: true
     )
     
@@ -354,7 +354,8 @@ if Partner.count == 0
         contact_phone: "+3809#{rand(10000000..99999999)}",
         post_count: rand(2..5),
         default_slot_duration: [30, 60, 90].sample,
-        status: active_status
+        is_active: true,
+        work_status: 'working'
       )
       
       # Добавляем удобства
@@ -433,6 +434,9 @@ if Booking.count == 0
       service_point = ServicePoint.all.sample
       car = client.cars.sample
       
+      # Пропускаем, если у клиента нет автомобилей
+      next unless car && car.car_type
+      
       # Выбираем случайную дату: вчера, сегодня или завтра
       slot_date = [Date.today - 1.day, Date.today, Date.today + 1.day, Date.today + 2.days].sample
       
@@ -473,7 +477,7 @@ if Booking.count == 0
           start_time: start_time,
           end_time: end_time,
           status_id: status.id,
-          payment_status: payment_status,
+          payment_status_id: payment_status.id,
           total_price: rand(500..2000),
           payment_method: ["cash", "card"].sample,
           notes: ["Прошу быть внимательными", "Позвоните за 30 минут", ""].sample

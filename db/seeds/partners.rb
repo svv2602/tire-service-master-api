@@ -7,6 +7,7 @@ begin
   # Проверяем существование необходимых ролей
   operator_role = UserRole.find_by(name: 'operator')
   manager_role = UserRole.find_by(name: 'manager')
+  partner_role = UserRole.find_by(name: 'partner')
   
   unless operator_role
     puts "Creating operator role..."
@@ -22,6 +23,15 @@ begin
     manager_role = UserRole.create!(
       name: 'manager',
       description: 'Менеджер партнера',
+      is_active: true
+    )
+  end
+  
+  unless partner_role
+    puts "Creating partner role..."
+    partner_role = UserRole.create!(
+      name: 'partner',
+      description: 'Партнер з правами управління своїми сервісними точками',
       is_active: true
     )
   end
@@ -45,7 +55,7 @@ begin
         first_name: 'Александр',
         last_name: 'Петренко',
         phone: '+380671234567',
-        role_id: operator_role.id,
+        role_id: partner_role.id,
         is_active: true,
         email_verified: true,
         phone_verified: true
@@ -71,7 +81,7 @@ begin
         first_name: 'Андрей',
         last_name: 'Коваленко',
         phone: '+380509876543',
-        role_id: operator_role.id,
+        role_id: partner_role.id,
         is_active: true,
         email_verified: true,
         phone_verified: true
@@ -97,7 +107,7 @@ begin
         first_name: 'Ирина',
         last_name: 'Савченко',
         phone: '+380635555555',
-        role_id: operator_role.id,
+        role_id: partner_role.id,
         is_active: true,
         email_verified: true,
         phone_verified: true
