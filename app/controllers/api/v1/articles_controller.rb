@@ -9,7 +9,20 @@ module Api
       def index
         # Если запрашиваются черновики, требуем авторизацию
         if params[:include_drafts].present?
-          authenticate_request unless @current_user
+          # Проверяем авторизацию
+          if !@current_user
+            begin
+              @current_user = AuthorizeApiRequest.new(request.headers).call
+            rescue StandardError
+              render json: { 
+                error: 'Требуется авторизация',
+                message: 'Для просмотра черновиков требуется авторизация.'
+              }, status: :unauthorized
+              return
+            end
+          end
+          
+          # Проверяем права администратора
           unless @current_user&.admin?
             render json: { 
               error: 'У вас нет прав для просмотра черновиков',
@@ -76,7 +89,15 @@ module Api
         if @article.draft?
           # Если пользователь не авторизован, пытаемся авторизовать
           unless @current_user
-            @current_user = AuthorizeApiRequest.new(request.headers).call
+            begin
+              @current_user = AuthorizeApiRequest.new(request.headers).call
+            rescue StandardError
+              render json: { 
+                error: 'Статья не найдена',
+                message: 'Запрашиваемая статья не существует или недоступна.'
+              }, status: :not_found
+              return
+            end
           end
           
           # Если все еще не авторизован или не админ, возвращаем 404
