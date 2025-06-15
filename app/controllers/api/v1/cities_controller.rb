@@ -9,7 +9,22 @@ module Api
       def index
         cities = City.includes(:region)
                      .where(is_active: true)
-                     .order(:name)
+        
+        # Фильтрация по region_id если параметр передан
+        if params[:region_id].present?
+          cities = cities.where(region_id: params[:region_id])
+        end
+        
+        cities = cities.order(:name)
+
+        # Пагинация
+        page = params[:page]&.to_i || 1
+        per_page = params[:per_page]&.to_i || 20
+        per_page = [per_page, 100].min # Ограничиваем максимум 100 записей на страницу
+        
+        offset = (page - 1) * per_page
+        total_count = cities.count
+        cities = cities.limit(per_page).offset(offset)
 
         render json: {
           data: cities.map do |city|
@@ -21,7 +36,10 @@ module Api
               is_active: city.is_active
             }
           end,
-          total: cities.count
+          total: total_count,
+          page: page,
+          per_page: per_page,
+          total_pages: (total_count.to_f / per_page).ceil
         }
       end
       
