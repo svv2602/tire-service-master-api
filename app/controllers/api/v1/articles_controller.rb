@@ -1,15 +1,26 @@
 module Api
   module V1
     class ArticlesController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :categories]
+      skip_before_action :authenticate_request, only: [:show, :categories]
       before_action :authorize_admin, except: [:index, :show, :categories]
       before_action :set_article, only: [:show, :update, :destroy]
       
       # GET /api/v1/articles
       def index
+        # Отладочная информация
+        Rails.logger.info "ArticlesController#index: current_user=#{@current_user&.email}, admin=#{@current_user&.admin?}"
+        
         articles = Article.includes(:author)
-                         .where(status: 'published')
-                         .order(published_at: :desc)
+        
+        # Для админов показываем все статьи, для обычных пользователей только опубликованные
+        unless @current_user&.admin?
+          articles = articles.where(status: 'published')
+          Rails.logger.info "ArticlesController#index: Фильтруем только опубликованные статьи"
+        else
+          Rails.logger.info "ArticlesController#index: Показываем все статьи для админа"
+        end
+        
+        articles = articles.order(created_at: :desc)
 
         # Фильтрация по категории
         if params[:category].present?
@@ -46,11 +57,13 @@ module Api
               title: article.title,
               excerpt: article.excerpt,
               category: article.category,
+              status: article.status,
               featured: article.featured,
               reading_time: article.reading_time,
               views_count: article.views_count,
               author: article.author&.first_name || 'Експерт',
               published_at: article.published_at,
+              created_at: article.created_at,
               slug: article.slug,
               featured_image_url: article.featured_image_url,
               tags: article.tags || []
@@ -176,7 +189,8 @@ module Api
       private
       
       def set_article
-        @article = Article.find_by!(slug: params[:id]) || Article.find(params[:id])
+        # Сначала пытаемся найти по slug, затем по ID
+        @article = Article.find_by(slug: params[:id]) || Article.find(params[:id])
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Стаття не знайдена' }, status: :not_found
       end
