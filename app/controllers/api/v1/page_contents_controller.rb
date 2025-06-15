@@ -1,14 +1,24 @@
 module Api
   module V1
     class PageContentsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :sections]
+      skip_before_action :authenticate_request, only: [:show, :sections]
       before_action :authorize_admin, except: [:index, :show, :sections]
       before_action :set_page_content, only: [:show, :update, :destroy, :toggle_active]
 
       # GET /api/v1/page_contents
       def index
+        # Отладочная информация (только в режиме разработки)
+        if Rails.env.development?
+          Rails.logger.info "🔍 PageContents#index Debug:"
+          Rails.logger.info "👤 Current User: #{current_user&.id} (#{current_user&.email})"
+          Rails.logger.info "🔑 User Role: #{current_user&.role}"
+          Rails.logger.info "👑 Is Admin?: #{current_user&.admin?}"
+          Rails.logger.info "🌟 Is Super Admin?: #{current_user&.super_admin?}"
+        end
+
         # Для публичного доступа показываем только активный контент
-        if current_user&.super_admin?
+        # Админы и супер-админы могут видеть весь контент
+        if current_user&.admin? || current_user&.super_admin?
           page_contents = PageContent.includes(image_attachment: :blob, gallery_images_attachments: :blob)
         else
           page_contents = PageContent.active.includes(image_attachment: :blob, gallery_images_attachments: :blob)
@@ -34,7 +44,7 @@ module Api
         end
 
         # Фильтрация по активности (только для админов)
-        if current_user&.super_admin? && params[:active].present?
+        if (current_user&.admin? || current_user&.super_admin?) && params[:active].present?
           page_contents = page_contents.where(active: params[:active] == 'true')
         end
 
@@ -147,7 +157,7 @@ module Api
           # Обработка загруженных файлов
           handle_file_uploads
 
-          render json: format_page_content(@page_content), status: :created
+          render json: serialize_page_content(@page_content), status: :created
         else
           render json: { 
             errors: @page_content.errors.full_messages,
@@ -162,7 +172,7 @@ module Api
           # Обработка загруженных файлов
           handle_file_uploads
 
-          render json: format_page_content(@page_content)
+          render json: serialize_page_content(@page_content)
         else
           render json: { 
             errors: @page_content.errors.full_messages,
@@ -185,7 +195,7 @@ module Api
       # PATCH /api/v1/page_contents/:id/toggle_active
       def toggle_active
         @page_content.update!(active: !@page_content.active)
-        render json: format_page_content(@page_content)
+        render json: serialize_page_content(@page_content)
       rescue StandardError => e
         render json: { 
           error: e.message,
@@ -254,19 +264,15 @@ module Api
       end
 
       def serialize_page_content(content)
-        content_data = content.as_json(
-          include: {
-            image_attachment: { include: :blob },
-            gallery_images_attachments: { include: :blob }
-          }
-        )
+        content_data = content.as_json
         
         content_data['image_url'] = content.image_url
         content_data['gallery_image_urls'] = content.gallery_image_urls
-        content_data['settings'] = content.settings_with_defaults
+        content_data['settings'] = content.settings || {}
         content_data['available_settings_fields'] = content.available_settings_fields
         content_data['content_type_name'] = content.content_type_name
         content_data['section_name'] = content.section_name
+        content_data['dynamic_data'] = content.dynamic_data
 
         content_data
       end
