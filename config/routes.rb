@@ -12,6 +12,15 @@ Rails.application.routes.draw do
   # API Routes
   namespace :api do
     namespace :v1 do
+      # Управление контентом страниц
+      resources :page_contents do
+        collection do
+          get 'sections'
+        end
+        member do
+          patch 'toggle_active'
+        end
+      end
       # Health check endpoint
       get 'health', to: 'health#index'
       
@@ -62,7 +71,11 @@ Rails.application.routes.draw do
       get 'users/me', to: 'users#me'
       
       # Пользователи
-      resources :users, only: [:index, :show, :create, :update, :destroy]
+      resources :users, only: [:index, :show, :create, :update, :destroy] do
+        member do
+          patch :toggle_active
+        end
+      end
       
       # Администраторы
       resources :administrators, only: [:index, :show, :create, :update, :destroy]
@@ -173,7 +186,11 @@ Rails.application.routes.draw do
       
       # Каталоги
       resources :regions, only: [:index, :show, :create, :update, :destroy]
-      resources :cities, only: [:index, :show, :create, :update, :destroy]
+      resources :cities, only: [:index, :show, :create, :update, :destroy] do
+        collection do
+          get :with_service_points
+        end
+      end
       resources :car_brands do
         resources :car_models
       end
@@ -265,6 +282,9 @@ Rails.application.routes.draw do
       resources :cancellation_reasons
       resources :regions
       resources :cities
+
+      # Маршруты для ролей пользователей
+      resources :user_roles, only: [:index, :show]
     end
   end
 end

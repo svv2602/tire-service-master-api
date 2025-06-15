@@ -2,39 +2,68 @@ module Api
   module V1
     class CitiesController < ApiController
       before_action :set_city, only: [:show, :update, :destroy]
-      before_action :authorize_admin, except: [:index, :show]
-      skip_before_action :authenticate_request, only: [:index, :show]
+      before_action :authorize_admin, except: [:index, :show, :with_service_points]
+      skip_before_action :authenticate_request, only: [:index, :show, :with_service_points]
       
       # GET /api/v1/cities
       def index
-        @cities = City.includes(:region).where(is_active: true)
-        
-        # Фильтрация по региону
-        if params[:region_id].present?
-          @cities = @cities.where(region_id: params[:region_id])
-        end
-        
-        @cities = @cities.order(:name)
-        
+        cities = City.includes(:region)
+                     .where(is_active: true)
+                     .order(:name)
+
         render json: {
-          data: @cities.as_json(include: { 
-            region: { only: [:id, :name, :code] }
-          })
+          data: cities.map do |city|
+            {
+              id: city.id,
+              name: city.name,
+              region_id: city.region_id,
+              region_name: city.region.name,
+              is_active: city.is_active
+            }
+          end,
+          total: cities.count
+        }
+      end
+      
+      # GET /api/v1/cities/with_service_points
+      def with_service_points
+        cities = City.joins(:service_points)
+                     .where(is_active: true, service_points: { is_active: true, work_status: 'working' })
+                     .includes(:region)
+                     .distinct
+                     .order(:name)
+
+        render json: {
+          data: cities.map do |city|
+            service_points_count = city.service_points.where(is_active: true, work_status: 'working').count
+            
+            {
+              id: city.id,
+              name: city.name,
+              region_id: city.region_id,
+              region_name: city.region.name,
+              service_points_count: service_points_count,
+              is_active: city.is_active
+            }
+          end,
+          total: cities.count
         }
       end
       
       # GET /api/v1/cities/:id
       def show
-        @city = City.includes(:region).find(params[:id])
+        city = City.includes(:region, :service_points).find(params[:id])
         
-        render json: @city.as_json(include: { 
-          region: { only: [:id, :name, :code] }
-        })
+        render json: {
+          id: city.id,
+          name: city.name,
+          region_id: city.region_id,
+          region_name: city.region.name,
+          service_points_count: city.service_points.where(is_active: true).count,
+          is_active: city.is_active
+        }
       rescue ActiveRecord::RecordNotFound
-        render json: { 
-          error: "Город с ID #{params[:id]} не найден",
-          message: "Город с указанным идентификатором не существует в системе."
-        }, status: :not_found
+        render json: { error: 'Город не найден' }, status: :not_found
       end
       
       # POST /api/v1/cities

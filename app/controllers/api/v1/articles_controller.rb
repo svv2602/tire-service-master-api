@@ -1,121 +1,94 @@
 module Api
   module V1
     class ArticlesController < ApiController
-      before_action :authenticate_request, except: [:index, :show, :categories]
+      skip_before_action :authenticate_request, only: [:index, :show, :categories]
       before_action :authorize_admin, except: [:index, :show, :categories]
       before_action :set_article, only: [:show, :update, :destroy]
       
       # GET /api/v1/articles
       def index
-        # Если запрашиваются черновики, требуем авторизацию
-        if params[:include_drafts].present?
-          # Проверяем авторизацию
-          if !@current_user
-            begin
-              @current_user = AuthorizeApiRequest.new(request.headers).call
-            rescue StandardError
-              render json: { 
-                error: 'Требуется авторизация',
-                message: 'Для просмотра черновиков требуется авторизация.'
-              }, status: :unauthorized
-              return
-            end
-          end
-          
-          # Проверяем права администратора
-          unless @current_user&.admin?
-            render json: { 
-              error: 'У вас нет прав для просмотра черновиков',
-              message: 'Для просмотра черновиков требуются права администратора.'
-            }, status: :forbidden
-            return
-          end
+        articles = Article.includes(:author)
+                         .where(status: 'published')
+                         .order(published_at: :desc)
+
+        # Фильтрация по категории
+        if params[:category].present?
+          articles = articles.where(category: params[:category])
         end
-        
-        @articles = Article.includes(:author)
-        
-        # Фильтрация по статусу (только админы могут видеть черновики)
-        unless params[:include_drafts].present? && @current_user&.admin?
-          @articles = @articles.published
+
+        # Фильтрация по избранным статьям
+        if params[:featured] == 'true'
+          articles = articles.where(featured: true)
         end
-        
-        # Фильтры
-        @articles = @articles.by_category(params[:category]) if params[:category].present?
-        @articles = @articles.featured if params[:featured].present?
-        @articles = @articles.search(params[:query]) if params[:query].present?
-        
-        # Сортировка
-        case params[:sort]
-        when 'popular'
-          @articles = @articles.popular
-        when 'oldest'
-          @articles = @articles.order(published_at: :asc)
-        else
-          @articles = @articles.recent
+
+        # Поиск по заголовку и содержимому
+        if params[:search].present?
+          search_term = "%#{params[:search]}%"
+          articles = articles.where(
+            "title ILIKE ? OR content ILIKE ? OR excerpt ILIKE ?", 
+            search_term, search_term, search_term
+          )
         end
-        
+
         # Пагинация
-        page = (params[:page] || 1).to_i
-        per_page = [(params[:per_page] || 12).to_i, 50].min # максимум 50 на страницу
-        
-        total_count = @articles.count
-        @articles = @articles.offset((page - 1) * per_page).limit(per_page)
-        
-        total_pages = (total_count.to_f / per_page).ceil
-        
+        page = params[:page]&.to_i || 1
+        per_page = params[:per_page]&.to_i || 10
+        per_page = [per_page, 50].min # Максимум 50 статей за раз
+
+        offset = (page - 1) * per_page
+        total = articles.count
+        articles = articles.limit(per_page).offset(offset)
+
         render json: {
-          data: @articles.map { |article| article_summary_json(article) },
+          data: articles.map do |article|
+            {
+              id: article.id,
+              title: article.title,
+              excerpt: article.excerpt,
+              category: article.category,
+              featured: article.featured,
+              reading_time: article.reading_time,
+              views_count: article.views_count,
+              author: article.author&.first_name || 'Експерт',
+              published_at: article.published_at,
+              slug: article.slug,
+              featured_image_url: article.featured_image_url,
+              tags: article.tags || []
+            }
+          end,
           meta: {
             current_page: page,
-            total_pages: total_pages,
-            total_count: total_count,
-            per_page: per_page
+            per_page: per_page,
+            total_pages: (total.to_f / per_page).ceil,
+            total_count: total
           }
         }
       end
       
       # GET /api/v1/articles/:id
       def show
-        # Проверяем что статья найдена
-        unless @article
-          render json: { 
-            error: 'Статья не найдена',
-            message: 'Запрашиваемая статья не существует.'
-          }, status: :not_found
-          return
-        end
-        
-        # Если это черновик, требуем аутентификацию
-        if @article.draft?
-          # Если пользователь не авторизован, пытаемся авторизовать
-          unless @current_user
-            begin
-              @current_user = AuthorizeApiRequest.new(request.headers).call
-            rescue StandardError
-              render json: { 
-                error: 'Статья не найдена',
-                message: 'Запрашиваемая статья не существует или недоступна.'
-              }, status: :not_found
-              return
-            end
-          end
-          
-          # Если все еще не авторизован или не админ, возвращаем 404
-          unless @current_user&.admin?
-            render json: { 
-              error: 'Статья не найдена',
-              message: 'Запрашиваемая статья не существует или недоступна.'
-            }, status: :not_found
-            return
-          end
-        end
-        
-        # Увеличиваем счетчик просмотров (не для админов при предпросмотре)
-        unless @current_user&.admin? && params[:preview].present?
-          @article.increment_views!
-        end
-        
-        render json: article_full_json(@article)
+        # Увеличиваем счетчик просмотров
+        @article.increment!(:views_count)
+
+        render json: {
+          id: @article.id,
+          title: @article.title,
+          content: @article.content,
+          excerpt: @article.excerpt,
+          category: @article.category,
+          featured: @article.featured,
+          reading_time: @article.reading_time,
+          views_count: @article.views_count,
+          author: @article.author&.first_name || 'Експерт',
+          published_at: @article.published_at,
+          slug: @article.slug,
+          featured_image_url: @article.featured_image_url,
+          gallery_images: @article.gallery_images || [],
+          tags: @article.tags || [],
+          meta_title: @article.meta_title,
+          meta_description: @article.meta_description,
+          allow_comments: @article.allow_comments
+        }
       end
       
       # POST /api/v1/articles
@@ -157,7 +130,19 @@ module Api
       
       # GET /api/v1/articles/categories
       def categories
-        render json: Article.categories_list
+        categories_with_counts = Article.where(status: 'published')
+                                       .group(:category)
+                                       .count
+
+        categories_data = categories_with_counts.map do |category, count|
+          {
+            name: category,
+            count: count,
+            display_name: translate_category(category)
+          }
+        end.sort_by { |cat| cat[:display_name] }
+
+        render json: { data: categories_data }
       end
       
       # GET /api/v1/articles/popular
@@ -191,9 +176,9 @@ module Api
       private
       
       def set_article
-        @article = Article.find_by(slug: params[:id]) || Article.find(params[:id])
+        @article = Article.find_by!(slug: params[:id]) || Article.find(params[:id])
       rescue ActiveRecord::RecordNotFound
-        @article = nil
+        render json: { error: 'Стаття не знайдена' }, status: :not_found
       end
       
       def article_params
@@ -249,6 +234,19 @@ module Api
           allow_comments: article.allow_comments,
           updated_at: article.updated_at
         )
+      end
+      
+      def translate_category(category)
+        translations = {
+          'tips' => 'Поради',
+          'maintenance' => 'Обслуговування',
+          'safety' => 'Безпека',
+          'reviews' => 'Огляди',
+          'news' => 'Новини',
+          'selection' => 'Вибір шин'
+        }
+        
+        translations[category] || category.humanize
       end
     end
   end

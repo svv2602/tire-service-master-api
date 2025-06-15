@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_13_055815) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_14_190808) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -301,6 +301,23 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_13_055815) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_operators_on_user_id"
+  end
+
+  create_table "page_contents", force: :cascade do |t|
+    t.string "section"
+    t.string "content_type"
+    t.text "title"
+    t.text "content"
+    t.text "image_url"
+    t.text "settings"
+    t.integer "position"
+    t.boolean "active"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "language", default: "uk", null: false
+    t.index ["content_type", "language"], name: "index_page_contents_on_content_type_and_language"
+    t.index ["language"], name: "index_page_contents_on_language"
+    t.index ["section", "language"], name: "index_page_contents_on_section_and_language"
   end
 
   create_table "partners", force: :cascade do |t|

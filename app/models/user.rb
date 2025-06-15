@@ -56,6 +56,10 @@ class User < ApplicationRecord
     role&.name == 'admin'
   end
   
+  def super_admin?
+    admin? && administrator&.access_level.to_i >= 10
+  end
+  
   def partner?
     role&.name == 'partner'
   end
