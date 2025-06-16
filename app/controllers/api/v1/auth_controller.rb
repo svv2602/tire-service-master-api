@@ -14,14 +14,23 @@ module Api
           access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
           refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
           
+          # Устанавливаем refresh токен в HttpOnly куки
+          cookies.encrypted[:refresh_token] = {
+            value: refresh_token,
+            httponly: true,
+            secure: Rails.env.production?,
+            same_site: :strict,
+            expires: 30.days.from_now
+          }
+          
           # Создаем пользовательский JSON с добавлением роли
           user_json = user.as_json(only: [:id, :email, :first_name, :last_name, :is_active])
           user_json['role'] = user.role.name if user.role
           
           render json: { 
             tokens: { 
-              access: access_token,
-              refresh: refresh_token
+              access: access_token
+              # Не отправляем refresh токен в JSON ответе, так как он теперь в куки
             },
             user: user_json
           }
@@ -34,17 +43,21 @@ module Api
       # Обновление токена доступа
       def refresh
         begin
-          refresh_token = request.headers['Refresh-Token'] || params[:refresh_token]
+          # Получаем refresh токен из куки вместо заголовка
+          refresh_token = cookies.encrypted[:refresh_token]
+          
           raise Auth::TokenInvalidError, 'Refresh token is required' if refresh_token.blank?
           
           access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
           render json: { 
             tokens: { 
-              access: access_token,
-              refresh: refresh_token
+              access: access_token
+              # Refresh токен остается в куки
             }
           }
         rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
+          # Удаляем куки при ошибке
+          cookies.delete(:refresh_token)
           render json: { error: e.message }, status: :unauthorized
         end
       end
@@ -52,7 +65,8 @@ module Api
       # POST /api/v1/auth/logout
       # Универсальный выход из системы
       def logout
-        # В JWT нет server-side логаута, токен просто перестают использовать на клиенте
+        # Удаляем куки при выходе
+        cookies.delete(:refresh_token)
         render json: { message: 'Выход выполнен успешно' }, status: :ok
       end
 

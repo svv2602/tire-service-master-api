@@ -21,8 +21,18 @@ class Api::V1::ClientAuthController < ApplicationController
         # Создаем клиента вручную, если он не был создан автоматически
         client = user.client || Client.create!(user: user, preferred_notification_method: 'email')
         
-        # Генерируем JWT токен
-        token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+        # Генерируем JWT токены
+        access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+        refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
+        
+        # Устанавливаем refresh токен в HttpOnly куки
+        cookies.encrypted[:refresh_token] = {
+          value: refresh_token,
+          httponly: true,
+          secure: Rails.env.production?,
+          same_site: :strict,
+          expires: 30.days.from_now
+        }
         
         # Возвращаем ответ в формате, соответствующем тестам
         render json: {
@@ -30,8 +40,8 @@ class Api::V1::ClientAuthController < ApplicationController
           user: user.as_json(only: [:id, :email, :first_name, :last_name, :phone]),
           client: client.as_json(only: [:id, :preferred_notification_method]),
           tokens: {
-            access: token,
-            refresh: token # В данной реализации используем тот же токен для refresh
+            access: access_token
+            # Refresh токен теперь в куки
           }
         }, status: :created
       else
@@ -79,8 +89,18 @@ class Api::V1::ClientAuthController < ApplicationController
       # Обновляем время последнего входа
       user.update_last_login!
 
-      # Генерируем JWT токен
-      token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+      # Генерируем JWT токены
+      access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+      refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
+      
+      # Устанавливаем refresh токен в HttpOnly куки
+      cookies.encrypted[:refresh_token] = {
+        value: refresh_token,
+        httponly: true,
+        secure: Rails.env.production?,
+        same_site: :strict,
+        expires: 30.days.from_now
+      }
 
       # Возвращаем ответ в формате, соответствующем тестам
       render json: {
@@ -93,7 +113,8 @@ class Api::V1::ClientAuthController < ApplicationController
           role: user.role.name
         },
         tokens: {
-          access: token
+          access: access_token
+          # Refresh токен теперь в куки
         },
         message: 'Вход выполнен успешно'
       }, status: :ok
@@ -104,9 +125,10 @@ class Api::V1::ClientAuthController < ApplicationController
   end
 
   # POST /api/v1/clients/logout
-  # Выход из системы (для полноты API, на стороне клиента просто удаляется токен)
+  # Выход из системы
   def logout
-    # В JWT нет server-side логаута, токен просто перестают использовать на клиенте
+    # Удаляем куки при выходе
+    cookies.delete(:refresh_token)
     render json: { message: 'Выход выполнен успешно' }, status: :ok
   end
 
