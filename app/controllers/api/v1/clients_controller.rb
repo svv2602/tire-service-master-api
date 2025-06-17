@@ -247,32 +247,63 @@ module Api
       def update
         authorize @client
         
+        puts "🔍 CLIENT UPDATE DEBUG:"
+        puts "  Current user: #{current_user&.email} (role: #{current_user&.role&.name})"
+        puts "  Client ID: #{@client.id}"
+        puts "  Client user ID: #{@client.user_id}"
+        puts "  Received params: #{params.inspect}"
+        puts "  User update params: #{client_user_update_params.inspect}"
+        puts "  Client update params: #{client_update_params.inspect}"
+        
         old_values = @client.as_json
         
         Client.transaction do
-          @client.user.update!(client_user_update_params) if client_user_update_params.present?
-          @client.update!(client_update_params) if client_update_params.present?
+          if client_user_update_params.present?
+            puts "  Updating user with: #{client_user_update_params.inspect}"
+            @client.user.update!(client_user_update_params)
+          end
+          
+          if client_update_params.present?
+            puts "  Updating client with: #{client_update_params.inspect}"
+            @client.update!(client_update_params)
+          end
         end
         
+        puts "  ✅ Update successful"
         log_action('update', 'client', @client.id, old_values, @client.as_json)
         render json: @client, status: :ok
         
       rescue ActiveRecord::RecordInvalid => e
+        puts "  ❌ Validation error: #{e.record.errors.full_messages}"
         render json: { errors: e.record.errors }, status: :unprocessable_entity
+      rescue => e
+        puts "  ❌ General error: #{e.message}"
+        render json: { error: e.message }, status: :internal_server_error
       end
       
       # DELETE /api/v1/clients/:id
       def destroy
         authorize @client
         
+        puts "🔍 CLIENT DELETE DEBUG:"
+        puts "  Current user: #{current_user&.email} (role: #{current_user&.role&.name})"
+        puts "  Client ID: #{@client.id}"
+        puts "  Client user ID: #{@client.user_id}"
+        puts "  Client user active: #{@client.user.is_active}"
+        
         old_values = @client.as_json
         
         if @client.user.update(is_active: false)
+          puts "  ✅ Client deactivated successfully"
           log_action('deactivate', 'client', @client.id, old_values, @client.as_json)
           render json: { message: 'Client deactivated successfully' }
         else
+          puts "  ❌ Failed to deactivate client: #{@client.user.errors.full_messages}"
           render json: { errors: @client.user.errors }, status: :unprocessable_entity
         end
+      rescue => e
+        puts "  ❌ General error in delete: #{e.message}"
+        render json: { error: e.message }, status: :internal_server_error
       end
       
       private
@@ -286,7 +317,7 @@ module Api
       end
       
       def client_user_update_params
-        params.fetch(:user, {}).permit(:email, :phone, :password, :password_confirmation, :first_name, :last_name, :middle_name)
+        params.fetch(:user, {}).permit(:email, :phone, :password, :password_confirmation, :first_name, :last_name, :middle_name, :is_active)
       end
       
       def client_params
