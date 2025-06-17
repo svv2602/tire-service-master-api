@@ -29,7 +29,7 @@ module Api
         if @partners.empty?
           render json: {
             data: [],
-            meta: {
+            pagination: {
               current_page: page,
               total_pages: 0,
               total_count: 0,
@@ -43,7 +43,7 @@ module Api
         
         render json: {
           data: @partners.as_json(include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } }),
-          meta: {
+          pagination: {
             current_page: page,
             total_pages: total_pages,
             total_count: total_count,
