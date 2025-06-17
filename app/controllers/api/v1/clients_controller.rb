@@ -20,6 +20,11 @@ module Api
           )
         end
         
+        # Фильтрация по активности
+        if params[:active].present?
+          @clients = @clients.joins(:user).where(users: { is_active: params[:active] == 'true' })
+        end
+        
         paginated_data = paginate(@clients)
         
         render json: {
