@@ -12,6 +12,7 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
             'localhost:5173', '127.0.0.1:5173',
             'localhost:8080', '127.0.0.1:8080',
             'localhost:3008', '127.0.0.1:3008',
+            'localhost:8000', '127.0.0.1:8000',
             '192.168.9.109:3008'
 
     resource "*",
