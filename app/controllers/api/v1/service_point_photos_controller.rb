@@ -22,18 +22,34 @@ module Api
       def create
         authorize @service_point, :update?
         
+        Rails.logger.info "=== ServicePointPhotosController#create ==="
+        Rails.logger.info "Params: #{params.inspect}"
+        Rails.logger.info "Request content type: #{request.content_type}"
+        Rails.logger.info "Request headers: #{request.headers.env.select { |k, v| k.start_with?('HTTP_') }}"
+        Rails.logger.info "File param present: #{params[:file].present?}"
+        Rails.logger.info "File param class: #{params[:file].class}" if params[:file].present?
+        
         @photo = @service_point.photos.new(photo_params)
         
         # Прикрепляем файл ДО сохранения, чтобы прошла валидация presence: true
         if params[:file].present?
+          Rails.logger.info "Attaching file: #{params[:file].original_filename}"
           @photo.file.attach(params[:file])
+        else
+          Rails.logger.error "No file parameter found in request"
         end
         
         if @photo.save
+          Rails.logger.info "Photo saved successfully with ID: #{@photo.id}"
           render json: photo_json(@photo), status: :created
         else
+          Rails.logger.error "Photo save failed: #{@photo.errors.full_messages}"
           render json: { errors: @photo.errors }, status: :unprocessable_entity
         end
+      rescue => e
+        Rails.logger.error "Exception in create: #{e.class}: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
+        render json: { error: "Internal server error: #{e.message}" }, status: :internal_server_error
       end
       
       # PATCH/PUT /api/v1/service_points/:service_point_id/photos/:id
