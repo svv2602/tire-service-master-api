@@ -14,14 +14,23 @@ module Api
         header = request.headers['Authorization']
         token = header.split(' ').last if header
         
+        Rails.logger.info "BaseController#authenticate_request: Authorization header: #{header}"
+        Rails.logger.info "BaseController#authenticate_request: Token from header: #{token}"
+        
         # Если токена нет в заголовке, пытаемся получить из encrypted cookies
         if token.blank?
+          Rails.logger.info "BaseController#authenticate_request: Trying to get token from cookies"
+          Rails.logger.info "BaseController#authenticate_request: Available cookies: #{cookies.keys}"
+          Rails.logger.info "BaseController#authenticate_request: Raw access_token cookie: #{request.cookies['access_token']}"
+          
           token = cookies.encrypted[:access_token]
+          Rails.logger.info "BaseController#authenticate_request: Decrypted token: #{token ? 'present' : 'nil'}"
         end
         
         # Если токен все еще отсутствует, возвращаем ошибку
         if token.blank?
-          render json: { error: 'Токен отсутствует' }, status: :unauthorized
+          Rails.logger.error "BaseController#authenticate_request: No token found"
+          render json: { error: 'Токен не предоставлен' }, status: :unauthorized
           return
         end
         
