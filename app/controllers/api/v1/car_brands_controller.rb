@@ -41,26 +41,54 @@ module Api
       
       # POST /api/v1/car_brands
       def create
+        Rails.logger.info "=== CarBrandsController#create ==="
+        Rails.logger.info "Content Type: #{request.content_type}"
+        Rails.logger.info "Raw params: #{params.inspect}"
+        
         @car_brand = CarBrand.new(car_brand_params)
         
         if @car_brand.save
+          Rails.logger.info "Brand created successfully: #{@car_brand.id}"
           render json: brand_json(@car_brand), status: :created
         else
+          Rails.logger.error "Brand creation failed: #{@car_brand.errors.full_messages}"
           render json: { errors: @car_brand.errors }, status: :unprocessable_entity
         end
+      rescue => e
+        Rails.logger.error "Error in create: #{e.class}: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
+        render json: { error: "Internal server error: #{e.message}" }, status: :internal_server_error
       end
       
       # PUT /api/v1/car_brands/:id
       def update
-        if params[:car_brand][:logo] == 'null'
+        Rails.logger.info "=== CarBrandsController#update ==="
+        Rails.logger.info "Content Type: #{request.content_type}"
+        Rails.logger.info "Raw params: #{params.inspect}"
+        Rails.logger.info "car_brand params: #{params[:car_brand].inspect}"
+        
+        # Обрабатываем удаление логотипа
+        if params[:car_brand]&.dig(:logo) == 'null' || params[:car_brand]&.dig(:logo) == nil
+          Rails.logger.info "Removing logo"
           @car_brand.logo.purge if @car_brand.logo.attached?
         end
 
+        # Проверяем, есть ли новый файл логотипа
+        if params[:car_brand]&.dig(:logo).respond_to?(:read)
+          Rails.logger.info "New logo file detected: #{params[:car_brand][:logo].original_filename}"
+        end
+
         if @car_brand.update(car_brand_params)
+          Rails.logger.info "Brand updated successfully"
           render json: brand_json(@car_brand)
         else
+          Rails.logger.error "Brand update failed: #{@car_brand.errors.full_messages}"
           render json: { errors: @car_brand.errors }, status: :unprocessable_entity
         end
+      rescue => e
+        Rails.logger.error "Error in update: #{e.class}: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
+        render json: { error: "Internal server error: #{e.message}" }, status: :internal_server_error
       end
       
       # DELETE /api/v1/car_brands/:id
@@ -81,7 +109,14 @@ module Api
       end
       
       def car_brand_params
-        params.require(:car_brand).permit(:name, :logo, :is_active)
+        permitted_params = params.require(:car_brand).permit(:name, :logo, :is_active)
+        
+        # Если логотип пустой или null, исключаем его из параметров
+        if permitted_params[:logo].blank? || permitted_params[:logo] == 'null'
+          permitted_params.except(:logo)
+        else
+          permitted_params
+        end
       end
       
       def authorize_admin

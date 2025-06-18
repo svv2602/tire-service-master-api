@@ -9,6 +9,7 @@ class ApplicationController < ActionController::API
   rescue_from ActiveRecord::RecordNotFound, with: :not_found
   rescue_from ActiveRecord::RecordInvalid, with: :unprocessable_entity
   rescue_from Pundit::NotAuthorizedError, with: :forbidden
+  rescue_from ActionDispatch::Http::Parameters::ParseError, with: :bad_request
   
   # Аутентификация и авторизация
   before_action :authenticate_request
@@ -75,6 +76,10 @@ class ApplicationController < ActionController::API
   
   def forbidden
     render json: { error: 'Forbidden' }, status: :forbidden
+  end
+  
+  def bad_request
+    render json: { error: 'Bad request - malformed parameters' }, status: :bad_request
   end
   
   def json_request?
