@@ -24,6 +24,7 @@ module Api
         
         @photo = @service_point.photos.new(photo_params)
         
+        # Прикрепляем файл ДО сохранения, чтобы прошла валидация presence: true
         if params[:file].present?
           @photo.file.attach(params[:file])
         end
@@ -73,7 +74,7 @@ module Api
       end
       
       def photo_params
-        params.permit(:sort_order, :description, :is_main)
+        params.permit(:sort_order, :description, :is_main, :file)
       end
       
       def photo_update_params
