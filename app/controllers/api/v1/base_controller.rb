@@ -10,8 +10,20 @@ module Api
       private
 
       def authenticate_request
+        # Пытаемся получить токен из заголовка Authorization
         header = request.headers['Authorization']
         token = header.split(' ').last if header
+        
+        # Если токена нет в заголовке, пытаемся получить из encrypted cookies
+        if token.blank?
+          token = cookies.encrypted[:access_token]
+        end
+        
+        # Если токен все еще отсутствует, возвращаем ошибку
+        if token.blank?
+          render json: { error: 'Токен отсутствует' }, status: :unauthorized
+          return
+        end
         
         begin
           decoded = Auth::JsonWebToken.decode(token)
@@ -19,6 +31,8 @@ module Api
         rescue ActiveRecord::RecordNotFound => e
           render json: { error: 'Пользователь не найден' }, status: :unauthorized
         rescue JWT::DecodeError => e
+          render json: { error: 'Неверный токен' }, status: :unauthorized
+        rescue Auth::TokenInvalidError => e
           render json: { error: 'Неверный токен' }, status: :unauthorized
         end
       end
