@@ -79,7 +79,7 @@ module Api
       
       def car_params
         params.require(:car).permit(
-          :brand_id, :model_id, :year, :registration_number, :vin,
+          :brand_id, :model_id, :year, :registration_number,
           :tire_r, :tire_width, :tire_height, :name, :is_active
         )
       end
