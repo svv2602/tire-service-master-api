@@ -1,13 +1,8 @@
 class BookingSerializer < ActiveModel::Serializer
-  attributes :id, :booking_date, :start_time, :end_time, :status, :payment_status,
-             :cancellation_reason, :cancellation_comment, :total_price, :payment_method,
-             :notes, :created_at, :updated_at, :car_type, :client, :service_point, :car
-  
-  belongs_to :client
-  belongs_to :service_point
-  belongs_to :car, optional: true
-  belongs_to :car_type
-  has_many :booking_services
+  attributes :id, :client_id, :service_point_id, :car_id, :booking_date, :start_time, :end_time, 
+             :status_id, :payment_status_id, :cancellation_reason_id, :cancellation_comment, 
+             :total_price, :payment_method, :notes, :created_at, :updated_at, :car_type_id,
+             :status, :payment_status, :service_point, :client, :car_type, :car
   
   def status
     # In Swagger dry run mode, or if status is nil, provide a default
@@ -87,7 +82,7 @@ class BookingSerializer < ActiveModel::Serializer
     if object.client && object.client.user
       {
         id: object.client.id,
-        name: object.client.user.full_name,
+        name: object.client.user.full_name || "#{object.client.user.first_name} #{object.client.user.last_name}",
         phone: object.client.user.phone,
         email: object.client.user.email
       }
@@ -123,8 +118,8 @@ class BookingSerializer < ActiveModel::Serializer
     if object.car
       {
         id: object.car.id,
-        brand: object.car.brand,
-        model: object.car.model,
+        brand: object.car.brand&.name,
+        model: object.car.model&.name,
         year: object.car.year
       }
     else

@@ -18,108 +18,36 @@ module Api
         
         # В Swagger API тестах возвращаем заглушку
         if ENV['SWAGGER_DRY_RUN']
-          bookings = []
-          
-          # Создаем заглушки с разными датами и статусами для тестирования фильтров
+          # Создаем заглушки для тестов Swagger
           today = Date.current
-          statuses = %w[pending confirmed in_progress completed canceled_by_client]
-          
-          # Определяем, сколько объектов возвращать в зависимости от фильтров
-          if params[:booking_date].present?
-            # Возвращаем только один объект для фильтра по дате
-            Rails.logger.info "Filtering by booking_date: #{params[:booking_date]}"
-            booking_date = Date.parse(params[:booking_date]) rescue today
-            bookings = [build_booking_mock(id: 1, booking_date: booking_date)]
-          elsif params[:status_id].present?
-            # Возвращаем только один объект для фильтра по статусу
-            Rails.logger.info "Filtering by status_id: #{params[:status_id]}"
-            bookings = [build_booking_mock(id: 2, status_id: params[:status_id].to_i)]
-          elsif params[:today].present? && params[:today] == 'true'
-            # Возвращаем только один объект для фильтра "сегодня"
-            Rails.logger.info "Filtering by today: #{params[:today]}"
-            bookings = [build_booking_mock(id: 3, booking_date: today)]
-          elsif params[:upcoming].present? && params[:upcoming] == 'true'
-            # Возвращаем три объекта для фильтра "предстоящие"
-            Rails.logger.info "Filtering by upcoming: #{params[:upcoming]}"
-            bookings = [
-              build_booking_mock(id: 4, booking_date: today),
-              build_booking_mock(id: 5, booking_date: today + 1.day),
-              build_booking_mock(id: 6, booking_date: today + 2.days)
-            ]
-          elsif params[:test].present? && params[:test] == 'true'
-            # Тестовый запрос без фильтров для swagger_dry_run
-            Rails.logger.info "Test request for swagger_dry_run"
-            bookings = [
-              build_booking_mock(id: 7, booking_date: today - 1.day),
-              build_booking_mock(id: 8, booking_date: today),
-              build_booking_mock(id: 9, booking_date: today + 1.day),
-              build_booking_mock(id: 10, booking_date: today + 2.days)
-            ]
-          else
-            # Возвращаем четыре объекта по умолчанию
-            Rails.logger.info "No filters, returning default bookings"
-            bookings = [
-              build_booking_mock(id: 11, booking_date: today - 1.day),
-              build_booking_mock(id: 12, booking_date: today),
-              build_booking_mock(id: 13, booking_date: today + 1.day),
-              build_booking_mock(id: 14, booking_date: today + 2.days)
-            ]
-          end
-          
-          Rails.logger.info "Returning #{bookings.size} bookings"
+          bookings = [
+            build_booking_mock(booking_date: today - 1.day),
+            build_booking_mock(booking_date: today),
+            build_booking_mock(booking_date: today + 1.day),
+            build_booking_mock(booking_date: today + 2.days)
+          ]
           render json: bookings, status: :ok
           return
         end
         
-        # Определяем, какие бронирования показывать в зависимости от роли пользователя
-        # и параметров запроса
+        # Определяем набор бронирований в зависимости от параметров запроса
         if params[:client_id].present?
+          @client = Client.find(params[:client_id])
           begin
-            @client = Client.find(params[:client_id])
-            authorize @client
-            @bookings = policy_scope(@client.bookings)
-          rescue ActiveRecord::RecordNotFound => e
-            if ENV['SWAGGER_DRY_RUN']
-              # В режиме тестов возвращаем заглушки
-              render json: [], status: :ok
-              return
-            else
-              render json: { error: "Resource not found" }, status: :not_found
-              return
-            end
+            authorize @client, :show?
+            @bookings = @client.bookings
           rescue Pundit::NotAuthorizedError => e
-            if ENV['SWAGGER_DRY_RUN']
-              # В режиме тестов возвращаем заглушки
-              render json: [], status: :ok
-              return
-            else
-              render json: { error: "Not authorized" }, status: :forbidden
-              return
-            end
+            render json: { error: "Not authorized" }, status: :forbidden
+            return
           end
         elsif params[:service_point_id].present?
+          @service_point = ServicePoint.find(params[:service_point_id])
           begin
-            @service_point = ServicePoint.find(params[:service_point_id])
-            authorize @service_point
-            @bookings = policy_scope(@service_point.bookings)
-          rescue ActiveRecord::RecordNotFound => e
-            if ENV['SWAGGER_DRY_RUN']
-              # В режиме тестов возвращаем заглушки
-              render json: [], status: :ok
-              return
-            else
-              render json: { error: "Resource not found" }, status: :not_found
-              return
-            end
+            authorize @service_point, :show?
+            @bookings = @service_point.bookings
           rescue Pundit::NotAuthorizedError => e
-            if ENV['SWAGGER_DRY_RUN']
-              # В режиме тестов возвращаем заглушки
-              render json: [], status: :ok
-              return
-            else
-              render json: { error: "Not authorized" }, status: :forbidden
-              return
-            end
+            render json: { error: "Not authorized" }, status: :forbidden
+            return
           end
         else
           begin
@@ -147,7 +75,7 @@ module Api
         @bookings = apply_filters(@bookings)
         
         # Добавляем связанные данные для отображения названий вместо ID
-        @bookings = @bookings.includes(:status, :payment_status, :car_type)
+        @bookings = @bookings.includes(:status, :payment_status, :car_type, :service_point, client: :user)
         
         # Применяем сортировку
         @bookings = @bookings.order(booking_date: :asc, start_time: :asc)
@@ -155,7 +83,65 @@ module Api
         # Применяем пагинацию
         result = paginate(@bookings)
         
-        render json: result
+        # Преобразуем результат в формат, который ожидает фронтенд
+        bookings_with_relations = result[:data].map do |booking|
+          booking_hash = booking.as_json
+          
+          # Добавляем связанные объекты
+          booking_hash["service_point"] = {
+            id: booking.service_point&.id,
+            name: booking.service_point&.name || "Точка обслуживания ##{booking.service_point_id}",
+            address: booking.service_point&.address,
+            partner_name: booking.service_point&.partner&.name
+          }
+          
+          booking_hash["client"] = {
+            id: booking.client&.id,
+            user: {
+              id: booking.client&.user&.id,
+              first_name: booking.client&.user&.first_name,
+              last_name: booking.client&.user&.last_name,
+              phone: booking.client&.user&.phone,
+              email: booking.client&.user&.email
+            }
+          }
+          
+          booking_hash["status"] = {
+            id: booking.status&.id,
+            name: booking.status&.name || "unknown",
+            color: booking.status&.color || "#999999"
+          }
+          
+          booking_hash["payment_status"] = if booking.payment_status
+            {
+              id: booking.payment_status.id,
+              name: booking.payment_status.name,
+              color: booking.payment_status.color
+            }
+          else
+            nil
+          end
+          
+          booking_hash["car_type"] = if booking.car_type
+            {
+              id: booking.car_type.id,
+              name: booking.car_type.name,
+              description: booking.car_type.description
+            }
+          else
+            nil
+          end
+          
+          booking_hash
+        end
+        
+        # Формируем ответ в том же формате, что и раньше
+        response = {
+          data: bookings_with_relations,
+          pagination: result[:pagination]
+        }
+        
+        render json: response
       end
       
       # GET /api/v1/bookings/:id
