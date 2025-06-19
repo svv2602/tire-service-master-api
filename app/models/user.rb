@@ -18,8 +18,8 @@ class User < ApplicationRecord
   has_many :notification_settings, dependent: :destroy
   
   # Валидации
-  validates :email, presence: true, uniqueness: { case_sensitive: false }, format: { with: URI::MailTo::EMAIL_REGEXP }
-  validates :phone, uniqueness: true, allow_blank: true
+  validates :email, uniqueness: { case_sensitive: false, allow_blank: true }, format: { with: URI::MailTo::EMAIL_REGEXP, allow_blank: true }
+  validates :phone, uniqueness: true, presence: true
   validates :role_id, presence: true
   validates :first_name, presence: true, length: { minimum: 2, maximum: 50 }
   validates :last_name, presence: true, length: { minimum: 2, maximum: 50 }

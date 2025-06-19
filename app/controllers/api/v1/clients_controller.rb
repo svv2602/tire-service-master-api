@@ -46,20 +46,39 @@ module Api
       def create
         authorize Client
         
-        User.transaction do
-          @user = User.new(client_user_params)
-          @user.role = UserRole.find_by(name: 'client')
-          @user.save!
+        begin
+          ActiveRecord::Base.transaction do
+            puts "🔍 CLIENT CREATE DEBUG:"
+            puts "  User params: #{client_user_params.inspect}"
+            puts "  Client params: #{client_params.inspect}"
+            
+            @user = User.new(client_user_params)
+            @user.role = UserRole.find_by(name: 'client')
+            @user.save!
+            
+            # Клиент уже создан через коллбэк в модели User
+            @client = @user.client
+            
+            # Если есть параметры client, обновляем существующий клиент
+            if params[:client].present?
+              puts "  Updating client with: #{client_params.inspect}"
+              unless @client.update(client_params)
+                puts "  ❌ Client update failed: #{@client.errors.full_messages}"
+                raise ActiveRecord::RecordInvalid.new(@client)
+              end
+            end
+            
+            puts "  ✅ Client created successfully: ID=#{@client.id}"
+          end
           
-          @client = Client.new(client_params)
-          @client.user = @user
-          @client.save!
+          render json: @client, status: :created
+        rescue ActiveRecord::RecordInvalid => e
+          puts "  ❌ Validation error: #{e.record.errors.full_messages}"
+          render json: { errors: e.record.errors }, status: :unprocessable_entity
+        rescue => e
+          puts "  ❌ General error: #{e.message}"
+          render json: { error: e.message }, status: :unprocessable_entity
         end
-        
-        render json: @client, status: :created
-        
-      rescue ActiveRecord::RecordInvalid => e
-        render json: { errors: e.record.errors }, status: :unprocessable_entity
       end
       
       # POST /api/v1/clients/register
@@ -326,13 +345,10 @@ module Api
       end
       
       def client_params
-        params.require(:client).permit(
-          :email,
-          :password,
-          :password_confirmation,
-          :first_name,
-          :last_name,
-          :role_id
+        # Разрешаем параметры client для создания клиента
+        params.fetch(:client, {}).permit(
+          :preferred_notification_method,
+          :marketing_consent
         )
       end
       

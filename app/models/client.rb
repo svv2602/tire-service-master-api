@@ -9,7 +9,7 @@ class Client < ApplicationRecord
   
   # Валидации
   validates :user_id, presence: true, uniqueness: true
-  validates :preferred_notification_method, inclusion: { in: ['push', 'email', 'sms'] }
+  validates :preferred_notification_method, inclusion: { in: ['push', 'email', 'sms'] }, allow_nil: true
   
   # Методы
   def primary_car
