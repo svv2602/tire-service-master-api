@@ -1,16 +1,19 @@
 # Create car types
 puts "Creating car types..."
 car_types = [
-  { name: 'Sedan', description: 'A standard passenger car with a separate trunk', is_active: true },
-  { name: 'Hatchback', description: 'A car with a rear door that opens upward, similar to a sedan but with a trunk integrated into the passenger compartment', is_active: true },
-  { name: 'SUV', description: 'Sport Utility Vehicle, combines features of road-going passenger cars with off-road vehicles', is_active: true },
-  { name: 'Crossover', description: 'A vehicle with the design elements of an SUV but based on a passenger car platform', is_active: true },
-  { name: 'Pickup', description: 'A light-duty truck with an open cargo area in the rear', is_active: true },
-  { name: 'Minivan', description: 'A van designed for passenger use, with two or three rows of seating', is_active: true },
-  { name: 'Coupe', description: 'A two-door car with a fixed roof and sloping rear', is_active: true },
-  { name: 'Convertible', description: 'A car with a folding or removable roof', is_active: true },
-  { name: 'Wagon', description: 'A car with an extended cargo area, similar to a hatchback but with more cargo space', is_active: true },
-  { name: 'Van', description: 'A type of road vehicle used for transporting goods or people', is_active: true }
+  { name: 'Седан', description: 'Стандартный легковой автомобиль с отдельным багажником', is_active: true },
+  { name: 'Хэтчбек', description: 'Автомобиль с задней дверью, открывающейся вверх, багажник интегрирован в пассажирский салон', is_active: true },
+  { name: 'Внедорожник', description: 'Спортивно-утилитарный автомобиль, сочетающий характеристики легкового автомобиля и внедорожника', is_active: true },
+  { name: 'Кроссовер', description: 'Автомобиль с элементами дизайна внедорожника, но построенный на платформе легкового автомобиля', is_active: true },
+  { name: 'Пикап', description: 'Легкий грузовик с открытой грузовой площадкой сзади', is_active: true },
+  { name: 'Минивэн', description: 'Микроавтобус для пассажирских перевозок с двумя или тремя рядами сидений', is_active: true },
+  { name: 'Купе', description: 'Двухдверный автомобиль с фиксированной крышей и покатой задней частью', is_active: true },
+  { name: 'Кабриолет', description: 'Автомобиль со складывающейся или съемной крышей', is_active: true },
+  { name: 'Универсал', description: 'Автомобиль с расширенной грузовой зоной, похожий на хэтчбек, но с большим грузовым пространством', is_active: true },
+  { name: 'Фургон', description: 'Тип дорожного транспортного средства для перевозки товаров или людей', is_active: true },
+  { name: 'Легкий коммерческий транспорт', description: 'Коммерческие автомобили для перевозки грузов и пассажиров (Газель, Форд Транзит, Ивеко Дейли)', is_active: true },
+  { name: 'Малотоннажный грузовик', description: 'Грузовые автомобили грузоподъемностью до 3,5 тонн', is_active: true },
+  { name: 'Микроавтобус', description: 'Автобус малой вместимости для перевозки до 20 пассажиров', is_active: true }
 ]
 
 car_types.each do |car_type|

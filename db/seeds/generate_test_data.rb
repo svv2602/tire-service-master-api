@@ -80,10 +80,12 @@ end
 if CarType.count == 0
   puts "Создание типов автомобилей..."
   
-  CarType.create!(name: "Легковой", is_active: true)
-  CarType.create!(name: "Внедорожник", is_active: true)
-  CarType.create!(name: "Грузовой", is_active: true)
-  CarType.create!(name: "Минивэн", is_active: true)
+  CarType.create!(name: "Седан", description: "Стандартный легковой автомобиль с отдельным багажником", is_active: true)
+  CarType.create!(name: "Внедорожник", description: "Спортивно-утилитарный автомобиль, сочетающий характеристики легкового автомобиля и внедорожника", is_active: true)
+  CarType.create!(name: "Хэтчбек", description: "Автомобиль с задней дверью, открывающейся вверх, багажник интегрирован в пассажирский салон", is_active: true)
+  CarType.create!(name: "Кроссовер", description: "Автомобиль с элементами дизайна внедорожника, но построенный на платформе легкового автомобиля", is_active: true)
+  CarType.create!(name: "Минивэн", description: "Микроавтобус для пассажирских перевозок с двумя или тремя рядами сидений", is_active: true)
+  CarType.create!(name: "Пикап", description: "Легкий грузовик с открытой грузовой площадкой сзади", is_active: true)
   
   puts "Создано типов автомобилей: #{CarType.count}"
 end
