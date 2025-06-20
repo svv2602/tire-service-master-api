@@ -90,7 +90,27 @@ class DynamicAvailabilityService
     
     start_time = Time.parse("#{date} #{opening_time_str}")
     end_time = Time.parse("#{date} #{closing_time_str}")
-    total_posts = service_point.posts_count
+    
+    # Получаем количество активных постов, работающих в этот день
+    day_key = case date.wday
+    when 0 then 'sunday'
+    when 1 then 'monday'
+    when 2 then 'tuesday'
+    when 3 then 'wednesday'
+    when 4 then 'thursday'
+    when 5 then 'friday'
+    when 6 then 'saturday'
+    end
+    
+    total_posts = service_point.service_posts.active.select do |post|
+      if post.has_custom_schedule && post.working_days.present?
+        post.working_days[day_key] == true || post.working_days[day_key.to_s] == true
+      else
+        # Пост работает по расписанию точки
+        day_schedule = service_point.working_hours[day_key]
+        day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+      end
+    end.count
     
     return [] if total_posts.zero?
     
@@ -142,7 +162,27 @@ class DynamicAvailabilityService
     end_time = check_time + duration_minutes.minutes
     return { available: false, reason: 'Недостаточно времени до закрытия' } if end_time > closing_time
     
-    total_posts = service_point.posts_count
+    # Получаем количество активных постов, работающих в этот день
+    day_key = case date.wday
+    when 0 then 'sunday'
+    when 1 then 'monday'
+    when 2 then 'tuesday'
+    when 3 then 'wednesday'
+    when 4 then 'thursday'
+    when 5 then 'friday'
+    when 6 then 'saturday'
+    end
+    
+    total_posts = service_point.service_posts.active.select do |post|
+      if post.has_custom_schedule && post.working_days.present?
+        post.working_days[day_key] == true || post.working_days[day_key.to_s] == true
+      else
+        # Пост работает по расписанию точки
+        day_schedule = service_point.working_hours[day_key]
+        day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+      end
+    end.count
+    
     return { available: false, reason: 'Нет активных постов' } if total_posts.zero?
     
     # Проверяем доступность на весь период бронирования
@@ -240,26 +280,38 @@ class DynamicAvailabilityService
 
   private
 
-  # Получение рабочих часов для даты с учетом ScheduleTemplate
+  # Получение рабочих часов для даты с учетом working_hours
   def self.get_schedule_for_date(service_point, date)
-    # Определяем день недели (1 = понедельник, 7 = воскресенье)
-    wday = date.wday
-    wday = 7 if wday == 0 # Воскресенье = 7 вместо 0
+    return { is_working: false } unless service_point.working_hours.present?
     
-    # Находим шаблон расписания для этого дня недели
-    weekday = Weekday.find_by(sort_order: wday)
-    return { is_working: false } unless weekday
+    # Определяем день недели в формате для working_hours
+    day_key = case date.wday
+    when 0 then 'sunday'
+    when 1 then 'monday'
+    when 2 then 'tuesday'
+    when 3 then 'wednesday'
+    when 4 then 'thursday'
+    when 5 then 'friday'
+    when 6 then 'saturday'
+    end
     
-    schedule_template = service_point.schedule_templates.find_by(weekday: weekday)
-    return { is_working: false } unless schedule_template
+    day_schedule = service_point.working_hours[day_key]
+    return { is_working: false } unless day_schedule.present?
     
-    if schedule_template.is_working_day
+    is_working = day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true'
+    return { is_working: false } unless is_working
+    
+    begin
+      opening_time = Time.parse("#{date} #{day_schedule['start']}:00")
+      closing_time = Time.parse("#{date} #{day_schedule['end']}:00")
+      
       {
         is_working: true,
-        opening_time: schedule_template.opening_time,
-        closing_time: schedule_template.closing_time
+        opening_time: opening_time,
+        closing_time: closing_time
       }
-    else
+    rescue => e
+      Rails.logger.error "DynamicAvailabilityService: Ошибка парсинга времени для точки #{service_point.id}, день #{day_key}: #{e.message}"
       { is_working: false }
     end
   end
