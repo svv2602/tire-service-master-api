@@ -463,19 +463,32 @@ module Api
           # Преобразуем параметры в простые Ruby hashes чтобы избежать проблем с ActionController::Parameters
           posts_data = JSON.parse(params[:service_point][:service_posts_attributes].to_json)
           
-          posts_data.each do |post_data|
+          Rails.logger.info "=== Building temp posts from form data ==="
+          Rails.logger.info "Posts data from form: #{posts_data.inspect}"
+          
+          posts_data.each_with_index do |post_data, index|
+            # Проверяем destroy флаг сразу
+            if post_data['_destroy'] == '1' || post_data['_destroy'] == true
+              Rails.logger.info "Skipping post #{index} due to destroy flag"
+              next
+            end
+            
             # Находим существующий пост или создаем новый
-            if post_data['id'].present?
+            if post_data['id'].present? && post_data['id'].to_s != '' && post_data['id'].to_s != 'undefined'
               begin
                 existing_post = @service_point.service_posts.find(post_data['id'])
                 temp_post = existing_post.dup
+                Rails.logger.info "Found existing post ID #{post_data['id']}: #{existing_post.name}"
               rescue ActiveRecord::RecordNotFound
-                Rails.logger.warn "Service post with ID #{post_data['id']} not found, skipping"
-                next
+                Rails.logger.warn "Service post with ID #{post_data['id']} not found, creating new post"
+                temp_post = ServicePost.new
+                temp_post.service_point_id = @service_point.id
               end
             else
+              # Создаем новый пост (для новых постов из формы)
               temp_post = ServicePost.new
               temp_post.service_point_id = @service_point.id
+              Rails.logger.info "Creating new post #{index} from form data"
             end
             
             # Применяем изменения из формы
@@ -488,10 +501,13 @@ module Api
               end
             end
             
-            # Проверяем destroy флаг
-            unless post_data['_destroy'] == '1' || post_data['_destroy'] == true
-              temp_posts << temp_post
-            end
+            # Устанавливаем значения по умолчанию для новых постов
+            temp_post.is_active = true if temp_post.is_active.nil?
+            temp_post.slot_duration = 60 if temp_post.slot_duration.nil? || temp_post.slot_duration <= 0
+            
+            Rails.logger.info "Processed post: name=#{temp_post.name}, post_number=#{temp_post.post_number}, is_active=#{temp_post.is_active}, slot_duration=#{temp_post.slot_duration}"
+            
+            temp_posts << temp_post
           end
         else
           # Если нет изменений в постах, используем существующие
@@ -525,9 +541,18 @@ module Api
         # Проверяем рабочий день
         day_key = date.strftime('%A').downcase
         working_hours = service_point.working_hours
+        
+        # Логирование для отладки
+        Rails.logger.info "=== Schedule Preview Debug ==="
+        Rails.logger.info "Date: #{date}, Day key: #{day_key}"
+        Rails.logger.info "Working hours: #{working_hours}"
+        Rails.logger.info "Day hours: #{working_hours&.[](day_key)}"
+        
         is_working_day = working_hours && working_hours[day_key] && 
                          (working_hours[day_key]['is_working_day'] == 'true' || 
                           working_hours[day_key]['is_working_day'] == true)
+        
+        Rails.logger.info "Is working day: #{is_working_day}"
         
         if is_working_day && all_times.any?
           # Для каждого уникального времени создаем preview_slot
@@ -620,11 +645,34 @@ module Api
       
       # Проверяет работает ли пост в указанный день (для временных постов)
       def post_working_on_day?(service_post, day_key)
+        Rails.logger.info "=== Checking if post works on #{day_key} ==="
+        Rails.logger.info "Post: #{service_post.name}, has_custom_schedule: #{service_post.has_custom_schedule}"
+        Rails.logger.info "Working days: #{service_post.working_days}"
+        
         if service_post.has_custom_schedule && service_post.working_days.present?
-          service_post.working_days[day_key] == true
+          # Проверяем работает ли пост в этот день согласно индивидуальному расписанию
+          is_working = service_post.working_days[day_key] == true || service_post.working_days[day_key.to_s] == true
+          Rails.logger.info "Custom schedule result: #{is_working}"
+          is_working
         else
-          # Используем общее расписание точки
-          true # По умолчанию считаем что работает
+          # Используем общее расписание точки - проверяем, работает ли точка в этот день
+          begin
+            working_hours = service_post.service_point.working_hours
+          rescue
+            # Для временных постов service_point может быть недоступен, получаем из переданных данных
+            working_hours = nil
+          end
+          
+          Rails.logger.info "Service point working hours: #{working_hours}"
+          
+          if working_hours && working_hours[day_key].present?
+            is_working = working_hours[day_key]['is_working_day'] == true || working_hours[day_key]['is_working_day'] == 'true'
+            Rails.logger.info "General schedule result: #{is_working}"
+            is_working
+          else
+            Rails.logger.info "No working hours data, defaulting to false"
+            false # Если нет данных о расписании, считаем выходным
+          end
         end
       end
       
