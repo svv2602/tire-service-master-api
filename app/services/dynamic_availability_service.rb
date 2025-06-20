@@ -230,46 +230,90 @@ class DynamicAvailabilityService
     nil
   end
 
-  # Получение детальной информации о загрузке на день
+  # Получение детальной информации о загрузке на день (по слотам бронирования)
   def self.day_occupancy_details(service_point_id, date)
     service_point = ServicePoint.find(service_point_id)
     schedule_info = get_schedule_for_date(service_point, date)
     
     return { is_working: false } unless schedule_info[:is_working]
     
-    # Преобразуем время из объектов Time в строки времени, затем создаем новые объекты с нужной датой
-    opening_time_str = schedule_info[:opening_time].strftime('%H:%M:%S')
-    closing_time_str = schedule_info[:closing_time].strftime('%H:%M:%S')
+    # Получаем все доступные слоты для этого дня
+    available_slots = available_slots_for_date(service_point_id, date)
     
-    start_time = Time.parse("#{date} #{opening_time_str}")
-    end_time = Time.parse("#{date} #{closing_time_str}")
-    total_posts = service_point.posts_count
+    # Получаем все возможные слоты (доступные + занятые)
+    all_possible_slots = get_all_possible_slots_for_date(service_point_id, date)
     
-    intervals = []
-    current_time = start_time
+    total_slots = all_possible_slots.count
+    available_slots_count = available_slots.count
+    occupied_slots_count = total_slots - available_slots_count
     
-    while current_time < end_time
-      occupied_posts = count_occupied_posts_at_time(service_point_id, date, current_time)
-      available_posts = total_posts - occupied_posts
-      
-      intervals << {
-        time: current_time.strftime('%H:%M'),
-        occupied_posts: occupied_posts,
-        available_posts: available_posts,
-        occupancy_rate: total_posts > 0 ? (occupied_posts.to_f / total_posts * 100).round(1) : 0
-      }
-      
-      current_time += MIN_TIME_INTERVAL.minutes
-    end
+    occupancy_percentage = total_slots > 0 ? (occupied_slots_count.to_f / total_slots * 100).round(1) : 0
     
     {
       is_working: true,
       opening_time: schedule_info[:opening_time].strftime('%H:%M'),
       closing_time: schedule_info[:closing_time].strftime('%H:%M'),
-      total_posts: total_posts,
-      intervals: intervals,
-      summary: calculate_day_summary(intervals)
+      total_posts: service_point.service_posts.active.count,
+      summary: {
+        total_slots: total_slots,
+        available_slots: available_slots_count,
+        occupied_slots: occupied_slots_count,
+        occupancy_percentage: occupancy_percentage,
+        total_intervals: total_slots,
+        busy_intervals: occupied_slots_count,
+        free_intervals: available_slots_count,
+        average_occupancy_rate: occupancy_percentage,
+        peak_occupancy_rate: occupancy_percentage
+      }
     }
+  end
+
+  # Получение всех возможных слотов для дня (включая занятые)
+  def self.get_all_possible_slots_for_date(service_point_id, date)
+    service_point = ServicePoint.find(service_point_id)
+    
+    # Получаем рабочие часы для данной даты
+    schedule_info = get_schedule_for_date(service_point, date)
+    return [] unless schedule_info[:is_working]
+    
+    # Определяем день недели
+    day_key = date.strftime('%A').downcase
+    
+    all_slots = []
+    
+    # Проходим по всем активным постам
+    service_point.service_posts.active.ordered_by_post_number.each do |service_post|
+      # Проверяем, работает ли пост в этот день
+      next unless service_post.working_on_day?(day_key)
+      
+      # Определяем время работы поста
+      start_time_str = service_post.start_time_for_day(day_key)
+      end_time_str = service_post.end_time_for_day(day_key)
+      
+      start_time = Time.parse("#{date} #{start_time_str}")
+      end_time = Time.parse("#{date} #{end_time_str}")
+      
+      # Генерируем все возможные слоты с индивидуальной длительностью
+      current_time = start_time
+      while current_time + service_post.slot_duration.minutes <= end_time
+        slot_end_time = current_time + service_post.slot_duration.minutes
+        
+        all_slots << {
+          service_post_id: service_post.id,
+          post_number: service_post.post_number,
+          post_name: service_post.name,
+          start_time: current_time.strftime('%H:%M'),
+          end_time: slot_end_time.strftime('%H:%M'),
+          duration_minutes: service_post.slot_duration,
+          datetime: current_time
+        }
+        
+        current_time = slot_end_time
+      end
+    end
+    
+    # Сортируем по времени
+    all_slots.sort_by { |slot| slot[:datetime] }
   end
 
   private
