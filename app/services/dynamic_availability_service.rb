@@ -76,7 +76,7 @@ class DynamicAvailabilityService
     # На основе рабочих часов постов. Проверяем только пересечения с бронированиями.
   end
   
-  # Обратная совместимость: старый метод с фиксированным интервалом
+  # Группировка слотов постов по времени с агрегацией доступности
   def self.available_times_for_date(service_point_id, date, min_duration_minutes = nil)
     service_point = ServicePoint.find(service_point_id)
     
@@ -84,14 +84,11 @@ class DynamicAvailabilityService
     schedule_info = get_schedule_for_date(service_point, date)
     return [] unless schedule_info[:is_working]
     
-    # Преобразуем время из объектов Time в строки времени, затем создаем новые объекты с нужной датой
-    opening_time_str = schedule_info[:opening_time].strftime('%H:%M:%S')
-    closing_time_str = schedule_info[:closing_time].strftime('%H:%M:%S')
+    # Получаем все доступные слоты от постов
+    individual_slots = available_slots_for_date(service_point_id, date)
+    return [] if individual_slots.empty?
     
-    start_time = Time.parse("#{date} #{opening_time_str}")
-    end_time = Time.parse("#{date} #{closing_time_str}")
-    
-    # Получаем количество активных постов, работающих в этот день
+    # Получаем общее количество активных постов для этого дня
     day_key = case date.wday
     when 0 then 'sunday'
     when 1 then 'monday'
@@ -112,32 +109,29 @@ class DynamicAvailabilityService
       end
     end.count
     
-    return [] if total_posts.zero?
+    # Группируем слоты по времени начала
+    grouped_slots = individual_slots.group_by { |slot| slot[:start_time] }
     
-    available_slots = []
-    current_time = start_time
-    
-    # Проходим по всем временным интервалам дня
-    while current_time < end_time
-      occupied_posts = count_occupied_posts_at_time(service_point_id, date, current_time)
-      available_posts = total_posts - occupied_posts
+    # Создаем агрегированные временные слоты
+    available_time_slots = grouped_slots.map do |time, slots|
+      # Считаем сколько постов доступно в это время
+      available_posts_count = slots.count
       
-      if available_posts > 0
-        # Проверяем минимальную длительность если задана
-        if min_duration_minutes.nil? || has_enough_continuous_time?(service_point_id, date, current_time, min_duration_minutes)
-          available_slots << {
-            time: current_time.strftime('%H:%M'),
-            datetime: current_time,
-            available_posts: available_posts,
-            total_posts: total_posts
-          }
-        end
+      # Проверяем минимальную длительность если задана
+      if min_duration_minutes.nil? || slots.any? { |slot| slot[:duration_minutes] >= min_duration_minutes }
+        {
+          time: time,
+          datetime: slots.first[:datetime],
+          available_posts: available_posts_count,
+          total_posts: total_posts
+        }
+      else
+        nil
       end
-      
-      current_time += MIN_TIME_INTERVAL.minutes
-    end
+    end.compact
     
-    available_slots
+    # Сортируем по времени
+    available_time_slots.sort_by { |slot| slot[:datetime] }
   end
 
   # Проверка доступности конкретного времени

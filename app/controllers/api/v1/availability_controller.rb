@@ -60,36 +60,34 @@ class Api::V1::AvailabilityController < ApplicationController
     min_duration = params[:min_duration_minutes]&.to_i || params[:duration]&.to_i
     
     begin
-      # Используем метод с индивидуальными интервалами постов
-      available_slots = DynamicAvailabilityService.available_slots_for_date(
+      # Используем обратную совместимость с группировкой по времени
+      available_times_data = DynamicAvailabilityService.available_times_for_date(
         @service_point.id, 
-        date
+        date,
+        min_duration
       )
       
       # Фильтруем прошедшее время для сегодняшней даты
       current_time = Time.current
       if date == Date.current
-        available_slots = available_slots.select do |slot|
+        available_times_data = available_times_data.select do |slot|
           slot[:datetime] > current_time
         end
       end
-      
-      # Проверяем рабочий ли день
-      schedule_info = DynamicAvailabilityService.send(:get_schedule_for_date, @service_point, date)
       
       render json: {
         service_point_id: @service_point.id,
         date: date.strftime('%Y-%m-%d'),
         min_duration_minutes: min_duration,
-        available_times: available_slots.map do |slot|
+        available_times: available_times_data.map do |slot|
           {
-            time: slot[:start_time],
-            available_posts: 1, # Каждый слот представляет один доступный пост
-            total_posts: schedule_info[:is_working] ? @service_point.service_posts.active.count : 0,
+            time: slot[:time],
+            available_posts: slot[:available_posts],
+            total_posts: slot[:total_posts],
             can_book: true # Слоты уже отфильтрованы по доступности
           }
         end,
-        total_intervals: available_slots.count
+        total_intervals: available_times_data.count
       }
     rescue => e
       render json: { error: "Внутренняя ошибка сервера: #{e.message}" }, status: :internal_server_error
