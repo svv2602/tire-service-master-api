@@ -8,36 +8,31 @@ module Api
       # POST /api/v1/auth/login
       # Универсальный вход для всех ролей пользователей
       def login
-        user = User.find_by(email: params[:email])
+        auth_params = params.require(:auth)
+        email = auth_params[:login]
+        password = auth_params[:password]
         
-        Rails.logger.info("Auth#login: Attempting login for email: #{params[:email]}")
+        user = User.find_by(email: email)
+        
+        Rails.logger.info("Auth#login: Attempting login for email: #{email}")
         Rails.logger.info("Auth#login: cookies available: #{cookies.present?}")
         
-        if user&.authenticate(params[:password])
+        if user&.authenticate(password)
           access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
           refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
           
           Rails.logger.info("Auth#login: Authentication successful, setting cookies")
-          
-          # Устанавливаем access токен в HttpOnly куки (для автоматического восстановления сессии)
-          cookies.encrypted[:access_token] = {
-            value: access_token,
-            httponly: true,
-            secure: Rails.env.production?,
-            same_site: :strict,
-            expires: 15.minutes.from_now # Access токен живет меньше
-          }
           
           # Устанавливаем refresh токен в HttpOnly куки
           cookies.encrypted[:refresh_token] = {
             value: refresh_token,
             httponly: true,
             secure: Rails.env.production?,
-            same_site: :strict,
+            same_site: :lax, # Используем lax для лучшей совместимости с SPA
             expires: 30.days.from_now
           }
           
-          Rails.logger.info("Auth#login: Cookies set (access + refresh), preparing response")
+          Rails.logger.info("Auth#login: Cookies set (refresh only), preparing response")
           
           # Создаем пользовательский JSON с добавлением роли
           user_json = user.as_json(only: [:id, :email, :first_name, :last_name, :is_active])
@@ -45,7 +40,7 @@ module Api
           
           render json: { 
             tokens: { 
-              access: access_token # Отправляем токен и в ответе для немедленного использования
+              access: access_token # Отправляем только access токен в ответе
             },
             user: user_json
           }
@@ -66,15 +61,6 @@ module Api
           
           access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
           
-          # Устанавливаем новый access токен в cookies
-          cookies.encrypted[:access_token] = {
-            value: access_token,
-            httponly: true,
-            secure: Rails.env.production?,
-            same_site: :strict,
-            expires: 15.minutes.from_now
-          }
-          
           render json: { 
             tokens: { 
               access: access_token
@@ -83,7 +69,6 @@ module Api
         rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
           # Удаляем куки при ошибке
           cookies.delete(:refresh_token)
-          cookies.delete(:access_token)
           render json: { error: e.message }, status: :unauthorized
         end
       end
@@ -95,11 +80,10 @@ module Api
         Rails.logger.info("Auth#logout: Attempting logout")
         Rails.logger.info("Auth#logout: cookies available: #{cookies.present?}")
         
-        # Удаляем все auth куки при выходе
+        # Удаляем auth куки при выходе
         cookies.delete(:refresh_token)
-        cookies.delete(:access_token)
         
-        Rails.logger.info("Auth#logout: All auth cookies deleted, sending success response")
+        Rails.logger.info("Auth#logout: Auth cookies deleted, sending success response")
         render json: { message: 'Выход выполнен успешно' }, status: :ok
       end
 
