@@ -6,6 +6,12 @@ module Api
       
       protected
       
+      # Аутентификация только если токен присутствует (для публичных endpoint'ов)
+      def authenticate_request_if_token_present
+        return unless request.headers['Authorization'].present?
+        authenticate_request
+      end
+      
       # Метод для пагинации
       def paginate(collection)
         page = params[:page].present? ? params[:page].to_i : 1

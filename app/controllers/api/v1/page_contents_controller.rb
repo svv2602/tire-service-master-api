@@ -1,7 +1,8 @@
 module Api
   module V1
     class PageContentsController < ApiController
-      skip_before_action :authenticate_request, only: [:show, :sections]
+      skip_before_action :authenticate_request, only: [:index, :show, :sections]
+      before_action :set_current_user_if_authenticated, only: [:index]
       before_action :authorize_admin, except: [:index, :show, :sections]
       before_action :set_page_content, only: [:show, :update, :destroy, :toggle_active]
 
@@ -24,9 +25,14 @@ module Api
           page_contents = PageContent.active.includes(image_attachment: :blob, gallery_images_attachments: :blob)
         end
 
-        # Фильтрация по языку (по умолчанию украинский)
-        language = params[:language] || 'uk'
-        page_contents = page_contents.by_language(language)
+        # Фильтрация по языку (по умолчанию украинский, но не для админов если не указан явно)
+        if params[:language].present?
+          page_contents = page_contents.by_language(params[:language])
+        elsif !current_user&.admin? && !current_user&.super_admin?
+          # Для обычных пользователей по умолчанию украинский
+          page_contents = page_contents.by_language('uk')
+        end
+        # Для админов без указания языка показываем все языки
 
         # Фильтрация по секции
         if params[:section].present?
@@ -84,7 +90,7 @@ module Api
           if dynamic_data
             case content.content_type
             when 'service'
-              content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :description, :category, :icon])
+              content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :description, :category_id, :icon])
             when 'city'
               content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :region_id])
                                                          .map { |city| city.merge('service_points_count' => city['service_points_count'] || 0) }
@@ -134,13 +140,13 @@ module Api
         if dynamic_data
           case @page_content.content_type
           when 'service'
-            content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :description, :category, :icon])
+            content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :description, :category_id, :icon])
           when 'city'
             content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :region_id])
                                                        .map { |city| city.merge('service_points_count' => city['service_points_count'] || 0) }
           when 'article'
             content_hash['dynamic_data'] = dynamic_data.as_json(
-              only: [:id, :title, :excerpt, :category, :reading_time, :published_at, :slug],
+              only: [:id, :title, :excerpt, :category_id, :reading_time, :published_at, :slug],
               include: { author: { only: [:id, :first_name, :last_name] } }
             )
           end
@@ -307,7 +313,7 @@ module Api
                     id: service.id,
                     name: service.name,
                     description: service.description,
-                    category: service.service_category&.name,
+                    category_id: service.category_id,
                     icon: service.icon || 'service'
                   }
                 end
@@ -319,7 +325,7 @@ module Api
       # Получение статей из базы знаний
       def get_knowledge_base_articles(category = nil)
         articles = Article.where(status: 'published')
-        articles = articles.where(category: category) if category.present?
+        articles = articles.where(category_id: category) if category.present?
         
         articles.includes(:author)
                 .order(published_at: :desc)
@@ -329,7 +335,7 @@ module Api
                     id: article.id,
                     title: article.title,
                     excerpt: article.excerpt,
-                    category: article.category,
+                    category_id: article.category_id,
                     reading_time: article.reading_time,
                     author: article.author&.first_name || 'Експерт',
                     published_at: article.published_at,
@@ -339,6 +345,18 @@ module Api
       rescue
         # Если таблица статей не существует, возвращаем пустой массив
         []
+      end
+
+      # Устанавливаем current_user если токен валиден, но не требуем его
+      def set_current_user_if_authenticated
+        return unless request.headers['Authorization'].present?
+        
+        begin
+          authenticate_request
+        rescue => e
+          # Игнорируем ошибки авторизации для публичного доступа
+          Rails.logger.info "Public access: #{e.message}" if Rails.env.development?
+        end
       end
     end
   end
