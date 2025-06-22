@@ -31,10 +31,10 @@ module Auth
     
     def generate_tokens
       {
-        access_token: JsonWebToken.encode_access_token(user_id: user.id),
-        refresh_token: JsonWebToken.encode_refresh_token(user_id: user.id),
+        access_token: Auth::JsonWebToken.encode_access_token(user_id: user.id),
+        refresh_token: Auth::JsonWebToken.encode_refresh_token(user_id: user.id),
         token_type: 'Bearer',
-        expires_in: JsonWebToken::ACCESS_TOKEN_EXPIRY.to_i
+        expires_in: Auth::JsonWebToken::ACCESS_TOKEN_EXPIRY.to_i
       }
     end
   end
