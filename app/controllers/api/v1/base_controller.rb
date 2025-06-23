@@ -20,7 +20,6 @@ module Api
         # Если токена нет в заголовке, пытаемся получить из encrypted cookies
         if token.blank?
           Rails.logger.info "BaseController#authenticate_request: Trying to get token from cookies"
-          Rails.logger.info "BaseController#authenticate_request: Available cookies: #{cookies.keys}"
           Rails.logger.info "BaseController#authenticate_request: Raw access_token cookie: #{request.cookies['access_token']}"
           
           token = cookies.encrypted[:access_token]
