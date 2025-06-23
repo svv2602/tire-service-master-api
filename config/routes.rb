@@ -218,7 +218,7 @@ Rails.application.routes.draw do
       end
       
       # Бронирования
-      resources :bookings, only: [:index, :show] do
+      resources :bookings, only: [:index, :show, :create, :update, :destroy] do
         member do
           post 'confirm', to: 'bookings#confirm'
           post 'cancel', to: 'bookings#cancel'

@@ -427,8 +427,12 @@ module Api
         
         authorize @booking
         
-        # Отмена бронирования - используем cancel по бизнес-логике
-        cancel_booking(CancellationReason.find_by(name: 'client_canceled'), params[:comment])
+        # Полное удаление бронирования из базы данных
+        if @booking.destroy
+          render json: { message: 'Бронирование успешно удалено' }, status: :ok
+        else
+          render json: { errors: @booking.errors.full_messages }, status: :unprocessable_entity
+        end
       end
       
       # POST /api/v1/bookings/:id/confirm
