@@ -188,6 +188,7 @@ module Api
             {
               id: point.id,
               name: point.name,
+              description: point.description,
               address: point.address,
               city: {
                 id: point.city.id,
