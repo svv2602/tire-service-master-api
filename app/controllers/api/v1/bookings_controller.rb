@@ -34,8 +34,9 @@ module Api
         if params[:client_id].present?
           @client = Client.find(params[:client_id])
           begin
-            authorize @client, :show?
-            @bookings = @client.bookings
+            # Проверяем права доступа к бронированиям клиента через policy_scope
+            # Это позволит клиенту видеть только свои бронирования
+            @bookings = policy_scope(Booking).where(client_id: @client.id)
           rescue Pundit::NotAuthorizedError => e
             render json: { error: "Not authorized" }, status: :forbidden
             return
