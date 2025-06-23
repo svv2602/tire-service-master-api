@@ -179,7 +179,7 @@ module Api
         end
         
         # Сортировка по рейтингу (лучшие сначала)
-        @service_points = @service_points.includes(:city, :partner, :reviews)
+        @service_points = @service_points.includes(:city, :partner, :reviews, :photos)
                                        .order(average_rating: :desc, name: :asc)
         
         # Возвращаем данные с дополнительной информацией для клиентов
@@ -205,7 +205,17 @@ module Api
               can_accept_bookings: point.can_accept_bookings?,
               work_status: point.display_status,
               distance: params[:latitude] && params[:longitude] ? 
-                calculate_distance(params[:latitude].to_f, params[:longitude].to_f, point.latitude, point.longitude) : nil
+                calculate_distance(params[:latitude].to_f, params[:longitude].to_f, point.latitude, point.longitude) : nil,
+              # Добавляем фотографии для отображения в карточке
+              photos: point.photos.sorted.map do |photo|
+                {
+                  id: photo.id,
+                  url: photo.file.attached? ? Rails.application.routes.url_helpers.url_for(photo.file) : nil,
+                  description: photo.description,
+                  is_main: photo.is_main,
+                  sort_order: photo.sort_order
+                }
+              end
             }
           end,
           total: @service_points.count,
