@@ -96,7 +96,7 @@ module Api
                                                          .map { |city| city.merge('service_points_count' => city['service_points_count'] || 0) }
             when 'article'
               content_hash['dynamic_data'] = dynamic_data.as_json(
-                only: [:id, :title, :excerpt, :category, :reading_time, :published_at, :slug],
+                only: [:id, :title, :excerpt, :category_id, :reading_time, :published_at, :slug],
                 include: { author: { only: [:id, :first_name, :last_name] } }
               )
             end
