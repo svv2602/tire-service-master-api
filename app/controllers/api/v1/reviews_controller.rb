@@ -42,35 +42,62 @@ module Api
         render json: @review
       end
       
-      # POST /api/v1/clients/:client_id/reviews
+      # POST /api/v1/clients/:client_id/reviews (старый путь)
+      # POST /api/v1/reviews (новый путь для админа)
       def create
-        @client = Client.find(params[:client_id])
-        @booking = @client.bookings.find(review_params[:booking_id])
-        
-        # Проверяем, что бронирование выполнено
-        unless @booking.status.name == "completed"
-          return render json: { error: "Can't review unfinished booking" }, status: :unprocessable_entity
-        end
-        
-        # Проверяем, что отзыв на это бронирование еще не оставлен
-        if Review.exists?(booking_id: @booking.id)
-          return render json: { error: "Review for this booking already exists" }, status: :unprocessable_entity
-        end
-        
-        @review = Review.new(review_params.except(:booking_id))
-        @review.client = @client
-        @review.booking = @booking
-        @review.service_point = @booking.service_point
-        
-        authorize @review
-        
-        if @review.save
-          # Пересчитываем рейтинг сервисной точки
-          @review.service_point.recalculate_metrics!
+        if params[:client_id].present?
+          # Старое поведение для клиента
+          @client = Client.find(params[:client_id])
+          @booking = @client.bookings.find(review_params[:booking_id])
           
-          render json: @review, status: :created
+          # Проверяем, что бронирование выполнено
+          unless @booking.status.name == "completed"
+            return render json: { error: "Can't review unfinished booking" }, status: :unprocessable_entity
+          end
+          
+          # Проверяем, что отзыв на это бронирование еще не оставлен
+          if Review.exists?(booking_id: @booking.id)
+            return render json: { error: "Review for this booking already exists" }, status: :unprocessable_entity
+          end
+          
+          @review = Review.new(review_params.except(:booking_id))
+          @review.client = @client
+          @review.booking = @booking
+          @review.service_point = @booking.service_point
+          
+          authorize @review
+          
+          if @review.save
+            # Пересчитываем рейтинг сервисной точки
+            @review.service_point.recalculate_metrics!
+            
+            render json: @review, status: :created
+          else
+            render json: { errors: @review.errors }, status: :unprocessable_entity
+          end
         else
-          render json: { errors: @review.errors }, status: :unprocessable_entity
+          # Новый путь для администратора: POST /api/v1/reviews
+          unless current_user&.admin?
+            return render json: { error: 'Only admin can create review without booking' }, status: :forbidden
+          end
+          client = Client.find_by(id: params[:review][:client_id])
+          service_point = ServicePoint.find_by(id: params[:review][:service_point_id])
+          unless client && service_point
+            return render json: { error: 'client_id and service_point_id are required' }, status: :unprocessable_entity
+          end
+          @review = Review.new(
+            rating: params[:review][:rating],
+            comment: params[:review][:comment],
+            client: client,
+            service_point: service_point
+          )
+          authorize @review
+          if @review.save
+            service_point.recalculate_metrics!
+            render json: @review, status: :created
+          else
+            render json: { errors: @review.errors }, status: :unprocessable_entity
+          end
         end
       end
       
