@@ -134,7 +134,7 @@ Rails.application.routes.draw do
         resources :schedule_exceptions, only: [:index, :show, :create, :update, :destroy]
         resources :schedule_slots, only: [:index, :show, :create, :update, :destroy]
         resources :amenities, only: [:index, :create, :destroy]
-        resources :reviews, only: [:index, :show, :create, :update, :destroy], only: [:index, :show]
+        resources :reviews, only: [:index, :show]
         resources :bookings, only: [:index, :show]
         resources :photos, controller: 'service_point_photos'
         resources :services, only: [:index, :create, :destroy], controller: 'service_point_services'
