@@ -20,6 +20,10 @@ class ReviewPolicy < ApplicationPolicy
   end
 
   def create?
+    # Администратор может создавать отзывы для любых клиентов
+    return true if user&.admin?
+    
+    # Клиент может создавать отзывы только для себя
     return false unless user&.client?
     record.client == user.client
   end

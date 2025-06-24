@@ -407,7 +407,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_24_055817) do
   end
 
   create_table "reviews", force: :cascade do |t|
-    t.bigint "booking_id", null: false
+    t.bigint "booking_id"
     t.bigint "client_id", null: false
     t.bigint "service_point_id", null: false
     t.integer "rating", null: false
