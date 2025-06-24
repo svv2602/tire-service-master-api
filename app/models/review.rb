@@ -1,12 +1,12 @@
 class Review < ApplicationRecord
   # Связи
-  belongs_to :booking
+  belongs_to :booking, optional: true
   belongs_to :client
   belongs_to :service_point
   
   # Валидации
   validates :rating, presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1, less_than_or_equal_to: 5 }
-  validates :booking_id, uniqueness: true
+  validates :booking_id, uniqueness: true, allow_nil: true
   
   # Скоупы
   scope :published, -> { where(is_published: true) }
