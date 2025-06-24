@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 Диагностика авторизации Reviews API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        .token-display { word-break: break-all; font-size: 12px; background: #f8f9fa; padding: 5px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Диагностика авторизации Reviews API</h1>
+        
+        <div class="test-section">
+            <h3>1. Авторизация администратора</h3>
+            <button class="btn-primary" onclick="loginAdmin()">Войти как администратор</button>
+            <div id="loginResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. Проверка текущего пользователя</h3>
+            <button class="btn-secondary" onclick="checkCurrentUser()">Проверить current_user</button>
+            <div id="currentUserResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. Получение всех отзывов</h3>
+            <button class="btn-secondary" onclick="getAllReviews()">GET /api/v1/reviews</button>
+            <div id="reviewsResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. Получение отзывов с фильтром pending</h3>
+            <button class="btn-secondary" onclick="getPendingReviews()">GET /api/v1/reviews?status=pending</button>
+            <div id="pendingResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. Получение отзывов с фильтром published</h3>
+            <button class="btn-secondary" onclick="getPublishedReviews()">GET /api/v1/reviews?status=published</button>
+            <div id="publishedResult"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = '';
+        const API_BASE = 'http://localhost:8000';
+
+        async function loginAdmin() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include', // Важно для cookies
+                    body: JSON.stringify({
+                        auth: {
+                            login: 'admin@test.com',
+                            password: 'admin123'
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.access_token;
+                    document.getElementById('loginResult').innerHTML = `
+                        <div class="result success">
+                            ✅ Авторизация успешна!<br>
+                            <strong>User ID:</strong> ${data.user.id}<br>
+                            <strong>Email:</strong> ${data.user.email}<br>
+                            <strong>Role:</strong> ${data.user.role}<br>
+                            <strong>Token:</strong> <div class="token-display">${authToken}</div>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('loginResult').innerHTML = `
+                        <div class="result error">❌ Ошибка авторизации: ${JSON.stringify(data)}</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('loginResult').innerHTML = `
+                    <div class="result error">❌ Ошибка сети: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function checkCurrentUser() {
+            if (!authToken) {
+                document.getElementById('currentUserResult').innerHTML = `
+                    <div class="result error">❌ Сначала авторизуйтесь!</div>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('currentUserResult').innerHTML = `
+                        <div class="result success">
+                            ✅ Current user получен!<br>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('currentUserResult').innerHTML = `
+                        <div class="result error">❌ Ошибка: ${JSON.stringify(data)}</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('currentUserResult').innerHTML = `
+                    <div class="result error">❌ Ошибка сети: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function getAllReviews() {
+            if (!authToken) {
+                document.getElementById('reviewsResult').innerHTML = `
+                    <div class="result error">❌ Сначала авторизуйтесь!</div>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/reviews`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const reviewsSummary = data.map(r => ({
+                        id: r.id,
+                        status: r.status,
+                        is_published: r.is_published,
+                        comment: r.comment.substring(0, 30) + '...'
+                    }));
+
+                    document.getElementById('reviewsResult').innerHTML = `
+                        <div class="result success">
+                            ✅ Получено отзывов: ${data.length}<br>
+                            <pre>${JSON.stringify(reviewsSummary, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('reviewsResult').innerHTML = `
+                        <div class="result error">❌ Ошибка: ${JSON.stringify(data)}</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('reviewsResult').innerHTML = `
+                    <div class="result error">❌ Ошибка сети: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function getPendingReviews() {
+            if (!authToken) {
+                document.getElementById('pendingResult').innerHTML = `
+                    <div class="result error">❌ Сначала авторизуйтесь!</div>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/reviews?status=pending`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const reviewsSummary = data.map(r => ({
+                        id: r.id,
+                        status: r.status,
+                        is_published: r.is_published,
+                        comment: r.comment.substring(0, 30) + '...'
+                    }));
+
+                    document.getElementById('pendingResult').innerHTML = `
+                        <div class="result success">
+                            ✅ Получено pending отзывов: ${data.length}<br>
+                            <pre>${JSON.stringify(reviewsSummary, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('pendingResult').innerHTML = `
+                        <div class="result error">❌ Ошибка: ${JSON.stringify(data)}</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('pendingResult').innerHTML = `
+                    <div class="result error">❌ Ошибка сети: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function getPublishedReviews() {
+            if (!authToken) {
+                document.getElementById('publishedResult').innerHTML = `
+                    <div class="result error">❌ Сначала авторизуйтесь!</div>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/reviews?status=published`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const reviewsSummary = data.map(r => ({
+                        id: r.id,
+                        status: r.status,
+                        is_published: r.is_published,
+                        comment: r.comment.substring(0, 30) + '...'
+                    }));
+
+                    document.getElementById('publishedResult').innerHTML = `
+                        <div class="result success">
+                            ✅ Получено published отзывов: ${data.length}<br>
+                            <pre>${JSON.stringify(reviewsSummary, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('publishedResult').innerHTML = `
+                        <div class="result error">❌ Ошибка: ${JSON.stringify(data)}</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('publishedResult').innerHTML = `
+                    <div class="result error">❌ Ошибка сети: ${error.message}</div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

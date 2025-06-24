@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 Тестирование статуса "отклонен" для отзывов</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-info { background-color: #17a2b8; color: white; }
+        
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; font-size: 12px; }
+        
+        .status-indicator { 
+            display: inline-block; 
+            padding: 4px 12px; 
+            border-radius: 4px; 
+            font-size: 12px; 
+            font-weight: bold; 
+            margin: 2px;
+        }
+        .status-published { background-color: #28a745; color: white; }
+        .status-pending { background-color: #ffc107; color: black; }
+        .status-rejected { background-color: #dc3545; color: white; }
+        
+        .review-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f9f9f9;
+        }
+        
+        .review-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .rating {
+            color: #ffc107;
+            font-size: 18px;
+        }
+        
+        h1 { color: #333; text-align: center; }
+        h2 { color: #555; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        h3 { color: #666; }
+        
+        .test-results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .test-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        
+        .test-pass { background-color: #d4edda; color: #155724; }
+        .test-fail { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тестирование статуса "отклонен" для отзывов</h1>
+        
+        <div class="test-section info">
+            <h3>📋 Цель тестирования</h3>
+            <p>Проверить, что администратор может устанавливать статус отзыва "отклонен" (rejected) и что этот статус корректно сохраняется и отображается.</p>
+            
+            <h4>🎯 Тестовые сценарии:</h4>
+            <ul>
+                <li>1. Авторизация администратора</li>
+                <li>2. Получение списка всех отзывов</li>
+                <li>3. Изменение статуса отзыва на "rejected"</li>
+                <li>4. Проверка фильтрации по статусу "rejected"</li>
+                <li>5. Проверка всех возможных статусов</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🔐 1. Авторизация администратора</h2>
+            <button class="btn-primary" onclick="testLogin()">Войти как администратор</button>
+            <div id="loginResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>📝 2. Получение всех отзывов</h2>
+            <button class="btn-info" onclick="getAllReviews()">Получить все отзывы</button>
+            <div id="allReviewsResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>❌ 3. Установка статуса "rejected"</h2>
+            <p>Выберите отзыв для изменения статуса:</p>
+            <select id="reviewSelect" style="padding: 8px; margin: 10px 0; width: 200px;">
+                <option value="">Выберите отзыв...</option>
+            </select>
+            <br>
+            <button class="btn-danger" onclick="setRejectedStatus()">Установить статус "Отклонен"</button>
+            <div id="rejectedResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 4. Фильтрация по статусам</h2>
+            <button class="btn-success" onclick="getReviewsByStatus('published')">Опубликованные</button>
+            <button class="btn-warning" onclick="getReviewsByStatus('pending')">На модерации</button>
+            <button class="btn-danger" onclick="getReviewsByStatus('rejected')">Отклоненные</button>
+            <div id="filterResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔄 5. Тест смены всех статусов</h2>
+            <button class="btn-info" onclick="testAllStatusChanges()">Протестировать все статусы</button>
+            <div id="statusTestResult"></div>
+        </div>
+
+        <div class="test-results">
+            <h2>📊 Результаты тестирования</h2>
+            <div id="testSummary"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let authToken = '';
+        let testResults = [];
+
+        function addTestResult(testName, passed, details) {
+            testResults.push({ testName, passed, details });
+            updateTestSummary();
+        }
+
+        function updateTestSummary() {
+            const summaryDiv = document.getElementById('testSummary');
+            const passedTests = testResults.filter(t => t.passed).length;
+            const totalTests = testResults.length;
+            
+            let html = `<h3>Пройдено тестов: ${passedTests}/${totalTests}</h3>`;
+            
+            testResults.forEach(test => {
+                const className = test.passed ? 'test-pass' : 'test-fail';
+                const icon = test.passed ? '✅' : '❌';
+                html += `<div class="test-item ${className}">${icon} ${test.testName}: ${test.details}</div>`;
+            });
+            
+            summaryDiv.innerHTML = html;
+        }
+
+        async function testLogin() {
+            const resultDiv = document.getElementById('loginResult');
+            resultDiv.innerHTML = '<p>🔄 Авторизация...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        auth: {
+                            login: 'admin@test.com',
+                            password: 'admin123'
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ Авторизация успешна</h4>
+                            <p><strong>Пользователь:</strong> ${data.user.email}</p>
+                            <p><strong>Роль:</strong> ${data.user.role}</p>
+                            <p><strong>Токен получен:</strong> ${authToken ? 'Да' : 'Нет'}</p>
+                        </div>
+                    `;
+                    addTestResult('Авторизация администратора', true, `Успешно вошли как ${data.user.email}`);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><h4>❌ Ошибка авторизации</h4><p>${error.message}</p></div>`;
+                addTestResult('Авторизация администратора', false, error.message);
+            }
+        }
+
+        async function getAllReviews() {
+            const resultDiv = document.getElementById('allReviewsResult');
+            resultDiv.innerHTML = '<p>🔄 Загрузка отзывов...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/reviews`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const reviews = await response.json();
+                    
+                    // Заполняем селект для выбора отзыва
+                    const reviewSelect = document.getElementById('reviewSelect');
+                    reviewSelect.innerHTML = '<option value="">Выберите отзыв...</option>';
+                    
+                    let html = `<div class="success"><h4>✅ Загружено отзывов: ${reviews.length}</h4>`;
+                    
+                    // Группируем по статусам
+                    const byStatus = {
+                        published: reviews.filter(r => r.status === 'published'),
+                        pending: reviews.filter(r => r.status === 'pending'),
+                        rejected: reviews.filter(r => r.status === 'rejected')
+                    };
+                    
+                    html += `
+                        <p>📊 Статистика по статусам:</p>
+                        <ul>
+                            <li>Опубликованных: <span class="status-indicator status-published">${byStatus.published.length}</span></li>
+                            <li>На модерации: <span class="status-indicator status-pending">${byStatus.pending.length}</span></li>
+                            <li>Отклоненных: <span class="status-indicator status-rejected">${byStatus.rejected.length}</span></li>
+                        </ul>
+                    `;
+                    
+                    // Показываем первые 5 отзывов
+                    html += '<h4>📝 Последние отзывы:</h4>';
+                    reviews.slice(0, 5).forEach(review => {
+                        const statusClass = `status-${review.status}`;
+                        const stars = '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
+                        
+                        html += `
+                            <div class="review-card">
+                                <div class="review-header">
+                                    <span class="rating">${stars}</span>
+                                    <span class="status-indicator ${statusClass}">${getStatusLabel(review.status)}</span>
+                                </div>
+                                <p><strong>ID:</strong> ${review.id}</p>
+                                <p><strong>Комментарий:</strong> ${review.comment || 'Без комментария'}</p>
+                                <p><strong>Клиент:</strong> ${review.client?.user?.email || 'Неизвестно'}</p>
+                            </div>
+                        `;
+                        
+                        // Добавляем в селект
+                        reviewSelect.innerHTML += `<option value="${review.id}">ID: ${review.id} - ${review.status} - ${review.rating}★</option>`;
+                    });
+                    
+                    html += '</div>';
+                    resultDiv.innerHTML = html;
+                    addTestResult('Получение всех отзывов', true, `Загружено ${reviews.length} отзывов`);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><h4>❌ Ошибка загрузки отзывов</h4><p>${error.message}</p></div>`;
+                addTestResult('Получение всех отзывов', false, error.message);
+            }
+        }
+
+        async function setRejectedStatus() {
+            const reviewSelect = document.getElementById('reviewSelect');
+            const reviewId = reviewSelect.value;
+            const resultDiv = document.getElementById('rejectedResult');
+            
+            if (!reviewId) {
+                resultDiv.innerHTML = '<div class="warning"><p>⚠️ Выберите отзыв для изменения статуса</p></div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>🔄 Изменение статуса на "rejected"...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/reviews/${reviewId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        review: {
+                            status: 'rejected'
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    const updatedReview = await response.json();
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ Статус успешно изменен</h4>
+                            <p><strong>ID отзыва:</strong> ${updatedReview.id}</p>
+                            <p><strong>Новый статус:</strong> <span class="status-indicator status-${updatedReview.status}">${getStatusLabel(updatedReview.status)}</span></p>
+                            <p><strong>is_published:</strong> ${updatedReview.is_published}</p>
+                            <p><strong>Рейтинг:</strong> ${'★'.repeat(updatedReview.rating)}</p>
+                        </div>
+                    `;
+                    addTestResult('Установка статуса "rejected"', true, `Отзыв ID:${reviewId} переведен в статус "rejected"`);
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(`HTTP ${response.status}: ${JSON.stringify(errorData)}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><h4>❌ Ошибка изменения статуса</h4><p>${error.message}</p></div>`;
+                addTestResult('Установка статуса "rejected"', false, error.message);
+            }
+        }
+
+        async function getReviewsByStatus(status) {
+            const resultDiv = document.getElementById('filterResult');
+            resultDiv.innerHTML = `<p>🔄 Загрузка отзывов со статусом "${status}"...</p>`;
+            
+            try {
+                const response = await fetch(`${API_BASE}/reviews?status=${status}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const reviews = await response.json();
+                    const statusClass = `status-${status}`;
+                    
+                    let html = `
+                        <div class="success">
+                            <h4>✅ Отзывы со статусом <span class="status-indicator ${statusClass}">${getStatusLabel(status)}</span></h4>
+                            <p><strong>Найдено:</strong> ${reviews.length} отзывов</p>
+                    `;
+                    
+                    if (reviews.length > 0) {
+                        html += '<h5>📋 Список отзывов:</h5>';
+                        reviews.forEach(review => {
+                            const stars = '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
+                            html += `
+                                <div class="review-card">
+                                    <p><strong>ID:</strong> ${review.id} | <strong>Рейтинг:</strong> ${stars} | <strong>Статус:</strong> <span class="status-indicator ${statusClass}">${review.status}</span></p>
+                                    <p><strong>Комментарий:</strong> ${review.comment || 'Без комментария'}</p>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    html += '</div>';
+                    resultDiv.innerHTML = html;
+                    addTestResult(`Фильтрация по статусу "${status}"`, true, `Найдено ${reviews.length} отзывов`);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><h4>❌ Ошибка фильтрации</h4><p>${error.message}</p></div>`;
+                addTestResult(`Фильтрация по статусу "${status}"`, false, error.message);
+            }
+        }
+
+        async function testAllStatusChanges() {
+            const resultDiv = document.getElementById('statusTestResult');
+            const reviewSelect = document.getElementById('reviewSelect');
+            const reviewId = reviewSelect.value;
+            
+            if (!reviewId) {
+                resultDiv.innerHTML = '<div class="warning"><p>⚠️ Выберите отзыв для тестирования</p></div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>🔄 Тестирование всех статусов...</p>';
+            
+            const statuses = ['pending', 'published', 'rejected'];
+            let html = '<div class="info"><h4>🔄 Результаты смены статусов:</h4>';
+            
+            for (const status of statuses) {
+                try {
+                    const response = await fetch(`${API_BASE}/reviews/${reviewId}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            review: { status: status }
+                        })
+                    });
+
+                    if (response.ok) {
+                        const updatedReview = await response.json();
+                        const statusClass = `status-${status}`;
+                        html += `<p>✅ ${getStatusLabel(status)}: <span class="status-indicator ${statusClass}">${updatedReview.status}</span> (is_published: ${updatedReview.is_published})</p>`;
+                    } else {
+                        html += `<p>❌ ${getStatusLabel(status)}: Ошибка HTTP ${response.status}</p>`;
+                    }
+                } catch (error) {
+                    html += `<p>❌ ${getStatusLabel(status)}: ${error.message}</p>`;
+                }
+                
+                // Небольшая пауза между запросами
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            html += '</div>';
+            resultDiv.innerHTML = html;
+            addTestResult('Тест всех статусов', true, `Протестированы все статусы для отзыва ID:${reviewId}`);
+        }
+
+        function getStatusLabel(status) {
+            const labels = {
+                'published': 'Опубликован',
+                'pending': 'На модерации',
+                'rejected': 'Отклонен'
+            };
+            return labels[status] || status;
+        }
+
+        // Автоматический запуск базовых тестов
+        window.onload = function() {
+            setTimeout(() => {
+                testLogin();
+                setTimeout(() => {
+                    getAllReviews();
+                }, 2000);
+            }, 1000);
+        };
+    </script>
+</body>
+</html> 

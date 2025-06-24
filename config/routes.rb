@@ -168,6 +168,9 @@ Rails.application.routes.draw do
         end
       end
       
+      # Отзывы (прямые маршруты для админов)
+      resources :reviews, only: [:index, :show, :create, :update, :destroy]
+      
       # Клиенты
       resources :clients, only: [:index, :show, :create, :update, :destroy] do
         resources :cars, only: [:index, :show, :create, :update, :destroy]

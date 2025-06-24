@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест исправления редактирования отзывов</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .info { background: #d1ecf1; border-color: #bee5eb; color: #0c5460; }
+        button { padding: 10px 15px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        .log { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Тест исправления редактирования отзывов</h1>
+        
+        <div class="test-section info">
+            <h3>📋 Проблема</h3>
+            <p>Администратор получает ошибку 403 Forbidden при попытке редактировать отзыв через PATCH /api/v1/reviews/10</p>
+            
+            <h4>✅ Исправления:</h4>
+            <ul>
+                <li>Добавлен прямой маршрут <code>resources :reviews</code> в routes.rb</li>
+                <li>Исправлен метод <code>set_review</code> в контроллере для поддержки прямого доступа</li>
+                <li>API фронтенда уже использует правильный URL <code>reviews/${id}</code></li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🔐 1. Авторизация администратора</h3>
+            <button class="btn-primary" onclick="loginAdmin()">Войти как админ</button>
+            <div id="loginResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 2. Получение отзыва для редактирования</h3>
+            <input type="number" id="reviewId" placeholder="ID отзыва" value="10" style="padding: 8px; margin-right: 10px;">
+            <button class="btn-primary" onclick="getReview()">Получить отзыв</button>
+            <div id="getReviewResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>✏️ 3. Редактирование отзыва (PATCH)</h3>
+            <div style="margin: 10px 0;">
+                <label>Рейтинг: <input type="number" id="newRating" min="1" max="5" value="4" style="padding: 5px; width: 60px;"></label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Комментарий: <textarea id="newComment" style="padding: 5px; width: 100%; height: 80px;">Обновленный отзыв от администратора</textarea></label>
+            </div>
+            <button class="btn-success" onclick="updateReview()">Обновить отзыв</button>
+            <div id="updateResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 4. Проверка маршрутов</h3>
+            <button class="btn-primary" onclick="checkRoutes()">Проверить маршруты</button>
+            <div id="routesResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📜 Лог операций</h3>
+            <button class="btn-danger" onclick="clearLog()">Очистить лог</button>
+            <div id="operationLog" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let authToken = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('operationLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logEntry.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#333';
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('operationLog').innerHTML = '';
+        }
+
+        async function loginAdmin() {
+            const resultDiv = document.getElementById('loginResult');
+            try {
+                log('🔐 Авторизация администратора...');
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'admin@test.com',
+                        password: 'admin123'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.token) {
+                    authToken = data.token;
+                    resultDiv.innerHTML = `<div class="success">✅ Авторизация успешна<br>Токен: ${authToken.substring(0, 20)}...</div>`;
+                    log(`✅ Авторизация успешна. Роль: ${data.user?.role}`, 'success');
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка авторизации: ${data.error || 'Неизвестная ошибка'}</div>`;
+                    log(`❌ Ошибка авторизации: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+                log(`❌ Ошибка сети: ${error.message}`, 'error');
+            }
+        }
+
+        async function getReview() {
+            const resultDiv = document.getElementById('getReviewResult');
+            const reviewId = document.getElementById('reviewId').value;
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">❌ Сначала авторизуйтесь</div>';
+                return;
+            }
+
+            try {
+                log(`📝 Получение отзыва ID: ${reviewId}...`);
+                const response = await fetch(`${API_BASE}/reviews/${reviewId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Отзыв получен<br>
+                            <strong>Клиент:</strong> ${data.client?.user?.first_name} ${data.client?.user?.last_name}<br>
+                            <strong>Рейтинг:</strong> ${data.rating}/5<br>
+                            <strong>Комментарий:</strong> ${data.comment}<br>
+                            <strong>Сервисная точка:</strong> ${data.service_point?.name}
+                        </div>
+                    `;
+                    log(`✅ Отзыв ID:${reviewId} получен. Рейтинг: ${data.rating}`, 'success');
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка получения отзыва: ${data.error || response.status}</div>`;
+                    log(`❌ Ошибка получения отзыва: ${data.error || response.status}`, 'error');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+                log(`❌ Ошибка сети: ${error.message}`, 'error');
+            }
+        }
+
+        async function updateReview() {
+            const resultDiv = document.getElementById('updateResult');
+            const reviewId = document.getElementById('reviewId').value;
+            const newRating = document.getElementById('newRating').value;
+            const newComment = document.getElementById('newComment').value;
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">❌ Сначала авторизуйтесь</div>';
+                return;
+            }
+
+            try {
+                log(`✏️ Обновление отзыва ID: ${reviewId}...`);
+                const response = await fetch(`${API_BASE}/reviews/${reviewId}`, {
+                    method: 'PATCH',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        rating: parseInt(newRating),
+                        comment: newComment
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Отзыв успешно обновлен!<br>
+                            <strong>Новый рейтинг:</strong> ${data.rating}/5<br>
+                            <strong>Новый комментарий:</strong> ${data.comment}
+                        </div>
+                    `;
+                    log(`✅ Отзыв ID:${reviewId} успешно обновлен`, 'success');
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка обновления: ${data.error || response.status}</div>`;
+                    log(`❌ Ошибка обновления отзыва: ${data.error || response.status}`, 'error');
+                    
+                    // Дополнительная диагностика для 403 ошибки
+                    if (response.status === 403) {
+                        log('🔍 403 Forbidden - проверьте ReviewPolicy и права администратора', 'error');
+                    }
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+                log(`❌ Ошибка сети: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkRoutes() {
+            const resultDiv = document.getElementById('routesResult');
+            
+            try {
+                log('📊 Проверка доступных маршрутов...');
+                
+                // Проверяем health endpoint
+                const healthResponse = await fetch(`${API_BASE}/health`);
+                const healthData = await healthResponse.json();
+                
+                resultDiv.innerHTML = `
+                    <div class="info">
+                        <h4>🔍 Диагностика маршрутов:</h4>
+                        <p><strong>Health endpoint:</strong> ${healthResponse.ok ? '✅ Работает' : '❌ Не работает'}</p>
+                        <p><strong>Прямой маршрут отзывов:</strong> GET /api/v1/reviews/:id</p>
+                        <p><strong>Обновление отзыва:</strong> PATCH /api/v1/reviews/:id</p>
+                        <p><strong>Старый маршрут клиента:</strong> PATCH /api/v1/clients/:client_id/reviews/:id</p>
+                        
+                        <h4>📋 Ожидаемое поведение:</h4>
+                        <ul>
+                            <li>Администратор может использовать прямой маршрут /api/v1/reviews/:id</li>
+                            <li>Клиент использует вложенный маршрут /api/v1/clients/:client_id/reviews/:id</li>
+                            <li>ReviewPolicy должна разрешать админу редактирование любых отзывов</li>
+                        </ul>
+                    </div>
+                `;
+                
+                log('✅ Маршруты проверены', 'success');
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка проверки: ${error.message}</div>`;
+                log(`❌ Ошибка проверки маршрутов: ${error.message}`, 'error');
+            }
+        }
+
+        // Автоматическая проверка при загрузке страницы
+        window.onload = function() {
+            log('🚀 Тест исправления редактирования отзывов запущен');
+            log('📋 Для тестирования: 1) Авторизуйтесь как админ 2) Получите отзыв 3) Обновите его');
+        };
+    </script>
+</body>
+</html>

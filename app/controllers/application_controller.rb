@@ -18,16 +18,25 @@ class ApplicationController < ActionController::API
   protected
   
   def authenticate_request
-    header = request.headers['Authorization']
-    token = header.split(' ').last if header
+    # Сначала пробуем получить токен из cookies (приоритет)
+    access_token = cookies.encrypted[:access_token]
+    Rails.logger.info("Auth: access_token from cookies: #{access_token.present? ? 'present' : 'nil'}")
     
-    if token.nil?
+    # Если нет в cookies, пробуем из заголовка Authorization (для обратной совместимости)
+    if access_token.nil?
+      header = request.headers['Authorization']
+      access_token = header.split(' ').last if header
+      Rails.logger.info("Auth: access_token from header: #{access_token.present? ? 'present' : 'nil'}")
+    end
+    
+    if access_token.nil?
+      Rails.logger.info("Auth: No token found, returning unauthorized")
       render json: { error: 'Токен не предоставлен' }, status: :unauthorized
       return
     end
     
     begin
-      decoded = Auth::JsonWebToken.decode(token)
+      decoded = Auth::JsonWebToken.decode(access_token)
       
       # Проверяем, что это access токен
       unless decoded[:token_type] == 'access'
@@ -36,19 +45,54 @@ class ApplicationController < ActionController::API
       end
       
       @current_user = User.find(decoded[:user_id])
+      Rails.logger.info("Auth: Successfully authenticated user: #{@current_user.email} (ID: #{@current_user.id})")
       
       # Проверяем, что пользователь активен
       unless @current_user.is_active
+        Rails.logger.info("Auth: User account is inactive")
         render json: { error: 'Учетная запись отключена' }, status: :forbidden
         return
       end
       
     rescue Auth::TokenExpiredError => e
-      render json: { error: 'Токен истек', code: 'token_expired' }, status: :unauthorized
+      # Пробуем обновить токен из refresh cookie
+      if try_refresh_token
+        retry
+      else
+        render json: { error: 'Токен истек', code: 'token_expired' }, status: :unauthorized
+      end
     rescue Auth::TokenInvalidError => e
       render json: { error: 'Неверный токен', code: 'invalid_token' }, status: :unauthorized
     rescue ActiveRecord::RecordNotFound => e
       render json: { error: 'Пользователь не найден' }, status: :unauthorized
+    end
+  end
+
+  # Попытка автоматического обновления токена
+  def try_refresh_token
+    refresh_token = cookies.encrypted[:refresh_token]
+    return false if refresh_token.blank?
+
+    begin
+      new_access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
+      
+      # Устанавливаем новый access токен в cookie
+      cookies.encrypted[:access_token] = {
+        value: new_access_token,
+        httponly: true,
+        secure: Rails.env.production?,
+        same_site: :lax,
+        expires: 1.hour.from_now
+      }
+      
+      Rails.logger.info("Token auto-refreshed successfully")
+      return true
+    rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
+      # Удаляем недействительные cookies
+      cookies.delete(:access_token)
+      cookies.delete(:refresh_token)
+      Rails.logger.info("Failed to refresh token: #{e.message}")
+      return false
     end
   end
   

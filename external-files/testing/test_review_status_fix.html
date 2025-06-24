@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тестирование статуса отзыва</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+        .get-btn { background-color: #007bff; color: white; border: none; }
+        .update-btn { background-color: #28a745; color: white; border: none; }
+        .pending-btn { background-color: #ffc107; color: black; border: none; }
+        .rejected-btn { background-color: #dc3545; color: white; border: none; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .status-indicator { 
+            display: inline-block; 
+            padding: 2px 8px; 
+            border-radius: 3px; 
+            font-size: 12px; 
+            font-weight: bold; 
+        }
+        .status-published { background-color: #28a745; color: white; }
+        .status-pending { background-color: #ffc107; color: black; }
+        .status-rejected { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест статуса отзыва</h1>
+        <p>Тестирование исправления проблемы со статусом отзыва</p>
+
+        <div class="test-section">
+            <h3>🔐 1. Авторизация</h3>
+            <button class="get-btn" onclick="login()">Войти как админ</button>
+            <div id="auth-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📖 2. Получить отзыв</h3>
+            <button class="get-btn" onclick="getReview()">GET /api/v1/reviews/10</button>
+            <div id="get-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>✏️ 3. Обновить статус</h3>
+            <button class="pending-btn" onclick="updateStatus('pending')">Установить "На модерации"</button>
+            <button class="rejected-btn" onclick="updateStatus('rejected')">Установить "Отклонён"</button>
+            <button class="update-btn" onclick="updateStatus('published')">Установить "Опубликован"</button>
+            <div id="update-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 4. Проверить изменения</h3>
+            <button class="get-btn" onclick="checkStatus()">Проверить текущий статус</button>
+            <div id="check-result"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = '';
+
+        function formatStatus(status) {
+            const statusClass = `status-${status}`;
+            return `<span class="${statusClass}">${status.toUpperCase()}</span>`;
+        }
+
+        async function login() {
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        auth: {
+                            login: 'admin@test.com',
+                            password: 'admin123'
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    document.getElementById('auth-result').innerHTML = `
+                        <div class="success">
+                            ✅ Авторизация успешна<br>
+                            Токен: ${authToken.substring(0, 20)}...
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('auth-result').innerHTML = `
+                        <div class="error">❌ Ошибка авторизации: ${data.message}</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('auth-result').innerHTML = `
+                    <div class="error">❌ Ошибка: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function getReview() {
+            if (!authToken) {
+                alert('Сначала авторизуйтесь!');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/reviews/10', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('get-result').innerHTML = `
+                        <div class="success">
+                            ✅ Отзыв получен<br>
+                            ID: ${data.id}<br>
+                            Рейтинг: ${data.rating}⭐<br>
+                            Статус: ${formatStatus(data.status)}<br>
+                            is_published: ${data.is_published}<br>
+                            Комментарий: "${data.comment}"
+                        </div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('get-result').innerHTML = `
+                        <div class="error">❌ Ошибка: ${data.message || 'Неизвестная ошибка'}</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('get-result').innerHTML = `
+                    <div class="error">❌ Ошибка: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function updateStatus(status) {
+            if (!authToken) {
+                alert('Сначала авторизуйтесь!');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/reviews/10', {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        review: {
+                            rating: 5,
+                            comment: `🧪 Тест обновления статуса: ${status} (${new Date().toLocaleString()})`,
+                            status: status
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('update-result').innerHTML = `
+                        <div class="success">
+                            ✅ Статус обновлен на: ${formatStatus(data.status)}<br>
+                            is_published: ${data.is_published}<br>
+                            Время обновления: ${new Date(data.updated_at).toLocaleString()}
+                        </div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('update-result').innerHTML = `
+                        <div class="error">❌ Ошибка обновления: ${data.message || JSON.stringify(data)}</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('update-result').innerHTML = `
+                    <div class="error">❌ Ошибка: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function checkStatus() {
+            await getReview();
+            
+            // Копируем результат в секцию проверки
+            const getResult = document.getElementById('get-result').innerHTML;
+            document.getElementById('check-result').innerHTML = getResult;
+        }
+
+        // Автоматическая авторизация при загрузке страницы
+        window.onload = () => {
+            console.log('🧪 Тест статуса отзыва загружен');
+            console.log('Для начала нажмите "Войти как админ"');
+        };
+    </script>
+</body>
+</html> 

@@ -23,7 +23,15 @@ module Api
           
           Rails.logger.info("Auth#login: Authentication successful, setting cookies")
           
-          # Устанавливаем refresh токен в HttpOnly куки
+          # Устанавливаем оба токена в HttpOnly куки
+          cookies.encrypted[:access_token] = {
+            value: access_token,
+            httponly: true,
+            secure: Rails.env.production?,
+            same_site: :lax,
+            expires: 1.hour.from_now
+          }
+          
           cookies.encrypted[:refresh_token] = {
             value: refresh_token,
             httponly: true,
@@ -32,16 +40,14 @@ module Api
             expires: 30.days.from_now
           }
           
-          Rails.logger.info("Auth#login: Cookies set (refresh only), preparing response")
+          Rails.logger.info("Auth#login: Cookies set (access + refresh), preparing response")
           
           # Создаем пользовательский JSON с добавлением роли
           user_json = user.as_json(only: [:id, :email, :first_name, :last_name, :is_active])
           user_json['role'] = user.role.name if user.role
           
           render json: { 
-            tokens: { 
-              access: access_token # Отправляем только access токен в ответе
-            },
+            message: 'Авторизация успешна',
             user: user_json
           }
         else
@@ -80,7 +86,8 @@ module Api
         Rails.logger.info("Auth#logout: Attempting logout")
         Rails.logger.info("Auth#logout: cookies available: #{cookies.present?}")
         
-        # Удаляем auth куки при выходе
+        # Удаляем оба auth куки при выходе
+        cookies.delete(:access_token)
         cookies.delete(:refresh_token)
         
         Rails.logger.info("Auth#logout: Auth cookies deleted, sending success response")

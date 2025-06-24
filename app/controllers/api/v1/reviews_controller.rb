@@ -2,6 +2,7 @@ module Api
   module V1
     class ReviewsController < ApiController
       skip_before_action :authenticate_request, only: [:index, :show], if: -> { params[:service_point_id].present? }
+      before_action :ensure_authenticated, only: [:index], unless: -> { params[:service_point_id].present? || params[:client_id].present? }
       before_action :set_review, only: [:show, :update, :destroy]
       before_action :set_client_reviews, only: [:index], if: -> { params[:client_id].present? }
       before_action :set_service_point_reviews, only: [:index], if: -> { params[:service_point_id].present? }
@@ -9,7 +10,18 @@ module Api
       # GET /api/v1/clients/:client_id/reviews
       # GET /api/v1/service_points/:service_point_id/reviews
       def index
+        Rails.logger.info("ReviewsController#index: Starting with current_user: #{current_user&.email}")
+        Rails.logger.info("ReviewsController#index: current_user.admin?: #{current_user&.admin?}")
+        Rails.logger.info("ReviewsController#index: @reviews before policy_scope: #{@reviews&.count || 'nil'}")
+        
         @reviews = policy_scope(@reviews || Review)
+        
+        Rails.logger.info("ReviewsController#index: @reviews after policy_scope: #{@reviews.count}")
+        
+        # Фильтрация по статусу
+        if params[:status].present?
+          @reviews = @reviews.where(status: params[:status])
+        end
         
         # Фильтрация по рейтингу
         if params[:rating].present?
@@ -25,6 +37,18 @@ module Api
           @reviews = @reviews.where("rating <= ?", params[:max_rating])
         end
         
+        # Поиск по тексту комментария, имени клиента и телефону
+        if params[:search].present?
+          search_term = "%#{params[:search]}%"
+          @reviews = @reviews.joins(client: :user).where(
+            "comment ILIKE ? OR users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.phone ILIKE ?",
+            search_term, search_term, search_term, search_term
+          )
+        end
+        
+        # Загружаем связанные данные для оптимизации
+        @reviews = @reviews.includes({ client: :user }, :service_point, :booking)
+        
         # Сортировка
         if params[:sort_by] == 'rating'
           @reviews = @reviews.order(rating: params[:sort_direction] || 'desc')
@@ -32,14 +56,53 @@ module Api
           @reviews = @reviews.order(created_at: :desc)
         end
         
-        render json: paginate(@reviews)
+        Rails.logger.info("ReviewsController#index: Final @reviews count: #{@reviews.count}")
+        Rails.logger.info("ReviewsController#index: Final @reviews IDs: #{@reviews.pluck(:id)}")
+        
+        render json: @reviews.as_json(
+          include: {
+            client: {
+              only: [:id],
+              include: {
+                user: {
+                  only: [:id, :email, :phone, :first_name, :last_name]
+                }
+              }
+            },
+            service_point: {
+              only: [:id, :name, :address, :phone]
+            },
+            booking: {
+              only: [:id, :booking_date, :start_time, :end_time]
+            }
+          },
+          methods: [:status]
+        )
       end
       
       # GET /api/v1/clients/:client_id/reviews/:id
       # GET /api/v1/service_points/:service_point_id/reviews/:id
       def show
         authorize @review
-        render json: @review
+        render json: @review.as_json(
+          include: {
+            client: {
+              only: [:id],
+              include: {
+                user: {
+                  only: [:id, :email, :phone, :first_name, :last_name]
+                }
+              }
+            },
+            service_point: {
+              only: [:id, :name, :address, :phone]
+            },
+            booking: {
+              only: [:id, :booking_date, :start_time, :end_time]
+            }
+          },
+          methods: [:status]
+        )
       end
       
       # POST /api/v1/clients/:client_id/reviews (старый путь)
@@ -71,7 +134,14 @@ module Api
             # Пересчитываем рейтинг сервисной точки
             @review.service_point.recalculate_metrics!
             
-            render json: @review, status: :created
+            render json: @review.as_json(
+              include: {
+                client: { only: [:id], include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } } },
+                service_point: { only: [:id, :name, :address, :phone] },
+                booking: { only: [:id, :booking_date, :start_time, :end_time] }
+              },
+              methods: [:status]
+            ), status: :created
           else
             render json: { errors: @review.errors }, status: :unprocessable_entity
           end
@@ -85,16 +155,27 @@ module Api
           unless client && service_point
             return render json: { error: 'client_id and service_point_id are required' }, status: :unprocessable_entity
           end
+          # Обработка статуса при создании
+          status = params[:review][:status] || 'published'
+          
           @review = Review.new(
             rating: params[:review][:rating],
             comment: params[:review][:comment],
             client: client,
-            service_point: service_point
+            service_point: service_point,
+            status: status
           )
           authorize @review
           if @review.save
             service_point.recalculate_metrics!
-            render json: @review, status: :created
+            render json: @review.as_json(
+              include: {
+                client: { only: [:id], include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } } },
+                service_point: { only: [:id, :name, :address, :phone] },
+                booking: { only: [:id, :booking_date, :start_time, :end_time] }
+              },
+              methods: [:status]
+            ), status: :created
           else
             render json: { errors: @review.errors }, status: :unprocessable_entity
           end
@@ -112,11 +193,19 @@ module Api
           end
         end
         
+        # Теперь используем поле status напрямую
         if @review.update(review_params)
           # Пересчитываем рейтинг сервисной точки
           @review.service_point.recalculate_metrics!
           
-          render json: @review
+          render json: @review.as_json(
+            include: {
+              client: { only: [:id], include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } } },
+              service_point: { only: [:id, :name, :address, :phone] },
+              booking: { only: [:id, :booking_date, :start_time, :end_time] }
+            },
+            methods: [:status]
+          )
         else
           render json: { errors: @review.errors }, status: :unprocessable_entity
         end
@@ -138,13 +227,20 @@ module Api
       
       private
       
+      def ensure_authenticated
+        Rails.logger.info("ReviewsController#ensure_authenticated: Checking authentication")
+        authenticate_request unless current_user
+        Rails.logger.info("ReviewsController#ensure_authenticated: current_user after auth: #{current_user&.email}")
+      end
+      
       def set_review
         @review = if params[:client_id].present?
-                    Client.find(params[:client_id]).reviews.find(params[:id])
+                    Client.find(params[:client_id]).reviews.includes({ client: :user }, :service_point, :booking).find(params[:id])
                   elsif params[:service_point_id].present?
-                    ServicePoint.find(params[:service_point_id]).reviews.find(params[:id])
+                    ServicePoint.find(params[:service_point_id]).reviews.includes({ client: :user }, :service_point, :booking).find(params[:id])
                   else
-                    Review.find(params[:id])
+                    # Прямой доступ к отзыву для админов
+                    Review.includes({ client: :user }, :service_point, :booking).find(params[:id])
                   end
       end
       
@@ -159,7 +255,7 @@ module Api
       end
       
       def review_params
-        params.require(:review).permit(:booking_id, :rating, :comment, :reply, :recommend, :client_id, :service_point_id)
+        params.require(:review).permit(:booking_id, :rating, :comment, :reply, :recommend, :client_id, :service_point_id, :status)
       end
     end
   end
