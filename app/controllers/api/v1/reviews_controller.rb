@@ -159,7 +159,7 @@ module Api
       end
       
       def review_params
-        params.require(:review).permit(:booking_id, :rating, :comment, :reply, :recommend)
+        params.require(:review).permit(:booking_id, :rating, :comment, :reply, :recommend, :client_id, :service_point_id)
       end
     end
   end
