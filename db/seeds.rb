@@ -13,7 +13,16 @@ priority_seeds = [
   'clients.rb',              # Создаем клиентов
   'car_types.rb',            # Создаем типы автомобилей
   'car_brands_and_models.rb', # Создаем бренды и модели автомобилей
-  'schedule_generation.rb'   # Создаем шаблоны расписания
+  'schedule_generation.rb',  # Создаем шаблоны расписания
+  'articles_multilang.rb'    # Создаем многоязычные статьи
+]
+
+# Исключаемые файлы (устаревшие или временные)
+excluded_seeds = [
+  'articles.rb',             # Старый файл статей
+  'articles_ru.rb',          # Старый файл русских статей
+  'create_ukrainian_articles.rb', # Временный файл
+  'reset_and_seed_all.rb'    # Файл полного сброса БД (запускается отдельно)
 ]
 
 # Сначала выполняем приоритетные сидеры в заданном порядке
@@ -49,8 +58,8 @@ end
 # Затем выполняем остальные сидеры
 Dir[File.join(Rails.root, 'db', 'seeds', '*.rb')].sort.each do |seed|
   seed_name = File.basename(seed)
-  # Пропускаем уже выполненные приоритетные сидеры
-  unless priority_seeds.include?(seed_name)
+  # Пропускаем уже выполненные приоритетные сидеры и исключенные файлы
+  unless priority_seeds.include?(seed_name) || excluded_seeds.include?(seed_name)
     puts "\n=== Загрузка файла сидов: #{seed_name} ==="
     begin
       load seed

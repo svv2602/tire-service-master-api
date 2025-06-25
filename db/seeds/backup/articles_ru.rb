@@ -2,9 +2,9 @@
 puts "Создание русских статей для базы знаний..."
 
 # Получаем автора (админа) - используем простой способ
-admin_user = User.where(email: 'admin@example.com').first
+admin_user = User.where(email: 'admin@test.com').first
 unless admin_user
-  puts "Ошибка: Не найден пользователь admin@example.com"
+  puts "Ошибка: Не найден пользователь admin@test.com"
   exit
 end
 
