@@ -9,7 +9,7 @@ module Api
       # Универсальный вход для всех ролей пользователей
       def login
         auth_params = params.require(:auth)
-        email = auth_params[:login]
+        email = auth_params[:email] || auth_params[:login]
         password = auth_params[:password]
         
         user = User.find_by(email: email)
@@ -46,9 +46,13 @@ module Api
           user_json = user.as_json(only: [:id, :email, :first_name, :last_name, :is_active])
           user_json['role'] = user.role.name if user.role
           
-          render json: { 
+          render json: {
             message: 'Авторизация успешна',
-            user: user_json
+            user: user_json,
+            tokens: {
+              access: access_token,
+              refresh: refresh_token
+            }
           }
         else
           Rails.logger.info("Auth#login: Authentication failed")
