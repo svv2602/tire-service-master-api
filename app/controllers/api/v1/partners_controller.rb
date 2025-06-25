@@ -222,16 +222,23 @@ module Api
         
         ActiveRecord::Base.transaction do
           # Обновляем данные пользователя, если они переданы
-          if params[:partner][:user].present? && @partner.user
-            user_update_params = params.require(:partner).require(:user).permit(:email, :phone, :first_name, :last_name)
+          if params[:partner][:user_attributes].present? && @partner.user
+            user_update_params = params.require(:partner).require(:user_attributes).permit(:email, :phone, :first_name, :last_name, :password, :password_confirmation)
+            
+            Rails.logger.info("Обновление пользователя с параметрами: #{user_update_params.inspect}")
             
             unless @partner.user.update(user_update_params)
+              Rails.logger.error("Ошибки при обновлении пользователя: #{@partner.user.errors.full_messages}")
               raise ActiveRecord::RecordInvalid.new(@partner.user)
             end
           end
           
-          # Обновляем данные партнера
-          unless @partner.update(partner_params)
+          # Обновляем данные партнера (исключаем user_attributes, так как мы их уже обработали)
+          partner_update_params = partner_params.except(:user_attributes)
+          Rails.logger.info("Обновление партнера с параметрами: #{partner_update_params.inspect}")
+          
+          unless @partner.update(partner_update_params)
+            Rails.logger.error("Ошибки при обновлении партнера: #{@partner.errors.full_messages}")
             raise ActiveRecord::RecordInvalid.new(@partner)
           end
         end
@@ -378,7 +385,7 @@ module Api
           :company_name, :company_description, :contact_person, 
           :logo_url, :website, :tax_number, :legal_address,
           :region_id, :city_id, :is_active,
-          user_attributes: [:email, :password, :phone, :first_name, :last_name, :role_id]
+          user_attributes: [:email, :password, :password_confirmation, :phone, :first_name, :last_name, :role_id]
         )
         
         # Проверка и установка значений по умолчанию
