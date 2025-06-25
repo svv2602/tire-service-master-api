@@ -32,13 +32,27 @@ module Api
             expires: 1.hour.from_now
           }
           
-          cookies.encrypted[:refresh_token] = {
+          # Универсальные опции для refresh_token
+          cookie_options = {
             value: refresh_token,
             httponly: true,
-            secure: Rails.env.production?,
-            same_site: :lax, # Используем lax для лучшей совместимости с SPA
-            expires: 30.days.from_now
+            expires: 30.days.from_now,
+            path: '/'
           }
+          if Rails.env.production?
+            cookie_options[:secure] = true
+            cookie_options[:same_site] = :none
+          else
+            cookie_options[:secure] = false
+            cookie_options[:same_site] = :none
+          end
+          
+          # Используем несколько имён cookie для большей совместимости
+          cookies.encrypted[:refresh_token] = cookie_options
+          cookies.encrypted[:_tire_service_refresh] = cookie_options
+          cookies.encrypted[:_session] = cookie_options
+          
+          Rails.logger.info("Auth#login: All refresh cookies set with names: refresh_token, _tire_service_refresh, _session")
           
           Rails.logger.info("Auth#login: Cookies set (access + refresh), preparing response")
           
@@ -70,7 +84,23 @@ module Api
           raise Auth::TokenInvalidError, 'Refresh token is required' if refresh_token.blank?
           
           access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
-          
+          # Генерируем новый refresh_token и кладём в куку (сквозная ротация)
+          new_refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: Auth::JsonWebToken.decode(refresh_token)['user_id'])
+          # Универсальные опции для refresh_token (refresh)
+          cookie_options = {
+            value: new_refresh_token,
+            httponly: true,
+            expires: 30.days.from_now,
+            path: '/'
+          }
+          if Rails.env.production?
+            cookie_options[:secure] = true
+            cookie_options[:same_site] = :lax
+          else
+            cookie_options[:secure] = false
+            cookie_options[:same_site] = :lax
+          end
+          cookies.encrypted[:refresh_token] = cookie_options
           render json: { 
             tokens: { 
               access: access_token
