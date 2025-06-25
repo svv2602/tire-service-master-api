@@ -578,36 +578,49 @@ module Api
 
         # Проверяем обязательные поля
         required_fields = []
-        required_fields << 'first_name' unless client_data[:first_name].present?
-        required_fields << 'phone' unless client_data[:phone].present?
-
-        if required_fields.any?
-          render json: { 
-            error: 'Не заполнены обязательные поля',
-            details: required_fields.map { |field| "#{field} обязательно для заполнения" }
-          }, status: :unprocessable_entity
-          return
+        required_fields << 'first_name' if client_data[:first_name].blank?
+        required_fields << 'phone' if client_data[:phone].blank?
+        
+        # Проверяем формат телефона
+        if client_data[:phone].present?
+          phone = client_data[:phone].gsub(/[^\d+]/, '')
+          unless phone.match?(/\A\+38\d{10}\z/)
+            required_fields << 'phone_format'
+          end
         end
-
-        # Валидация формата телефона
-        phone = client_data[:phone].to_s.gsub(/[\s\-()]/, '')
-        unless phone.start_with?('+380') && phone.match?(/\A\+380\d{9}\z/)
-          render json: { 
-            error: 'Неверный формат телефона',
-            details: ['Телефон должен начинаться с +380 и содержать 12 цифр']
-          }, status: :unprocessable_entity
-          return
-        end
-
-        # Валидация email если он указан
+        
+        # Проверяем формат email если он указан
         if client_data[:email].present?
           unless client_data[:email].match?(URI::MailTo::EMAIL_REGEXP)
-            render json: { 
-              error: 'Неверный формат email',
-              details: ['Проверьте правильность написания email']
-            }, status: :unprocessable_entity
-            return
+            required_fields << 'email_format'
           end
+        end
+        
+        # Проверяем длину имени
+        if client_data[:first_name].present? && client_data[:first_name].length < 2
+          required_fields << 'first_name_length'
+        end
+        
+        # Проверяем длину фамилии если она указана
+        if client_data[:last_name].present? && client_data[:last_name].length < 2
+          required_fields << 'last_name_length'
+        end
+        
+        if required_fields.any?
+          error_messages = {
+            'first_name' => 'Имя обязательно для заполнения',
+            'first_name_length' => 'Имя должно быть не менее 2 символов',
+            'last_name_length' => 'Фамилия должна быть не менее 2 символов',
+            'phone' => 'Телефон обязателен для заполнения',
+            'phone_format' => 'Неверный формат телефона. Используйте формат +38XXXXXXXXXX',
+            'email_format' => 'Неверный формат email'
+          }
+          
+          render json: { 
+            error: 'Ошибка валидации',
+            details: required_fields.map { |field| error_messages[field] }.compact
+          }, status: :unprocessable_entity
+          return
         end
       end
       

@@ -22,7 +22,7 @@ class User < ApplicationRecord
   validates :phone, uniqueness: true, presence: true
   validates :role_id, presence: true
   validates :first_name, presence: true, length: { minimum: 2, maximum: 50 }
-  validates :last_name, presence: true, length: { minimum: 2, maximum: 50 }
+  validates :last_name, length: { minimum: 2, maximum: 50, allow_blank: true }
   validates :password, length: { minimum: 6 }, if: -> { password.present? }
   
   # Кастомная валидация для телефона
