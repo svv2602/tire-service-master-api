@@ -98,8 +98,9 @@ class Api::V1::ClientAuthController < ApplicationController
         value: refresh_token,
         httponly: true,
         secure: Rails.env.production?,
-        same_site: :strict,
-        expires: 30.days.from_now
+        same_site: :lax,
+        expires: 30.days.from_now,
+        path: '/'
       }
 
       # Возвращаем ответ в формате, соответствующем тестам
