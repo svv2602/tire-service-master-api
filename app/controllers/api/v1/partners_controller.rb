@@ -135,6 +135,11 @@ module Api
         Rails.logger.info("🎯 Партнер валиден: #{@partner&.valid?}")
         Rails.logger.info("🎯 Ошибки партнера: #{@partner&.errors&.full_messages}")
         
+        unless @partner.present?
+          Rails.logger.error("🚨 @partner не определен перед render!")
+          raise StandardError.new("Партнер не был создан")
+        end
+        
         render json: @partner.as_json(include: { 
           user: { only: [:id, :email, :phone, :first_name, :last_name] },
           region: { only: [:id, :name, :code] },
@@ -142,6 +147,11 @@ module Api
         }), status: :created
         
       rescue ActiveRecord::RecordInvalid => e
+        Rails.logger.error("🚨 ActiveRecord::RecordInvalid в создании партнера: #{e.message}")
+        Rails.logger.error("🚨 Запись с ошибкой: #{e.record.class.name}")
+        Rails.logger.error("🚨 Ошибки записи: #{e.record.errors.full_messages}")
+        Rails.logger.error("🚨 Backtrace: #{e.backtrace.first(10).join("\n")}")
+        
         errors = {}
         
         if e.record.is_a?(User)
@@ -161,6 +171,10 @@ module Api
           message: "Не удалось создать партнера. Проверьте правильность введенных данных."
         }, status: :unprocessable_entity
       rescue StandardError => e
+        Rails.logger.error("🚨 StandardError в создании партнера: #{e.message}")
+        Rails.logger.error("🚨 Класс ошибки: #{e.class.name}")
+        Rails.logger.error("🚨 Backtrace: #{e.backtrace.first(10).join("\n")}")
+        
         render json: { 
           error: e.message,
           message: "Произошла ошибка при создании партнера." 
