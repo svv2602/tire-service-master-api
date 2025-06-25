@@ -337,7 +337,12 @@ module Api
       end
       
       def client_user_params
-        params.require(:user).permit(:email, :phone, :password, :password_confirmation, :first_name, :last_name, :middle_name)
+        user_params = params.require(:user).permit(:email, :phone, :password, :password_confirmation, :first_name, :last_name, :middle_name)
+        
+        # Преобразуем пустую строку email в nil для избежания конфликта уникальности
+        user_params[:email] = nil if user_params[:email].present? && user_params[:email].strip.empty?
+        
+        user_params
       end
       
       def client_user_update_params
