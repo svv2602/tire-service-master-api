@@ -104,6 +104,10 @@ module Api
             end
             
             Rails.logger.info("Партнер успешно создан с ID: #{@partner.id}")
+            
+            # Проверяем, что партнер действительно сохранился
+            Rails.logger.info("Партнер после сохранения: #{@partner.inspect}")
+            Rails.logger.info("Ошибки партнера: #{@partner.errors.full_messages}")
 
             # Если это регистрация (не админ создает партнера), генерируем JWT токен
             if !current_user&.admin?
@@ -125,6 +129,11 @@ module Api
             end
           end
         end
+        
+        Rails.logger.info("🎯 Готовимся к render для партнера ID: #{@partner&.id}")
+        Rails.logger.info("🎯 Партнер существует: #{@partner.present?}")
+        Rails.logger.info("🎯 Партнер валиден: #{@partner&.valid?}")
+        Rails.logger.info("🎯 Ошибки партнера: #{@partner&.errors&.full_messages}")
         
         render json: @partner.as_json(include: { 
           user: { only: [:id, :email, :phone, :first_name, :last_name] },
