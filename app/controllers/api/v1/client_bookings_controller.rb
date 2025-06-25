@@ -530,14 +530,23 @@ module Api
       
       # Параметры бронирования
       def booking_params
-        params.require(:booking).permit(
+        # Получаем параметры
+        params_data = params.require(:booking).permit(
           :service_point_id,
           :booking_date,
           :start_time,
-          :end_time,
           :notes,
           :total_price
         )
+
+        # Добавляем end_time на основе start_time и duration_minutes
+        if params_data[:start_time].present?
+          duration_minutes = calculate_duration_minutes || 60 # По умолчанию 1 час
+          start_time = Time.parse("#{params_data[:booking_date]} #{params_data[:start_time]}")
+          params_data[:end_time] = (start_time + duration_minutes.minutes).strftime('%H:%M')
+        end
+
+        params_data
       end
       
       # Параметры для обновления бронирования
@@ -582,10 +591,10 @@ module Api
 
         # Валидация формата телефона
         phone = client_data[:phone].to_s.gsub(/[\s\-()]/, '')
-        unless phone.match?(/\A\+?\d{10,15}\z/)
+        unless phone.start_with?('+380') && phone.match?(/\A\+380\d{9}\z/)
           render json: { 
             error: 'Неверный формат телефона',
-            details: ['Телефон должен содержать от 10 до 15 цифр']
+            details: ['Телефон должен начинаться с +380 и содержать 12 цифр']
           }, status: :unprocessable_entity
           return
         end
