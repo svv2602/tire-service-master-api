@@ -204,20 +204,52 @@ module Api
       
       # Находит или создает клиента на основе переданных данных
       def find_or_create_client
+        # Если передан client_id, используем его
+        if params[:client_id].present?
+          client = Client.find_by(id: params[:client_id])
+          if client
+            return client
+          else
+            render json: { 
+              error: 'Клиент не найден',
+              details: ['Указанный client_id не существует']
+            }, status: :unprocessable_entity
+            return nil
+          end
+        end
+
+        # Если пользователь авторизован, используем его client
+        if current_user&.client
+          return current_user.client
+        end
+
+        # Проверяем наличие данных клиента для создания
+        unless params[:client].present?
+          render json: { 
+            error: 'Данные клиента обязательны',
+            details: ['Необходимо указать данные клиента или client_id']
+          }, status: :unprocessable_entity
+          return nil
+        end
+
         client_data = client_params
         
-        # Сначала ищем по email, если указан
-        if client_data[:email].present?
-          user = User.find_by(email: client_data[:email])
-          return user.client if user&.client
+        # Ищем существующего пользователя по телефону или email
+        user = if client_data[:phone].present?
+          User.find_by(phone: client_data[:phone])
+        elsif client_data[:email].present?
+          User.find_by(email: client_data[:email])
         end
-        
-        # Ищем по телефону
-        if client_data[:phone].present?
-          user = User.find_by(phone: client_data[:phone])
-          return user.client if user&.client
+
+        # Если нашли пользователя, возвращаем его client
+        if user&.client
+          render json: { 
+            error: 'Клиент уже существует',
+            details: ['Пожалуйста, войдите в систему для создания бронирования']
+          }, status: :unprocessable_entity
+          return nil
         end
-        
+
         # Получаем роль клиента
         client_role = UserRole.find_by(name: 'client')
         unless client_role
@@ -226,7 +258,7 @@ module Api
           }, status: :internal_server_error
           return nil
         end
-        
+
         # Создаем нового гостевого клиента
         user = User.create!(
           email: client_data[:email].presence || generate_guest_email,
@@ -237,7 +269,7 @@ module Api
           role: client_role,
           is_active: true
         )
-        
+
         # Client создается автоматически в коллбэке
         user.client
       rescue ActiveRecord::RecordInvalid => e
@@ -277,127 +309,125 @@ module Api
       
       # Создает бронирование для клиента
       def create_client_booking
-        booking_data = booking_params.merge(client_id: @client.id)
-        
-        # Создаем или находим тип автомобиля
+        # Находим тип автомобиля
         car_type = find_or_create_car_type
-        booking_data[:car_type_id] = car_type.id
+        return { success: false, errors: ['Тип автомобиля не найден'] } unless car_type
+
+        # Рассчитываем длительность
+        duration = calculate_duration_minutes
         
-        # Создаем автомобиль клиента если данные предоставлены
-        car = create_client_car
-        booking_data[:car_id] = car.id if car
+        # Создаем бронирование
+        booking_data = booking_params.merge(
+          client_id: @client.id,
+          car_type_id: car_type.id,
+          status_id: BookingStatus.find_by(name: 'pending')&.id
+        )
+
+        # Устанавливаем время окончания
+        booking_date = booking_data[:booking_date]
+        start_time = booking_data[:start_time]
         
-        # Определяем время окончания
-        start_datetime = Time.parse("#{booking_data[:booking_date]} #{booking_data[:start_time]}")
-        end_datetime = start_datetime + calculate_duration_minutes.minutes
+        # Создаем время начала и конца в локальном часовом поясе
+        start_datetime = Time.zone.parse("#{booking_date} #{start_time}")
+        end_datetime = start_datetime + duration.minutes
+        
+        # Сохраняем только время без часового пояса
+        booking_data[:start_time] = start_datetime.strftime('%H:%M')
         booking_data[:end_time] = end_datetime.strftime('%H:%M')
-        
-        # Устанавливаем статус
-        booking_data[:status_id] = BookingStatus.pending_id
-        
+
+        # Добавляем информацию об автомобиле в notes если она есть
+        car_info = car_params
+        if car_info[:license_plate].present? || car_info[:car_brand].present? || car_info[:car_model].present?
+          car_notes = []
+          car_notes << "Номер: #{car_info[:license_plate]}" if car_info[:license_plate].present?
+          car_notes << "Марка: #{car_info[:car_brand]}" if car_info[:car_brand].present?
+          car_notes << "Модель: #{car_info[:car_model]}" if car_info[:car_model].present?
+          
+          booking_data[:notes] = [
+            booking_data[:notes],
+            "Информация об автомобиле:",
+            *car_notes
+          ].compact.join("\n")
+        end
+
         booking = Booking.new(booking_data)
-        
-        if booking.save
-          # Добавляем услуги если указаны
-          create_booking_services(booking) if params[:services].present?
+
+        # Добавляем услуги если они есть
+        if params[:services].present?
+          create_booking_services(booking)
           booking.update_total_price!
+        end
+
+        if booking.save
+          # Отправляем уведомления
+          BookingNotificationJob.perform_later(booking.id, :created)
+          
+          # Запускаем напоминания
+          BookingRemindersJob.perform_later(booking.id)
           
           { success: true, booking: booking }
         else
           { success: false, errors: booking.errors.full_messages }
         end
-      end
-      
-      # Создает автомобиль для клиента
-      def create_client_car
-        car_info = car_params
-        return nil unless car_info[:license_plate].present?
-        
-        # Ищем существующий автомобиль клиента по номеру
-        existing_car = ClientCar.find_by(
-          client_id: @client.id,
-          license_plate: car_info[:license_plate]
-        )
-        
-        return existing_car if existing_car
-        
-        # Находим или создаем бренды и модели
-        car_brand = nil
-        car_model = nil
-        car_type = find_or_create_car_type
-        
-        if car_info[:car_brand].present?
-          car_brand = CarBrand.find_or_create_by(name: car_info[:car_brand])
-          
-          if car_info[:car_model].present?
-            car_model = CarModel.find_or_create_by(
-              name: car_info[:car_model],
-              brand: car_brand
-            )
-          end
-        end
-        
-        # Создаем автомобиль
-        ClientCar.create(
-          client: @client,
-          license_plate: car_info[:license_plate],
-          brand: car_brand,
-          model: car_model,
-          car_type: car_type,
-          year: car_info[:year]&.to_i,
-          is_primary: false
-        )
-      rescue ActiveRecord::RecordInvalid => e
-        Rails.logger.warn "Failed to create car: #{e.message}"
-        nil
+      rescue StandardError => e
+        Rails.logger.error "Error creating booking: #{e.message}\n#{e.backtrace.join("\n")}"
+        { success: false, errors: ["Внутренняя ошибка сервера: #{e.message}"] }
       end
       
       # Находит или создает тип автомобиля
       def find_or_create_car_type
         car_info = car_params
         
-        # Ищем существующий тип по названию
-        if car_info[:car_brand].present? && car_info[:car_model].present?
-          car_type_name = "#{car_info[:car_brand]} #{car_info[:car_model]}"
-          car_type = CarType.find_by('name ILIKE ?', car_type_name)
-          return car_type if car_type
+        # Если передан car_type_id, используем его
+        if car_info[:car_type_id].present?
+          car_type = CarType.find_by(id: car_info[:car_type_id])
+          if car_type
+            return car_type
+          else
+            Rails.logger.error "CarType not found with id: #{car_info[:car_type_id]}"
+            render json: { 
+              error: 'Тип автомобиля не найден',
+              details: ['Указанный тип автомобиля не существует']
+            }, status: :unprocessable_entity
+            return nil
+          end
         end
-        
-        # Создаем новый тип на основе переданных данных или общий
-        type_name = if car_info[:car_brand].present?
-          "#{car_info[:car_brand]} #{car_info[:car_model].presence || 'Неизвестная модель'}"
-        else
-          'Легковой автомобиль'
-        end
-        
-        CarType.find_or_create_by(name: type_name) do |ct|
-          ct.description = "Автомобиль: #{type_name}"
-          ct.is_active = true
-        end
+
+        # Если тип не указан, это ошибка
+        render json: { 
+          error: 'Тип автомобиля обязателен',
+          details: ['Необходимо указать тип автомобиля']
+        }, status: :unprocessable_entity
+        nil
       end
       
       # Создает услуги для бронирования
       def create_booking_services(booking)
         params[:services]&.each do |service_data|
-          next unless service_data[:service_id].present?
-          
+          service = Service.find_by(id: service_data[:service_id])
+          next unless service
+
           booking.booking_services.create!(
-            service_id: service_data[:service_id],
+            service: service,
             quantity: service_data[:quantity] || 1,
-            price: service_data[:price] || 0
+            price: service.price,
+            duration_minutes: service.duration_minutes
           )
         end
+      rescue StandardError => e
+        Rails.logger.error "Error creating booking services: #{e.message}"
       end
       
       # Рассчитывает продолжительность услуг
       def calculate_duration_minutes
         if params[:services].present?
-          total_duration = params[:services].sum do |service|
-            Service.find_by(id: service[:service_id])&.duration_minutes || 60
+          params[:services].sum do |service_data|
+            service = Service.find_by(id: service_data[:service_id])
+            next 0 unless service
+            (service.duration_minutes || 0) * (service_data[:quantity] || 1)
           end
-          [total_duration, 60].max # Минимум 60 минут
         else
-          params[:duration_minutes]&.to_i || 60
+          60 # Стандартная длительность 1 час
         end
       end
       
@@ -481,55 +511,95 @@ module Api
       # Параметры клиента
       def client_params
         params.require(:client).permit(
-          :first_name, :last_name, :phone, :email
+          :first_name,
+          :last_name,
+          :phone,
+          :email
         )
       end
       
       # Параметры автомобиля  
       def car_params
-        params.permit(
-          car: [:license_plate, :car_brand, :car_model, :year]
-        )[:car] || {}
+        params.require(:car).permit(
+          :license_plate,
+          :car_brand,
+          :car_model,
+          :car_type_id
+        )
       end
       
       # Параметры бронирования
       def booking_params
         params.require(:booking).permit(
-          :service_point_id, :booking_date, :start_time, :notes
+          :service_point_id,
+          :booking_date,
+          :start_time,
+          :end_time,
+          :notes,
+          :total_price
         )
       end
       
       # Параметры для обновления бронирования
       def client_booking_update_params
         params.require(:booking).permit(
-          :booking_date, :start_time, :notes
+          :booking_date,
+          :start_time,
+          :end_time,
+          :notes
         )
       end
       
       # Валидация данных клиента
       def validate_client_data
+        # Пропускаем валидацию если передан client_id
+        return if params[:client_id].present?
+        
+        # Пропускаем валидацию если пользователь авторизован
+        return if current_user&.client
+        
         client_data = params[:client]
-        car_data = params[:car]
-        
-        errors = []
-        
-        # Проверяем обязательные поля клиента
-        errors << 'Имя клиента обязательно' unless client_data[:first_name].present?
-        errors << 'Фамилия клиента обязательна' unless client_data[:last_name].present?
-        errors << 'Телефон клиента обязателен' unless client_data[:phone].present?
-        
-        # Проверяем обязательные поля автомобиля
-        errors << 'Номер автомобиля обязателен' unless car_data[:license_plate].present?
-        
-        if errors.any?
+        unless client_data
           render json: { 
-            error: 'Данные клиента заполнены неполно',
-            details: errors 
+            error: 'Данные клиента обязательны',
+            details: ['Необходимо указать данные клиента или client_id']
           }, status: :unprocessable_entity
-          return false
+          return
         end
-        
-        true
+
+        # Проверяем обязательные поля
+        required_fields = []
+        required_fields << 'first_name' unless client_data[:first_name].present?
+        required_fields << 'phone' unless client_data[:phone].present?
+
+        if required_fields.any?
+          render json: { 
+            error: 'Не заполнены обязательные поля',
+            details: required_fields.map { |field| "#{field} обязательно для заполнения" }
+          }, status: :unprocessable_entity
+          return
+        end
+
+        # Валидация формата телефона
+        phone = client_data[:phone].to_s.gsub(/[\s\-()]/, '')
+        unless phone.match?(/\A\+?\d{10,15}\z/)
+          render json: { 
+            error: 'Неверный формат телефона',
+            details: ['Телефон должен содержать от 10 до 15 цифр']
+          }, status: :unprocessable_entity
+          return
+        end
+
+        # Валидация email если он указан
+        if client_data[:email].present?
+          unless client_data[:email].match?(URI::MailTo::EMAIL_REGEXP)
+            render json: { 
+              error: 'Неверный формат email',
+              details: ['Проверьте правильность написания email']
+            }, status: :unprocessable_entity
+            return
+          end
+        end
       end
       
       # Генерирует email для гостевого пользователя

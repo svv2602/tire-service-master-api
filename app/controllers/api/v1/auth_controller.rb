@@ -107,7 +107,8 @@ module Api
             email_verified: current_user.email_verified,
             phone_verified: current_user.phone_verified,
             role: current_user.role.name,
-            is_active: current_user.is_active?
+            is_active: current_user.is_active?,
+            client_id: current_user.client&.id
           }
         }
 
