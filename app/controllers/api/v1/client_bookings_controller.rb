@@ -432,14 +432,15 @@ module Api
       # Рассчитывает продолжительность услуг
       def calculate_duration_minutes
         if params[:services].present?
+          # Если есть услуги, используем их общую длительность
           params[:services].sum do |service_data|
             service = Service.find_by(id: service_data[:service_id])
             next 0 unless service
             (service.duration_minutes || 0) * (service_data[:quantity] || 1)
           end
         else
-          # Если нет услуг, используем длительность слота сервисной точки
-          booking_data = booking_params
+          # Если нет услуг, ВСЕГДА используем длительность слота сервисной точки
+          booking_data = booking_params_for_duration
           if booking_data[:service_point_id].present? && booking_data[:start_time].present?
             service_point = ServicePoint.find_by(id: booking_data[:service_point_id])
             if service_point
@@ -451,13 +452,38 @@ module Api
               matching_slot = available_slots.find { |slot| slot[:start_time] == booking_data[:start_time] }
               
               if matching_slot
+                Rails.logger.info("calculate_duration_minutes: Используем длительность слота #{matching_slot[:duration_minutes]} мин для времени #{booking_data[:start_time]}")
                 return matching_slot[:duration_minutes]
+              else
+                Rails.logger.warn("calculate_duration_minutes: Слот не найден для времени #{booking_data[:start_time]}, доступные слоты: #{available_slots.map { |s| s[:start_time] }}")
               end
             end
           end
           
-          60 # Стандартная длительность 1 час как fallback
+          # Если не удалось найти слот, используем длительность первого активного поста
+          if booking_data[:service_point_id].present?
+            service_point = ServicePoint.find_by(id: booking_data[:service_point_id])
+            first_post = service_point&.service_posts&.active&.first
+            if first_post&.slot_duration
+              Rails.logger.info("calculate_duration_minutes: Используем длительность первого поста #{first_post.slot_duration} мин как fallback")
+              return first_post.slot_duration
+            end
+          end
+          
+          Rails.logger.warn("calculate_duration_minutes: Используем стандартную длительность 60 мин как последний fallback")
+          60 # Стандартная длительность только как последний fallback
         end
+      end
+      
+      # Вспомогательный метод для получения параметров без рекурсии
+      def booking_params_for_duration
+        params.require(:booking).permit(
+          :service_point_id,
+          :booking_date,
+          :start_time,
+          :notes,
+          :total_price
+        )
       end
       
       # Проверяет возможность отмены записи

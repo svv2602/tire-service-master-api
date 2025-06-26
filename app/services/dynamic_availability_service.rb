@@ -5,8 +5,8 @@ class DynamicAvailabilityService
   # Минимальный интервал проверки в минутах (для обратной совместимости)
   MIN_TIME_INTERVAL = 15
 
-  # Получение доступных временных слотов с учетом индивидуальных интервалов постов
-  def self.available_slots_for_date(service_point_id, date)
+  # Получение ВСЕХ временных слотов с указанием их доступности (новый метод)
+  def self.all_slots_for_date(service_point_id, date)
     service_point = ServicePoint.find(service_point_id)
     
     # Получаем рабочие часы для данной даты
@@ -16,7 +16,7 @@ class DynamicAvailabilityService
     # Определяем день недели
     day_key = date.strftime('%A').downcase
     
-    available_slots = []
+    all_slots = []
     
     # Проходим по всем активным постам
     service_point.service_posts.active.ordered_by_post_number.each do |service_post|
@@ -30,7 +30,7 @@ class DynamicAvailabilityService
       start_time = Time.parse("#{date} #{start_time_str}")
       end_time = Time.parse("#{date} #{end_time_str}")
       
-      # Генерируем слоты с индивидуальной длительностью
+      # Генерируем ВСЕ слоты с индивидуальной длительностью
       current_time = start_time
       while current_time + service_post.slot_duration.minutes <= end_time
         slot_end_time = current_time + service_post.slot_duration.minutes
@@ -38,36 +38,51 @@ class DynamicAvailabilityService
         # Проверяем доступность слота
         is_available = !is_slot_occupied?(service_point_id, service_post.id, date, current_time, slot_end_time)
         
-        if is_available
-          available_slots << {
-            service_post_id: service_post.id,
-            post_number: service_post.post_number,
-            post_name: service_post.name,
-            start_time: current_time.strftime('%H:%M'),
-            end_time: slot_end_time.strftime('%H:%M'),
-            duration_minutes: service_post.slot_duration,
-            datetime: current_time
-          }
-        end
+        all_slots << {
+          service_post_id: service_post.id,
+          post_number: service_post.post_number,
+          post_name: service_post.name,
+          start_time: current_time.strftime('%H:%M'),
+          end_time: slot_end_time.strftime('%H:%M'),
+          duration_minutes: service_post.slot_duration,
+          datetime: current_time,
+          available: is_available
+        }
         
         current_time = slot_end_time
       end
     end
     
     # Сортируем по времени
-    available_slots.sort_by { |slot| slot[:datetime] }
+    all_slots.sort_by { |slot| slot[:datetime] }
+  end
+
+  # Получение доступных временных слотов с учетом индивидуальных интервалов постов (существующий метод)
+  def self.available_slots_for_date(service_point_id, date)
+    # Используем новый метод и фильтруем только доступные слоты
+    all_slots_for_date(service_point_id, date).select { |slot| slot[:available] }
   end
   
   # Проверяет, занят ли слот для конкретного поста
   def self.is_slot_occupied?(service_point_id, service_post_id, date, start_time, end_time)
     # Проверяем наличие бронирований, которые пересекаются с этим слотом
+    # Логика пересечения: бронирование начинается до окончания слота И заканчивается после начала слота
+    
+    # Преобразуем время слота в строки для сравнения
+    slot_start_str = start_time.is_a?(String) ? start_time : start_time.strftime('%H:%M:%S')
+    slot_end_str = end_time.is_a?(String) ? end_time : end_time.strftime('%H:%M:%S')
+    
+    # Создаем объекты Time с фиксированной датой для корректного сравнения
+    slot_start_time = Time.parse("2000-01-01 #{slot_start_str}")
+    slot_end_time = Time.parse("2000-01-01 #{slot_end_str}")
+    
     Booking.where(
       service_point_id: service_point_id, 
       booking_date: date
     ).where(
       "start_time < ? AND end_time > ?", 
-      end_time.strftime('%H:%M:%S'), 
-      start_time.strftime('%H:%M:%S')
+      slot_end_time,
+      slot_start_time
     ).where.not(
       status_id: BookingStatus.canceled_statuses
     ).exists?
@@ -135,7 +150,7 @@ class DynamicAvailabilityService
   end
 
   # Проверка доступности конкретного времени
-  def self.check_availability_at_time(service_point_id, date, time, duration_minutes = 60, exclude_booking_id: nil)
+  def self.check_availability_at_time(service_point_id, date, time, duration_minutes = nil, exclude_booking_id: nil)
     service_point = ServicePoint.find(service_point_id)
     
     # Проверяем рабочие часы
@@ -158,21 +173,22 @@ class DynamicAvailabilityService
     # Ищем слот, который начинается в указанное время
     matching_slot = available_slots.find { |slot| slot[:start_time] == check_time.strftime('%H:%M') }
     
-    # Если нет слота в указанное время, проверяем доступность по старой логике
+    # Если нет слота в указанное время, время недоступно
     unless matching_slot
-      end_time = check_time + duration_minutes.minutes
-      return { available: false, reason: 'Недостаточно времени до закрытия' } if end_time > closing_time
-    else
-      # Если есть слот, проверяем, достаточно ли его длительности
-      slot_duration = matching_slot[:duration_minutes]
-      if duration_minutes > slot_duration
-        return { 
-          available: false, 
-          reason: "Недостаточная длительность слота (доступно #{slot_duration} мин, требуется #{duration_minutes} мин)",
-          available_duration: slot_duration,
-          requested_duration: duration_minutes
-        }
-      end
+      return { available: false, reason: 'Нет доступного слота в указанное время' }
+    end
+    
+    # Определяем длительность: используем переданную или длительность слота
+    actual_duration = duration_minutes || matching_slot[:duration_minutes]
+    
+    # Проверяем, достаточно ли длительности слота
+    if actual_duration > matching_slot[:duration_minutes]
+      return { 
+        available: false, 
+        reason: "Недостаточная длительность слота (доступно #{matching_slot[:duration_minutes]} мин, требуется #{actual_duration} мин)",
+        available_duration: matching_slot[:duration_minutes],
+        requested_duration: actual_duration
+      }
     end
     
     # Получаем количество активных постов, работающих в этот день
@@ -198,14 +214,8 @@ class DynamicAvailabilityService
     
     return { available: false, reason: 'Нет активных постов' } if total_posts.zero?
     
-    # Определяем время окончания бронирования
-    if matching_slot
-      # Используем длительность слота
-      end_time = check_time + matching_slot[:duration_minutes].minutes
-    else
-      # Используем переданную длительность
-      end_time = check_time + duration_minutes.minutes
-    end
+    # Определяем время окончания бронирования (используем фактическую длительность)
+    end_time = check_time + actual_duration.minutes
     
     # Проверяем доступность на весь период бронирования
     current_time = check_time
