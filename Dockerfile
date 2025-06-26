@@ -8,62 +8,52 @@
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG RUBY_VERSION=3.3.7
-FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
+FROM ruby:3.3.7-alpine
 
-# Rails app lives here
-WORKDIR /rails
+# Устанавливаем системные зависимости
+RUN apk add --no-cache \
+    build-base \
+    postgresql-dev \
+    postgresql-client \
+    git \
+    curl \
+    tzdata \
+    bash \
+    nodejs \
+    npm \
+    imagemagick \
+    vips-dev \
+    shared-mime-info
 
-# Install base packages
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 libvips postgresql-client && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+# Устанавливаем рабочую директорию
+WORKDIR /app
 
-# Set production environment
-ENV RAILS_ENV="production" \
-    BUNDLE_DEPLOYMENT="1" \
-    BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development"
-
-# Throw-away build stage to reduce size of final image
-FROM base AS build
-
-# Install packages needed to build gems
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential git libpq-dev libyaml-dev pkg-config && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
-
-# Install application gems
+# Копируем Gemfile и Gemfile.lock
 COPY Gemfile Gemfile.lock ./
-RUN bundle install && \
-    rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
-    bundle exec bootsnap precompile --gemfile
 
-# Copy application code
+# Устанавливаем bundler и зависимости
+RUN gem install bundler:2.5.23 && \
+    bundle config set --local deployment 'false' && \
+    bundle config set --local without 'production' && \
+    bundle install --jobs 4 --retry 3
+
+# Копируем весь код приложения
 COPY . .
 
-# Precompile bootsnap code for faster boot times
-RUN bundle exec bootsnap precompile app/ lib/
+# Создаем директории для логов и временных файлов
+RUN mkdir -p tmp/pids tmp/cache tmp/sockets log && \
+    chmod -R 755 tmp log
 
+# Устанавливаем права доступа
+RUN addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup && \
+    chown -R appuser:appgroup /app
 
+# Переключаемся на пользователя приложения
+USER appuser
 
-
-# Final stage for app image
-FROM base
-
-# Copy built artifacts: gems, application
-COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
-COPY --from=build /rails /rails
-
-# Run and own only the runtime files as a non-root user for security
-RUN groupadd --system --gid 1000 rails && \
-    useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
-    chown -R rails:rails db log storage tmp
-USER 1000:1000
-
-# Entrypoint prepares the database.
-ENTRYPOINT ["/rails/bin/docker-entrypoint"]
-
-# Start server via Thruster by default, this can be overwritten at runtime
+# Открываем порт 8000
 EXPOSE 8000
-CMD ["./bin/thrust", "./bin/rails", "server", "-p", "8000"]
+
+# Команда по умолчанию (может быть переопределена в docker-compose.yml)
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "8000"]
