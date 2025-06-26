@@ -547,6 +547,14 @@ module Api
             phone: booking.client.user.phone,
             email: booking.client.user.email
           },
+          service_recipient: {
+            first_name: booking.service_recipient_first_name,
+            last_name: booking.service_recipient_last_name,
+            full_name: booking.service_recipient_full_name,
+            phone: booking.service_recipient_phone,
+            email: booking.service_recipient_email,
+            is_self_service: booking.self_service?
+          },
           car_info: car_info,
           services: booking.booking_services.includes(:service).map do |bs|
             {
@@ -591,7 +599,11 @@ module Api
           :booking_date,
           :start_time,
           :notes,
-          :total_price
+          :total_price,
+          :service_recipient_first_name,
+          :service_recipient_last_name,
+          :service_recipient_phone,
+          :service_recipient_email
         )
 
         # Добавляем end_time на основе start_time и duration_minutes

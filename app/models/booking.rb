@@ -22,6 +22,19 @@ class Booking < ApplicationRecord
   validates :client_id, presence: true
   validates :service_point_id, presence: true
   validates :status_id, presence: true
+  
+  # Валидации для получателя услуги
+  validates :service_recipient_first_name, presence: true, length: { maximum: 100 }
+  validates :service_recipient_last_name, presence: true, length: { maximum: 100 }
+  validates :service_recipient_phone, presence: true, format: { 
+    with: /\A\+?[\d\s\-\(\)]+\z/, 
+    message: 'должен содержать только цифры, пробелы, дефисы и скобки' 
+  }
+  validates :service_recipient_email, format: { 
+    with: URI::MailTo::EMAIL_REGEXP, 
+    message: 'имеет неверный формат' 
+  }, allow_blank: true
+  
   validate :end_time_after_start_time
   validate :car_belongs_to_client, if: -> { car_id.present? }
   validate :valid_status_id, unless: -> { skip_status_validation || ENV['SWAGGER_DRY_RUN'] }
@@ -189,6 +202,37 @@ class Booking < ApplicationRecord
   
   def update_total_price!
     update(total_price: calculate_total_price)
+  end
+  
+  # Методы для работы с получателем услуги
+  def service_recipient_full_name
+    "#{service_recipient_first_name} #{service_recipient_last_name}".strip
+  end
+  
+  def service_recipient_display_name
+    service_recipient_full_name.presence || service_recipient_phone
+  end
+  
+  # Проверяет, является ли получатель услуги тем же лицом, что и заказчик
+  def self_service?
+    return false unless client&.user
+    
+    client.user.first_name == service_recipient_first_name &&
+    client.user.last_name == service_recipient_last_name &&
+    client.user.phone == service_recipient_phone
+  end
+  
+  # Возвращает контактную информацию для уведомлений
+  def contact_info_for_notifications
+    {
+      recipient_name: service_recipient_full_name,
+      recipient_phone: service_recipient_phone,
+      recipient_email: service_recipient_email,
+      booker_name: "#{client.user.first_name} #{client.user.last_name}".strip,
+      booker_phone: client.user.phone,
+      booker_email: client.user.email,
+      is_self_service: self_service?
+    }
   end
   
   # Проверка пересечения с другими бронированиями

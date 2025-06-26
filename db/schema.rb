@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_26_025945) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_26_101059) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -127,6 +127,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_025945) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "car_type_id", null: false
+    t.string "service_recipient_first_name", comment: "Имя получателя услуги"
+    t.string "service_recipient_last_name", comment: "Фамилия получателя услуги"
+    t.string "service_recipient_phone", comment: "Телефон получателя услуги для связи"
+    t.string "service_recipient_email", comment: "Email получателя услуги (опционально)"
     t.index ["booking_date", "start_time", "end_time"], name: "idx_bookings_time_range"
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_id"], name: "index_bookings_on_car_id"
@@ -135,6 +139,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_025945) do
     t.index ["payment_status_id"], name: "index_bookings_on_payment_status_id"
     t.index ["service_point_id", "booking_date", "start_time"], name: "idx_bookings_service_point_date_time"
     t.index ["service_point_id"], name: "index_bookings_on_service_point_id"
+    t.index ["service_recipient_phone"], name: "index_bookings_on_service_recipient_phone"
     t.index ["status_id"], name: "index_bookings_on_status_id"
   end
 

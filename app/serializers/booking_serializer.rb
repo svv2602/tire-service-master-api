@@ -3,7 +3,7 @@ class BookingSerializer < ActiveModel::Serializer
              :status_id, :payment_status_id, :cancellation_reason_id, :cancellation_comment, 
              :total_price, :payment_method, :notes, :created_at, :updated_at, :car_type_id,
              :status, :payment_status, :service_point, :client, :car_type, :car,
-             :car_brand, :car_model, :license_plate
+             :car_brand, :car_model, :license_plate, :service_recipient
   
   def status
     # In Swagger dry run mode, or if status is nil, provide a default
@@ -149,5 +149,16 @@ class BookingSerializer < ActiveModel::Serializer
 
   def license_plate
     object.license_plate
+  end
+
+  def service_recipient
+    {
+      first_name: object.service_recipient_first_name,
+      last_name: object.service_recipient_last_name,
+      full_name: object.service_recipient_full_name,
+      phone: object.service_recipient_phone,
+      email: object.service_recipient_email,
+      is_self_service: object.self_service?
+    }
   end
 end

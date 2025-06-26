@@ -5,7 +5,7 @@ class DynamicAvailabilityService
   # Минимальный интервал проверки в минутах (для обратной совместимости)
   MIN_TIME_INTERVAL = 15
 
-  # Получение ВСЕХ временных слотов с указанием их доступности (новый метод)
+  # Получение ВСЕХ временных слотов с указанием их доступности (новый подход)
   def self.all_slots_for_date(service_point_id, date)
     service_point = ServicePoint.find(service_point_id)
     
@@ -16,61 +16,71 @@ class DynamicAvailabilityService
     # Определяем день недели
     day_key = date.strftime('%A').downcase
     
-    all_slots = []
-    
-    # Проходим по всем активным постам
-    service_point.service_posts.active.ordered_by_post_number.each do |service_post|
-      # Проверяем, работает ли пост в этот день
-      next unless service_post.working_on_day?(day_key)
-      
-      # Определяем время работы поста
-      start_time_str = service_post.start_time_for_day(day_key)
-      end_time_str = service_post.end_time_for_day(day_key)
-      
-      start_time = Time.parse("#{date} #{start_time_str}")
-      end_time = Time.parse("#{date} #{end_time_str}")
-      
-      # Генерируем ВСЕ слоты с индивидуальной длительностью
-      current_time = start_time
-      while current_time + service_post.slot_duration.minutes <= end_time
-        slot_end_time = current_time + service_post.slot_duration.minutes
-        
-        # Проверяем доступность слота
-        is_available = !is_slot_occupied?(service_point_id, service_post.id, date, current_time, slot_end_time)
-        
-        all_slots << {
-          service_post_id: service_post.id,
-          post_number: service_post.post_number,
-          post_name: service_post.name,
-          start_time: current_time.strftime('%H:%M'),
-          end_time: slot_end_time.strftime('%H:%M'),
-          duration_minutes: service_post.slot_duration,
-          datetime: current_time,
-          available: is_available
-        }
-        
-        current_time = slot_end_time
-      end
+    # Получаем все активные посты, работающие в этот день
+    working_posts = service_point.service_posts.active.select do |post|
+      post.working_on_day?(day_key)
     end
     
-    # Сортируем по времени
-    all_slots.sort_by { |slot| slot[:datetime] }
+    return [] if working_posts.empty?
+    
+    # Берем параметры от первого поста (предполагаем что все посты одинаковые)
+    first_post = working_posts.first
+    total_posts_count = working_posts.count
+    
+    # Определяем время работы
+    start_time_str = first_post.start_time_for_day(day_key)
+    end_time_str = first_post.end_time_for_day(day_key)
+    slot_duration = first_post.slot_duration
+    
+    start_time = Time.parse("#{date} #{start_time_str}")
+    end_time = Time.parse("#{date} #{end_time_str}")
+    
+    # Генерируем все временные слоты
+    all_slots = []
+    current_time = start_time
+    
+    while current_time + slot_duration.minutes <= end_time
+      slot_end_time = current_time + slot_duration.minutes
+      
+      # Подсчитываем количество бронирований в это время
+      bookings_count = count_bookings_at_time(service_point_id, date, current_time, slot_end_time)
+      
+      # Создаем слоты для каждого доступного поста
+      (1..total_posts_count).each do |post_index|
+        is_available = post_index > bookings_count
+        
+        all_slots << {
+          service_post_id: working_posts[post_index - 1]&.id,
+          post_number: post_index,
+          post_name: "Пост #{post_index}",
+          start_time: current_time.strftime('%H:%M'),
+          end_time: slot_end_time.strftime('%H:%M'),
+          duration_minutes: slot_duration,
+          datetime: current_time,
+          available: is_available,
+          bookings_count: bookings_count,
+          total_posts: total_posts_count
+        }
+      end
+      
+      current_time = slot_end_time
+    end
+    
+    # Сортируем по времени, затем по номеру поста
+    all_slots.sort_by { |slot| [slot[:datetime], slot[:post_number]] }
   end
 
-  # Получение доступных временных слотов с учетом индивидуальных интервалов постов (существующий метод)
+  # Получение доступных временных слотов (существующий метод)
   def self.available_slots_for_date(service_point_id, date)
     # Используем новый метод и фильтруем только доступные слоты
     all_slots_for_date(service_point_id, date).select { |slot| slot[:available] }
   end
-  
-  # Проверяет, занят ли слот для конкретного поста
-  def self.is_slot_occupied?(service_point_id, service_post_id, date, start_time, end_time)
-    # Проверяем наличие бронирований, которые пересекаются с этим слотом
-    # Логика пересечения: бронирование начинается до окончания слота И заканчивается после начала слота
-    
-    # Преобразуем время слота в строки для сравнения
-    slot_start_str = start_time.is_a?(String) ? start_time : start_time.strftime('%H:%M:%S')
-    slot_end_str = end_time.is_a?(String) ? end_time : end_time.strftime('%H:%M:%S')
+
+  # Подсчет количества бронирований в указанное время
+  def self.count_bookings_at_time(service_point_id, date, start_time, end_time)
+    # Преобразуем время в строки для сравнения с БД
+    slot_start_str = start_time.strftime('%H:%M:%S')
+    slot_end_str = end_time.strftime('%H:%M:%S')
     
     # Создаем объекты Time с фиксированной датой для корректного сравнения
     slot_start_time = Time.parse("2000-01-01 #{slot_start_str}")
@@ -85,10 +95,12 @@ class DynamicAvailabilityService
       slot_start_time
     ).where.not(
       status_id: BookingStatus.canceled_statuses
-    ).exists?
-    
-    # Примечание: Убрали зависимость от schedule_slots, так как генерируем слоты динамически
-    # На основе рабочих часов постов. Проверяем только пересечения с бронированиями.
+    ).count
+  end
+
+  # Устаревший метод - оставляем для обратной совместимости
+  def self.is_slot_occupied?(service_point_id, service_post_id, date, start_time, end_time)
+    count_bookings_at_time(service_point_id, date, start_time, end_time) > 0
   end
   
   # Группировка слотов постов по времени с агрегацией доступности
