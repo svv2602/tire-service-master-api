@@ -523,7 +523,7 @@ module Api
           ],
           service_posts_attributes: [
             :id, :name, :description, :slot_duration, :is_active, :post_number, :_destroy,
-            :has_custom_schedule,
+            :has_custom_schedule, :service_category_id,
             working_days: [:monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday],
             custom_hours: [:start, :end]
           ],
