@@ -438,7 +438,25 @@ module Api
             (service.duration_minutes || 0) * (service_data[:quantity] || 1)
           end
         else
-          60 # Стандартная длительность 1 час
+          # Если нет услуг, используем длительность слота сервисной точки
+          booking_data = booking_params
+          if booking_data[:service_point_id].present? && booking_data[:start_time].present?
+            service_point = ServicePoint.find_by(id: booking_data[:service_point_id])
+            if service_point
+              # Получаем доступные слоты для указанной даты
+              date = Date.parse(booking_data[:booking_date])
+              available_slots = DynamicAvailabilityService.available_slots_for_date(service_point.id, date)
+              
+              # Ищем слот, который начинается в указанное время
+              matching_slot = available_slots.find { |slot| slot[:start_time] == booking_data[:start_time] }
+              
+              if matching_slot
+                return matching_slot[:duration_minutes]
+              end
+            end
+          end
+          
+          60 # Стандартная длительность 1 час как fallback
         end
       end
       

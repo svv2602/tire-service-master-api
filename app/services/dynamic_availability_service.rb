@@ -152,9 +152,28 @@ class DynamicAvailabilityService
     
     return { available: false, reason: 'Вне рабочих часов' } if check_time < opening_time || check_time >= closing_time
     
-    # Проверяем что время + длительность не выходит за рабочие часы
-    end_time = check_time + duration_minutes.minutes
-    return { available: false, reason: 'Недостаточно времени до закрытия' } if end_time > closing_time
+    # Получаем доступные слоты для проверки реальной доступности
+    available_slots = available_slots_for_date(service_point_id, date)
+    
+    # Ищем слот, который начинается в указанное время
+    matching_slot = available_slots.find { |slot| slot[:start_time] == check_time.strftime('%H:%M') }
+    
+    # Если нет слота в указанное время, проверяем доступность по старой логике
+    unless matching_slot
+      end_time = check_time + duration_minutes.minutes
+      return { available: false, reason: 'Недостаточно времени до закрытия' } if end_time > closing_time
+    else
+      # Если есть слот, проверяем, достаточно ли его длительности
+      slot_duration = matching_slot[:duration_minutes]
+      if duration_minutes > slot_duration
+        return { 
+          available: false, 
+          reason: "Недостаточная длительность слота (доступно #{slot_duration} мин, требуется #{duration_minutes} мин)",
+          available_duration: slot_duration,
+          requested_duration: duration_minutes
+        }
+      end
+    end
     
     # Получаем количество активных постов, работающих в этот день
     day_key = case date.wday
@@ -178,6 +197,15 @@ class DynamicAvailabilityService
     end.count
     
     return { available: false, reason: 'Нет активных постов' } if total_posts.zero?
+    
+    # Определяем время окончания бронирования
+    if matching_slot
+      # Используем длительность слота
+      end_time = check_time + matching_slot[:duration_minutes].minutes
+    else
+      # Используем переданную длительность
+      end_time = check_time + duration_minutes.minutes
+    end
     
     # Проверяем доступность на весь период бронирования
     current_time = check_time
