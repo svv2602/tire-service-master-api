@@ -368,7 +368,16 @@ class DynamicAvailabilityService
 
   # Проверка доступности времени с учетом категории услуг
   def self.check_availability_with_category(service_point_id, date, start_time, duration, category_id)
-    service_point = ServicePoint.find(service_point_id)
+    begin
+      service_point = ServicePoint.find(service_point_id)
+    rescue ActiveRecord::RecordNotFound
+      return {
+        available: false,
+        reason: 'Сервисная точка не найдена',
+        available_posts_count: 0,
+        total_posts_count: 0
+      }
+    end
     
     # Получаем посты только для указанной категории
     available_posts = service_point.posts_for_category(category_id)

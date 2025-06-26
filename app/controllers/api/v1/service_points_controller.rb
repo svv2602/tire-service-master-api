@@ -1,8 +1,8 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details]
-      before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses, :client_search]
+      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details, :by_category, :posts_by_category]
+      before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses, :client_search, :by_category]
       
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points
@@ -431,23 +431,26 @@ module Api
         
         return render json: { error: 'Параметр category_id обязателен' }, status: :bad_request unless category_id
         
-        service_points = ServicePoint.joins(:service_posts)
-                                     .where(service_posts: { service_category_id: category_id, is_active: true })
-                                     .where(is_active: true)
+        # Сначала получаем ID сервисных точек с постами указанной категории
+        service_point_ids = ServicePost.where(service_category_id: category_id, is_active: true)
+                                       .joins(:service_point)
+                                       .where(service_points: { is_active: true })
+                                       .pluck(:service_point_id)
+                                       .uniq
         
-        service_points = service_points.where(city_id: city_id) if city_id.present?
+        # Фильтруем по городу если указан
+        if city_id.present?
+          service_point_ids = ServicePoint.where(id: service_point_ids, city_id: city_id).pluck(:id)
+        end
         
-        paginated_points = service_points.distinct
-                                         .includes(:city, :partner, service_posts: :service_category)
-                                         .page(params[:page])
-                                         .per(params[:per_page] || 20)
+        # Получаем сервисные точки по ID
+        service_points = ServicePoint.where(id: service_point_ids)
+                                     .includes(:city, :partner, service_posts: :service_category)
         
-        render json: {
-          data: paginated_points.map { |sp| ServicePointSerializer.new(sp).as_json },
-          total_count: service_points.distinct.count,
-          current_page: paginated_points.current_page,
-          total_pages: paginated_points.total_pages
-        }
+        # Используем базовый метод paginate из ApiController
+        result = paginate(service_points)
+        
+        render json: result
       end
       
       # GET /api/v1/service_points/:id/posts_by_category?category_id=1

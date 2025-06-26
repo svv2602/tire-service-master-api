@@ -3,7 +3,7 @@
 
 class Api::V1::AvailabilityController < ApplicationController
   skip_before_action :authenticate_request, except: [:client_check_availability]
-  before_action :set_service_point, except: [:client_check_availability]
+  before_action :set_service_point, except: [:client_check_availability, :check_with_category, :slots_for_category]
   
   # GET /api/v1/availability/:service_point_id/:date  
   # Получение доступных временных слотов для клиентов (упрощенная версия)
