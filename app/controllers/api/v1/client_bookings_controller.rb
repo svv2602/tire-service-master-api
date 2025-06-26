@@ -3,7 +3,7 @@ module Api
     class ClientBookingsController < ApiController
       # Пропускаем аутентификацию для клиентских записей (гостевые записи)
       # Но для create делаем опциональную аутентификацию - пытаемся аутентифицировать, но не требуем этого
-      skip_before_action :authenticate_request, only: [:show, :update, :cancel, :reschedule, :check_availability_for_booking]
+      skip_before_action :authenticate_request, only: [:create, :show, :update, :cancel, :reschedule, :check_availability_for_booking]
       before_action :optional_authenticate_request, only: [:create]
       
       before_action :set_booking, only: [:show, :update, :cancel, :reschedule]
@@ -18,13 +18,21 @@ module Api
           return
         end
         
+        # Логируем входящие параметры
+        Rails.logger.info "=== CLIENT BOOKING CREATE START ==="
+        Rails.logger.info "Params: #{params.to_unsafe_h}"
+        Rails.logger.info "Current user: #{current_user&.id}"
+        
         # Создаем или находим клиента
         @client = find_or_create_client
         return unless @client
         
+        Rails.logger.info "Client found/created: #{@client.id}"
+        
         # Проверяем доступность времени
         availability_check = perform_availability_check
         unless availability_check[:available]
+          Rails.logger.error "Availability check failed: #{availability_check[:reason]}"
           render json: { 
             error: 'Выбранное время недоступно', 
             reason: availability_check[:reason] 
@@ -32,8 +40,15 @@ module Api
           return
         end
         
+        Rails.logger.info "Availability check passed"
+        
         # Создаем бронирование
         booking_result = create_client_booking
+        
+        Rails.logger.info "Booking creation result: #{booking_result[:success] ? 'SUCCESS' : 'FAILED'}"
+        if !booking_result[:success]
+          Rails.logger.error "Booking errors: #{booking_result[:errors]}"
+        end
         
         if booking_result[:success]
           render json: format_booking_response(booking_result[:booking]), status: :created
@@ -43,6 +58,8 @@ module Api
             details: booking_result[:errors] 
           }, status: :unprocessable_entity
         end
+        
+        Rails.logger.info "=== CLIENT BOOKING CREATE END ==="
       end
       
       # POST /api/v1/client_bookings/check_availability_for_booking
