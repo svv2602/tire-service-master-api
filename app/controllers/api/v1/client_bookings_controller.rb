@@ -2,7 +2,9 @@ module Api
   module V1
     class ClientBookingsController < ApiController
       # Пропускаем аутентификацию для клиентских записей (гостевые записи)
-      skip_before_action :authenticate_request, only: [:create, :show, :update, :cancel, :reschedule, :check_availability_for_booking]
+      # Но для create делаем опциональную аутентификацию - пытаемся аутентифицировать, но не требуем этого
+      skip_before_action :authenticate_request, only: [:show, :update, :cancel, :reschedule, :check_availability_for_booking]
+      before_action :optional_authenticate_request, only: [:create]
       
       before_action :set_booking, only: [:show, :update, :cancel, :reschedule]
       before_action :validate_client_data, only: [:create], unless: -> { ENV['SWAGGER_DRY_RUN'] }
@@ -218,9 +220,18 @@ module Api
           end
         end
 
-        # Если пользователь авторизован, используем его client
-        if current_user&.client
-          return current_user.client
+        # Если пользователь авторизован, используем его client или создаем новый
+        if current_user
+          if current_user.client
+            Rails.logger.info("find_or_create_client: Using current_user.client (ID: #{current_user.client.id})")
+            return current_user.client
+          else
+            # Создаем клиента для авторизованного пользователя
+            Rails.logger.info("find_or_create_client: Creating new client for authenticated user (ID: #{current_user.id})")
+            client = Client.create!(user: current_user)
+            Rails.logger.info("find_or_create_client: Created client (ID: #{client.id}) for user (ID: #{current_user.id})")
+            return client
+          end
         end
 
         # Проверяем наличие данных клиента для создания
@@ -564,8 +575,17 @@ module Api
         # Пропускаем валидацию если передан client_id
         return if params[:client_id].present?
         
-        # Пропускаем валидацию если пользователь авторизован
-        return if current_user&.client
+        # Пропускаем валидацию если пользователь авторизован и у него есть связанный клиент
+        if current_user&.client
+          Rails.logger.info("validate_client_data: Skipping validation - user has associated client (ID: #{current_user.client.id})")
+          return
+        end
+        
+        # Если пользователь авторизован, но у него нет связанного клиента, создаем его
+        if current_user && !current_user.client
+          Rails.logger.info("validate_client_data: Creating client for authenticated user (ID: #{current_user.id})")
+          return
+        end
         
         client_data = params[:client]
         unless client_data
@@ -670,6 +690,35 @@ module Api
           created_at: Time.current,
           updated_at: Time.current
         }
+      end
+
+      # Опциональная аутентификация - пытается аутентифицировать пользователя, но не требует этого
+      def optional_authenticate_request
+        # Сначала пробуем получить токен из cookies (приоритет)
+        access_token = cookies.encrypted[:access_token]
+        Rails.logger.info("Optional Auth: access_token from cookies: #{access_token.present? ? 'present' : 'nil'}")
+        
+        # Если нет в cookies, пробуем из заголовка Authorization
+        if access_token.nil?
+          header = request.headers['Authorization']
+          access_token = header.split(' ').last if header
+          Rails.logger.info("Optional Auth: access_token from header: #{access_token.present? ? 'present' : 'nil'}")
+        end
+        
+        # Если токен есть, пытаемся аутентифицировать пользователя
+        if access_token.present?
+          begin
+            decoded = Auth::JsonWebToken.decode(access_token)
+            @current_user = User.find(decoded[:user_id])
+            Rails.logger.info("Optional Auth: Successfully authenticated user ID: #{@current_user.id}")
+          rescue => e
+            Rails.logger.info("Optional Auth: Failed to authenticate: #{e.message}")
+            @current_user = nil
+          end
+        else
+          Rails.logger.info("Optional Auth: No token found, proceeding as guest")
+          @current_user = nil
+        end
       end
     end
   end

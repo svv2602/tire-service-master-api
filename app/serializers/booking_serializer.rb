@@ -2,7 +2,8 @@ class BookingSerializer < ActiveModel::Serializer
   attributes :id, :client_id, :service_point_id, :car_id, :booking_date, :start_time, :end_time, 
              :status_id, :payment_status_id, :cancellation_reason_id, :cancellation_comment, 
              :total_price, :payment_method, :notes, :created_at, :updated_at, :car_type_id,
-             :status, :payment_status, :service_point, :client, :car_type, :car
+             :status, :payment_status, :service_point, :client, :car_type, :car,
+             :car_brand, :car_model, :license_plate
   
   def status
     # In Swagger dry run mode, or if status is nil, provide a default
@@ -83,6 +84,8 @@ class BookingSerializer < ActiveModel::Serializer
       {
         id: object.client.id,
         name: object.client.user.full_name || "#{object.client.user.first_name} #{object.client.user.last_name}",
+        first_name: object.client.user.first_name,
+        last_name: object.client.user.last_name,
         phone: object.client.user.phone,
         email: object.client.user.email
       }
@@ -90,6 +93,8 @@ class BookingSerializer < ActiveModel::Serializer
       {
         id: object.client_id,
         name: "Клиент ##{object.client_id}",
+        first_name: nil,
+        last_name: nil,
         phone: nil,
         email: nil
       }
@@ -102,6 +107,11 @@ class BookingSerializer < ActiveModel::Serializer
         id: object.service_point.id,
         name: object.service_point.name,
         address: object.service_point.address,
+        phone: object.service_point.phone,
+        city: object.service_point.city ? {
+          id: object.service_point.city.id,
+          name: object.service_point.city.name
+        } : nil,
         partner_name: object.service_point.partner&.name
       }
     else
@@ -109,6 +119,8 @@ class BookingSerializer < ActiveModel::Serializer
         id: object.service_point_id,
         name: "Точка обслуживания ##{object.service_point_id}",
         address: nil,
+        phone: nil,
+        city: nil,
         partner_name: nil
       }
     end
@@ -125,5 +137,17 @@ class BookingSerializer < ActiveModel::Serializer
     else
       nil
     end
+  end
+
+  def car_brand
+    object.car_brand
+  end
+
+  def car_model
+    object.car_model
+  end
+
+  def license_plate
+    object.license_plate
   end
 end
