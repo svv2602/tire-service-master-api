@@ -198,7 +198,7 @@ class ServicePoint < ApplicationRecord
   def add_service(service_id)
     return if service_available?(service_id)
     
-    service_point_services.create(service_id: service_id)
+    service_point_services.create!(service_id: service_id)
   end
   
   # Удаляет услугу из списка доступных в этой точке
@@ -240,6 +240,50 @@ class ServicePoint < ApplicationRecord
     update_column(:working_hours, hours)
     
     hours
+  end
+  
+  # Методы для работы с категориями услуг
+  
+  def posts_for_category(category_id)
+    service_posts.active.by_category(category_id)
+  end
+  
+  def posts_count_for_category(category_id)
+    posts_for_category(category_id).count
+  end
+  
+  def contact_phone_for_category(category_id)
+    category_contacts.dig(category_id.to_s, 'phone')
+  end
+  
+  def contact_email_for_category(category_id)
+    category_contacts.dig(category_id.to_s, 'email')
+  end
+  
+  def set_category_contact(category_id, phone:, email: nil)
+    self.category_contacts = category_contacts.merge(
+      category_id.to_s => { 'phone' => phone, 'email' => email }.compact
+    )
+  end
+  
+  def remove_category_contact(category_id)
+    updated_contacts = category_contacts.dup
+    updated_contacts.delete(category_id.to_s)
+    self.category_contacts = updated_contacts
+  end
+  
+  def supports_category?(category_id)
+    posts_for_category(category_id).exists?
+  end
+  
+  def available_categories
+    service_posts.includes(:service_category).map(&:service_category).uniq
+  end
+  
+  def category_statistics
+    service_posts.joins(:service_category)
+                 .group('service_categories.name')
+                 .count
   end
   
   private

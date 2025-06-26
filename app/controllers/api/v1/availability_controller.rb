@@ -2,7 +2,7 @@
 # Контроллер для работы с динамической доступностью
 
 class Api::V1::AvailabilityController < ApplicationController
-  skip_before_action :authenticate_request
+  skip_before_action :authenticate_request, except: [:client_check_availability]
   before_action :set_service_point, except: [:client_check_availability]
   
   # GET /api/v1/availability/:service_point_id/:date  
@@ -280,6 +280,68 @@ class Api::V1::AvailabilityController < ApplicationController
       render json: { error: 'Неверный формат времени' }, status: :bad_request
     rescue => e
       render json: { error: "Внутренняя ошибка сервера: #{e.message}" }, status: :internal_server_error
+    end
+  end
+  
+  # POST /api/v1/availability/check_with_category
+  def check_with_category
+    service_point_id = params[:servicePointId]
+    date = params[:date]
+    start_time = params[:startTime]
+    duration = params[:duration]&.to_i || 60
+    category_id = params[:categoryId]
+    
+    # Валидация параметров
+    required_params = [service_point_id, date, start_time, category_id]
+    if required_params.any?(&:blank?)
+      return render json: { 
+        error: 'Не все обязательные параметры переданы' 
+      }, status: :bad_request
+    end
+    
+    begin
+      result = DynamicAvailabilityService.check_availability_with_category(
+        service_point_id, date, start_time, duration, category_id
+      )
+      
+      render json: result
+    rescue => e
+      render json: { 
+        error: "Ошибка проверки доступности: #{e.message}" 
+      }, status: :internal_server_error
+    end
+  end
+  
+  # GET /api/v1/availability/slots_for_category?service_point_id=1&date=2025-01-01&category_id=1
+  def slots_for_category
+    service_point_id = params[:service_point_id]
+    date = params[:date]
+    category_id = params[:category_id]
+    
+    # Валидация параметров
+    required_params = [service_point_id, date, category_id]
+    if required_params.any?(&:blank?)
+      return render json: { 
+        error: 'Не все обязательные параметры переданы' 
+      }, status: :bad_request
+    end
+    
+    begin
+      slots = DynamicAvailabilityService.available_slots_for_category(
+        service_point_id, date, category_id
+      )
+      
+      render json: {
+        service_point_id: service_point_id,
+        date: date,
+        category_id: category_id,
+        slots: slots,
+        total_slots: slots.count
+      }
+    rescue => e
+      render json: { 
+        error: "Ошибка получения слотов: #{e.message}" 
+      }, status: :internal_server_error
     end
   end
   

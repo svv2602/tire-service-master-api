@@ -373,47 +373,128 @@ module Api
         )
       end
       
-      # Получает расписание с детализацией по постам обслуживания
+      # GET /api/v1/service_points/posts_schedule?date=YYYY-MM-DD
       def posts_schedule
         date = Date.parse(params[:date]) rescue Date.current
         
-        schedule_by_posts = {}
+        # Получаем все посты для данной сервисной точки
+        posts = @service_point.service_posts.active.includes(:schedule_slots)
         
-        @service_point.service_posts.active.ordered_by_post_number.each do |service_post|
-          slots = @service_point.schedule_slots
-                               .where(slot_date: date, service_post: service_post)
-                               .left_joins(:bookings)
-                               .order(:start_time)
+        # Получаем расписание для каждого поста на указанную дату
+        posts_schedule = posts.map do |post|
+          # Получаем слоты для данного поста на указанную дату
+          slots = post.schedule_slots.where(slot_date: date)
+                      .order(:start_time)
           
-          schedule_by_posts[service_post.id] = {
-            post_info: ServicePostSerializer.new(service_post).as_json,
+          # Проверяем доступность каждого слота (нет ли бронирований)
+          available_slots = slots.select do |slot|
+            # Проверяем, нет ли бронирований на этот слот
+            !Booking.exists?(
+              service_point: @service_point,
+              booking_date: date,
+              start_time: slot.start_time,
+              end_time: slot.end_time
+            )
+          end
+          
+          {
+            post_id: post.id,
+            post_number: post.post_number,
+            post_name: post.name,
+            total_slots: slots.count,
+            available_slots: available_slots.count,
+            occupied_slots: slots.count - available_slots.count,
             slots: slots.map do |slot|
               {
                 id: slot.id,
                 start_time: slot.start_time.strftime('%H:%M'),
                 end_time: slot.end_time.strftime('%H:%M'),
-                duration_minutes: slot.duration_in_minutes,
-                is_available: slot.is_available,
-                is_booked: slot.booked?
+                is_available: available_slots.include?(slot),
+                is_special: slot.is_special,
+                special_description: slot.special_description
               }
-            end,
-            total_slots: slots.count,
-            available_slots: slots.select { |s| s.is_available && !s.booked? }.count,
-            occupancy_rate: slots.count > 0 ? ((slots.select(&:booked?).count.to_f / slots.count) * 100).round(2) : 0
+            end
           }
         end
         
         render json: {
-          service_point: ServicePointBasicSerializer.new(@service_point).as_json,
-          date: date,
-          schedule_by_posts: schedule_by_posts,
-          summary: {
-            total_posts: @service_point.service_posts.active.count,
-            total_slots: @service_point.schedule_slots.where(slot_date: date).count,
-            total_available: @service_point.schedule_slots.where(slot_date: date, is_available: true)
-                                          .left_joins(:bookings).where(bookings: { id: nil }).count
-          }
+          service_point_id: @service_point.id,
+          date: date.strftime('%Y-%m-%d'),
+          posts_schedule: posts_schedule
         }
+      end
+      
+      # GET /api/v1/service_points/by_category?category_id=1&city_id=1
+      def by_category
+        category_id = params[:category_id]
+        city_id = params[:city_id]
+        
+        return render json: { error: 'Параметр category_id обязателен' }, status: :bad_request unless category_id
+        
+        service_points = ServicePoint.joins(:service_posts)
+                                     .where(service_posts: { service_category_id: category_id, is_active: true })
+                                     .where(is_active: true)
+        
+        service_points = service_points.where(city_id: city_id) if city_id.present?
+        
+        paginated_points = service_points.distinct
+                                         .includes(:city, :partner, service_posts: :service_category)
+                                         .page(params[:page])
+                                         .per(params[:per_page] || 20)
+        
+        render json: {
+          data: paginated_points.map { |sp| ServicePointSerializer.new(sp).as_json },
+          total_count: service_points.distinct.count,
+          current_page: paginated_points.current_page,
+          total_pages: paginated_points.total_pages
+        }
+      end
+      
+      # GET /api/v1/service_points/:id/posts_by_category?category_id=1
+      def posts_by_category
+        category_id = params[:category_id]
+        
+        return render json: { error: 'Параметр category_id обязателен' }, status: :bad_request unless category_id
+        
+        posts = @service_point.posts_for_category(category_id)
+        
+        render json: {
+          data: posts.includes(:service_category).map { |post| ServicePostSerializer.new(post).as_json },
+          category_contact: {
+            phone: @service_point.contact_phone_for_category(category_id),
+            email: @service_point.contact_email_for_category(category_id)
+          },
+          posts_count: posts.count
+        }
+      end
+      
+      # PATCH /api/v1/service_points/:id/category_contacts
+      def update_category_contacts
+        contacts_data = params[:category_contacts] || {}
+        
+        begin
+          contacts_data.each do |category_id, contact_info|
+            next unless contact_info.is_a?(Hash)
+            
+            @service_point.set_category_contact(
+              category_id,
+              phone: contact_info[:phone],
+              email: contact_info[:email]
+            )
+          end
+          
+          if @service_point.save
+            render json: { 
+              success: true, 
+              category_contacts: @service_point.category_contacts,
+              message: 'Контакты успешно обновлены'
+            }
+          else
+            render json: { errors: @service_point.errors }, status: :unprocessable_entity
+          end
+        rescue => e
+          render json: { error: "Ошибка обновления контактов: #{e.message}" }, status: :internal_server_error
+        end
       end
       
       private

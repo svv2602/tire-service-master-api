@@ -199,35 +199,28 @@
 
 ### 2.3 Booking
 
-- [ ] **Обновить модель Booking**
+- [x] **Обновить модель Booking**
   ```ruby
   # app/models/booking.rb
   class Booking < ApplicationRecord
     # Существующие связи...
     belongs_to :service_category, optional: true
     
+    # Скоупы для работы с категориями
     scope :by_category, ->(category_id) { where(service_category_id: category_id) }
+    scope :with_category, -> { includes(:service_category) }
     
-    validate :service_category_supported_by_service_point
-    before_validation :assign_service_category_from_services, on: :create
+    # Валидация категории
+    validate :service_category_matches_service_point, if: :service_category_id?
     
     private
     
-    def service_category_supported_by_service_point
-      return unless service_category_id && service_point_id
+    def service_category_matches_service_point
+      return unless service_category_id.present? && service_point_id.present?
       
       unless service_point.supports_category?(service_category_id)
-        errors.add(:service_category_id, 'не поддерживается данной сервисной точкой')
+        errors.add(:service_category_id, "не поддерживается данной сервисной точкой")
       end
-    end
-    
-    def assign_service_category_from_services
-      return if service_category_id.present?
-      return if services.empty?
-      
-      # Берем категорию первой услуги
-      first_service_category = services.first&.category_id
-      self.service_category_id = first_service_category if first_service_category
     end
   end
   ```
@@ -238,14 +231,12 @@
 
 ### 3.1 ServicePointsController
 
-- [ ] **Добавить методы для работы с категориями**
+- [x] **Добавить методы для работы с категориями**
   ```ruby
   # app/controllers/api/v1/service_points_controller.rb
-  class Api::V1::ServicePointsController < Api::V1::BaseController
-    before_action :set_service_point, only: [:show, :update, :destroy, :posts_by_category, :update_category_contacts]
-    
+  class Api::V1::ServicePointsController < ApiController
+    # GET /api/v1/service_points/by_category?category_id=1&city_id=1
     def by_category
-      # GET /api/v1/service_points/by_category?category_id=1&city_id=1
       category_id = params[:category_id]
       city_id = params[:city_id]
       
@@ -270,8 +261,8 @@
       }
     end
     
+    # GET /api/v1/service_points/:id/posts_by_category?category_id=1
     def posts_by_category
-      # GET /api/v1/service_points/:id/posts_by_category?category_id=1
       category_id = params[:category_id]
       
       return render json: { error: 'Параметр category_id обязателен' }, status: :bad_request unless category_id
@@ -288,8 +279,8 @@
       }
     end
     
+    # PATCH /api/v1/service_points/:id/category_contacts
     def update_category_contacts
-      # PATCH /api/v1/service_points/:id/category_contacts
       contacts_data = params[:category_contacts] || {}
       
       begin
@@ -316,63 +307,16 @@
         render json: { error: "Ошибка обновления контактов: #{e.message}" }, status: :internal_server_error
       end
     end
-    
-    private
-    
-    def service_point_params
-      params.require(:service_point).permit(
-        :name, :address, :phone, :email, :city_id, :partner_id, :is_active,
-        category_contacts: {}
-      )
-    end
   end
   ```
 
 ### 3.2 BookingsController
 
 - [ ] **Добавить поддержку категорий**
-  ```ruby
-  # app/controllers/api/v1/bookings_controller.rb
-  class Api::V1::BookingsController < Api::V1::BaseController
-    def index
-      # Существующая логика...
-      
-      # Фильтрация по категории
-      if params[:service_category_id].present?
-        @bookings = @bookings.by_category(params[:service_category_id])
-      end
-      
-      # Остальная логика пагинации и рендера...
-    end
-    
-    def create
-      # Проверяем поддержку категории сервисной точкой
-      if booking_params[:service_category_id] && booking_params[:service_point_id]
-        service_point = ServicePoint.find(booking_params[:service_point_id])
-        unless service_point.supports_category?(booking_params[:service_category_id])
-          return render json: { 
-            error: 'Выбранная категория услуг не поддерживается данной сервисной точкой' 
-          }, status: :unprocessable_entity
-        end
-      end
-      
-      # Существующая логика создания...
-    end
-    
-    private
-    
-    def booking_params
-      params.require(:booking).permit(
-        # Существующие параметры...
-        :service_category_id
-      )
-    end
-  end
-  ```
 
 ### 3.3 AvailabilityController
 
-- [ ] **Создать контроллер для проверки доступности с категориями**
+- [x] **Создать контроллер для проверки доступности с категориями**
   ```ruby
   # app/controllers/api/v1/availability_controller.rb
   class Api::V1::AvailabilityController < Api::V1::BaseController

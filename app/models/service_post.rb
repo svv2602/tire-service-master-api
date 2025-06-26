@@ -1,9 +1,11 @@
 # Модель для индивидуальных постов обслуживания с настройками времени
 class ServicePost < ApplicationRecord
   belongs_to :service_point
+  belongs_to :service_category
   has_many :schedule_slots, dependent: :destroy
   
   # Валидации
+  validates :service_category_id, presence: true
   validates :post_number, presence: true
   validates :post_number, numericality: { greater_than: 0, 
                                          message: "Номер поста должен быть положительным числом" }
@@ -26,6 +28,10 @@ class ServicePost < ApplicationRecord
   scope :for_service_point, ->(service_point_id) { where(service_point: service_point_id) }
   scope :ordered_by_post_number, -> { order(:post_number) }
   scope :with_custom_schedule, -> { where(has_custom_schedule: true) }
+  
+  # Новые скоупы для работы с категориями
+  scope :by_category, ->(category_id) { where(service_category_id: category_id) }
+  scope :with_category, -> { includes(:service_category) }
   
   # Методы для работы с индивидуальным расписанием
   
@@ -118,6 +124,16 @@ class ServicePost < ApplicationRecord
                                  .count
     
     (booked_slots.to_f / total_slots * 100).round(2)
+  end
+
+  # Методы для работы с категориями
+  
+  def category_name
+    service_category.name
+  end
+  
+  def supports_category?(category_id)
+    service_category_id == category_id
   end
 
   private

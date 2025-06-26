@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_26_101059) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_26_121747) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -131,12 +131,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_101059) do
     t.string "service_recipient_last_name", comment: "Фамилия получателя услуги"
     t.string "service_recipient_phone", comment: "Телефон получателя услуги для связи"
     t.string "service_recipient_email", comment: "Email получателя услуги (опционально)"
+    t.bigint "service_category_id"
     t.index ["booking_date", "start_time", "end_time"], name: "idx_bookings_time_range"
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_id"], name: "index_bookings_on_car_id"
     t.index ["car_type_id"], name: "index_bookings_on_car_type_id"
     t.index ["client_id"], name: "index_bookings_on_client_id"
     t.index ["payment_status_id"], name: "index_bookings_on_payment_status_id"
+    t.index ["service_category_id"], name: "index_bookings_on_service_category_id"
     t.index ["service_point_id", "booking_date", "start_time"], name: "idx_bookings_service_point_date_time"
     t.index ["service_point_id"], name: "index_bookings_on_service_point_id"
     t.index ["service_recipient_phone"], name: "index_bookings_on_service_recipient_phone"
@@ -550,6 +552,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_101059) do
     t.boolean "is_active", default: true, null: false
     t.string "work_status", default: "working", null: false
     t.json "working_hours"
+    t.jsonb "category_contacts", default: {}
+    t.index ["category_contacts"], name: "index_service_points_on_category_contacts", using: :gin
     t.index ["city_id"], name: "index_service_points_on_city_id"
     t.index ["is_active", "work_status"], name: "index_service_points_on_is_active_and_work_status"
     t.index ["is_active"], name: "index_service_points_on_is_active"
@@ -570,8 +574,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_101059) do
     t.boolean "has_custom_schedule", default: false, null: false, comment: "Использует ли пост индивидуальное расписание"
     t.json "working_days", comment: "JSON с настройками рабочих дней поста (monday, tuesday, etc.)"
     t.json "custom_hours", comment: "JSON с индивидуальным временем работы поста (start, end)"
+    t.bigint "service_category_id", null: false
+    t.index ["service_category_id"], name: "index_service_posts_on_service_category_id"
     t.index ["service_point_id", "is_active"], name: "index_service_posts_on_service_point_and_active"
     t.index ["service_point_id", "post_number"], name: "index_service_posts_on_service_point_and_post_number", unique: true
+    t.index ["service_point_id", "service_category_id"], name: "idx_on_service_point_id_service_category_id_59ee909e4d"
     t.index ["service_point_id"], name: "index_service_posts_on_service_point_id"
   end
 
@@ -657,6 +664,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_101059) do
   add_foreign_key "bookings", "client_cars", column: "car_id"
   add_foreign_key "bookings", "clients"
   add_foreign_key "bookings", "payment_statuses", on_delete: :restrict, validate: false
+  add_foreign_key "bookings", "service_categories"
   add_foreign_key "bookings", "service_points"
   add_foreign_key "car_models", "car_brands", column: "brand_id"
   add_foreign_key "cars", "car_types"
@@ -700,6 +708,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_101059) do
   add_foreign_key "service_point_services", "services"
   add_foreign_key "service_points", "cities"
   add_foreign_key "service_points", "partners"
+  add_foreign_key "service_posts", "service_categories"
   add_foreign_key "service_posts", "service_points"
   add_foreign_key "services", "service_categories", column: "category_id"
   add_foreign_key "system_logs", "users"

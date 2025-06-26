@@ -10,6 +10,7 @@ class Booking < ApplicationRecord
   belongs_to :status, class_name: 'BookingStatus', foreign_key: 'status_id', required: true
   belongs_to :payment_status, optional: true
   belongs_to :cancellation_reason, optional: true
+  belongs_to :service_category, optional: true
   has_many :booking_services, dependent: :destroy
   has_many :services, through: :booking_services
   has_one :review, dependent: :destroy
@@ -39,6 +40,7 @@ class Booking < ApplicationRecord
   validate :car_belongs_to_client, if: -> { car_id.present? }
   validate :valid_status_id, unless: -> { skip_status_validation || ENV['SWAGGER_DRY_RUN'] }
   validate :booking_time_available, on: :create, unless: -> { skip_availability_check }
+  validate :service_category_matches_service_point, if: :service_category_id?
   
   # Атрибуты для пропуска валидаций (нужны для тестов)
   attr_accessor :skip_status_validation, :skip_availability_check, :skip_notifications
@@ -57,6 +59,10 @@ class Booking < ApplicationRecord
   scope :active, -> { where(status_id: BookingStatus.active_statuses) }
   scope :completed, -> { where(status_id: BookingStatus.completed_statuses) }
   scope :canceled, -> { where(status_id: BookingStatus.canceled_statuses) }
+  
+  # Скоупы для работы с категориями
+  scope :by_category, ->(category_id) { where(service_category_id: category_id) }
+  scope :with_category, -> { includes(:service_category) }
   
   # Скоупы для динамической проверки занятости
   scope :overlapping_time, ->(date, start_time, end_time) {
@@ -326,6 +332,14 @@ class Booking < ApplicationRecord
       BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_cancelled])
     when 'completed'
       BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_completed])
+    end
+  end
+  
+  def service_category_matches_service_point
+    return unless service_category_id.present? && service_point_id.present?
+    
+    unless service_point.supports_category?(service_category_id)
+      errors.add(:service_category_id, "не поддерживается данной сервисной точкой")
     end
   end
 end

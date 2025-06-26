@@ -2,9 +2,11 @@
 class ServicePostSerializer < ActiveModel::Serializer
   attributes :id, :post_number, :name, :slot_duration, :is_active, :description, 
              :created_at, :updated_at, :display_name, :slot_duration_in_seconds,
-             :has_custom_schedule, :working_days, :custom_hours, :working_days_list
+             :has_custom_schedule, :working_days, :custom_hours, :working_days_list,
+             :category_name
   
   belongs_to :service_point, serializer: ServicePointBasicSerializer
+  belongs_to :service_category, serializer: ServiceCategorySerializer
   
   # Дополнительные атрибуты для удобства
   def display_name
@@ -13,6 +15,10 @@ class ServicePostSerializer < ActiveModel::Serializer
   
   def slot_duration_in_seconds
     object.slot_duration_in_seconds
+  end
+  
+  def category_name
+    object.category_name
   end
   
   # Возвращает список рабочих дней для удобства фронтенда

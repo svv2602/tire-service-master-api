@@ -34,6 +34,10 @@ Rails.application.routes.draw do
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
       post 'bookings/check_availability', to: 'availability#client_check_availability'
       
+      # API доступности с поддержкой категорий
+      post 'availability/check_with_category', to: 'availability#check_with_category'
+      get 'availability/slots_for_category', to: 'availability#slots_for_category'
+      
       # Клиентский API поиска сервисных точек  
       get 'service_points/search', to: 'service_points#client_search'
       
@@ -119,6 +123,12 @@ Rails.application.routes.draw do
           get 'basic', to: 'service_points#basic'
           get 'schedule', to: 'schedule#day'
           get 'client_details', to: 'service_points#client_details'
+          get 'posts_by_category', to: 'service_points#posts_by_category'
+          patch 'category_contacts', to: 'service_points#update_category_contacts'
+        end
+        
+        collection do
+          get 'by_category', to: 'service_points#by_category'
         end
         
         # Новое API для динамической доступности
