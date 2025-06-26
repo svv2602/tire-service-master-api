@@ -32,7 +32,7 @@ module Api
             name: service.name,
             description: service.description,
             category: service.category&.as_json,
-            default_duration: service.default_duration,
+    
             current_price: sps.price,  # Цена из ServicePointService
             duration: sps.duration,    # Длительность из ServicePointService
             is_available: sps.is_available,

@@ -13,6 +13,7 @@ priority_seeds = [
   'clients.rb',              # Создаем клиентов
   'car_types.rb',            # Создаем типы автомобилей
   'car_brands_and_models.rb', # Создаем бренды и модели автомобилей
+  'services.rb',             # Создаем услуги для сервисных точек
   'schedule_generation.rb',  # Создаем шаблоны расписания
   'articles_multilang.rb'    # Создаем многоязычные статьи
 ]

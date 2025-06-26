@@ -110,9 +110,9 @@ module Api
       def service_params
         # Поддерживаем как вложенные данные в 'data', так и прямые параметры
         if params[:service][:data].present?
-          params.require(:service).require(:data).permit(:name, :description, :default_duration, :is_active, :sort_order)
+          params.require(:service).require(:data).permit(:name, :description, :is_active, :sort_order)
         else
-          params.require(:service).permit(:name, :description, :default_duration, :is_active, :sort_order)
+          params.require(:service).permit(:name, :description, :is_active, :sort_order)
         end
       end
       

@@ -102,16 +102,16 @@ RSpec.describe "Api::V1::Services", type: :request do
         expect(names).to eq(names.sort)
       end
       
-      it "sorts by default_duration when specified" do
-        category_services.first.update(default_duration: 30)
-        category_services.second.update(default_duration: 60)
+      it "sorts by sort_order when specified" do
+        category_services.first.update(sort_order: 2)
+        category_services.second.update(sort_order: 1)
         
         get "/api/v1/service_categories/#{category.id}/services", 
-            params: { sort: 'default_duration' }
+            params: { sort: 'sort_order' }
         
         json = JSON.parse(response.body)
-        durations = json['data'].map { |service| service['default_duration'] }
-        expect(durations).to eq(durations.sort)
+        sort_orders = json['data'].map { |service| service['sort_order'] }
+        expect(sort_orders).to eq(sort_orders.sort)
       end
     end
     
@@ -166,7 +166,6 @@ RSpec.describe "Api::V1::Services", type: :request do
         service: {
           name: "Новая услуга",
           description: "Описание новой услуги",
-          default_duration: 45,
           is_active: true,
           sort_order: 1
         }
@@ -193,7 +192,7 @@ RSpec.describe "Api::V1::Services", type: :request do
       
       it "returns errors for invalid data" do
         post "/api/v1/service_categories/#{category.id}/services", 
-             params: { service: { name: "", default_duration: -1 } }, 
+             params: { service: { name: "" } }, 
              headers: admin_headers
         
         expect(response).to have_http_status(:unprocessable_entity)
@@ -229,7 +228,7 @@ RSpec.describe "Api::V1::Services", type: :request do
         service: {
           name: "Обновленная услуга",
           description: "Новое описание",
-          default_duration: 90
+          sort_order: 10
         }
       }
     end
@@ -243,12 +242,12 @@ RSpec.describe "Api::V1::Services", type: :request do
         expect(response).to have_http_status(:ok)
         service.reload
         expect(service.name).to eq("Обновленная услуга")
-        expect(service.default_duration).to eq(90)
+        expect(service.sort_order).to eq(10)
       end
       
       it "returns errors for invalid data" do
         put "/api/v1/service_categories/#{category.id}/services/#{service.id}", 
-            params: { service: { name: "", default_duration: -1 } }, 
+            params: { service: { name: "" } }, 
             headers: admin_headers
         
         expect(response).to have_http_status(:unprocessable_entity)

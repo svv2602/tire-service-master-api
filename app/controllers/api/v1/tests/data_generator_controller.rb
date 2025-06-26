@@ -268,9 +268,9 @@ module Api
           services = Service.all
           if services.empty?
             services = []
-            services << Service.create!(category_id: category.id, name: "Замена шин", default_duration: 60, is_active: true)
-            services << Service.create!(category_id: category.id, name: "Балансировка", default_duration: 30, is_active: true)
-            services << Service.create!(category_id: category.id, name: "Ремонт проколов", default_duration: 45, is_active: true)
+                    services << Service.create!(category_id: category.id, name: "Замена шин", sort_order: 1, is_active: true)
+        services << Service.create!(category_id: category.id, name: "Балансировка", sort_order: 2, is_active: true)
+        services << Service.create!(category_id: category.id, name: "Ремонт проколов", sort_order: 3, is_active: true)
           end
           
           # Связываем услуги с сервисной точкой
