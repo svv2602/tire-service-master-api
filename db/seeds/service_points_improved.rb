@@ -1,178 +1,195 @@
-# db/seeds/service_points_improved.rb
-# Улучшенные сиды для сервисных точек с полной настройкой
+# db/seeds/service_points_improved_fixed.rb
+# Создание улучшенных сервисных точек с динамическими ID категорий
 
-puts 'Creating improved service points with schedules, posts and services...'
+puts "Creating improved service points with schedules, posts and services..."
 
-# Проверяем зависимости
-unless Partner.exists? && City.exists? && ServiceCategory.exists? && Service.exists?
-  puts "  ERROR: Required data not found. Please run these seeds first:"
-  puts "  - partners.rb"
-  puts "  - cities.rb (or regions_cities.rb)"
-  puts "  - service_categories.rb"
-  puts "  - services.rb"
+# Получаем существующие данные
+partners = Partner.includes(:user).all
+cities = City.includes(:region).all  
+categories = ServiceCategory.all
+services = Service.includes(:category).all
+
+puts "  Found: #{partners.count} partners, #{cities.count} cities, #{categories.count} categories, #{services.count} services"
+
+# Проверяем наличие необходимых данных
+if partners.empty? || cities.empty? || categories.empty? || services.empty?
+  puts "❌ Недостаточно данных для создания сервисных точек"
+  puts "   Партнеры: #{partners.count}, Города: #{cities.count}, Категории: #{categories.count}, Услуги: #{services.count}"
+  puts "   Запустите сначала соответствующие seeds"
   exit
 end
 
-# Получаем необходимые данные
-partners = Partner.limit(3).to_a
-cities = City.limit(10).to_a
-service_categories = ServiceCategory.all.to_a
-services = Service.all.to_a
+# Получаем ID категорий динамически
+shino_category_id = categories.find { |c| c.name.include?('Шиномонтаж') }&.id || 1
+tech_category_id = categories.find { |c| c.name.include?('Техническое') }&.id || 2
+additional_category_id = categories.find { |c| c.name.include?('Дополнительные') }&.id || 3
 
-puts "  Found: #{partners.count} partners, #{cities.count} cities, #{service_categories.count} categories, #{services.count} services"
-
-# Стандартное расписание работы (Пн-Пт: 8:00-20:00, Сб: 9:00-18:00, Вс: выходной)
+# Стандартные рабочие часы
 default_working_hours = {
-  "monday" => { "start" => "08:00", "end" => "20:00", "is_working_day" => true },
-  "tuesday" => { "start" => "08:00", "end" => "20:00", "is_working_day" => true },
-  "wednesday" => { "start" => "08:00", "end" => "20:00", "is_working_day" => true },
-  "thursday" => { "start" => "08:00", "end" => "20:00", "is_working_day" => true },
-  "friday" => { "start" => "08:00", "end" => "20:00", "is_working_day" => true },
-  "saturday" => { "start" => "09:00", "end" => "18:00", "is_working_day" => true },
-  "sunday" => { "start" => "10:00", "end" => "16:00", "is_working_day" => false }
+  "monday" => { "start" => "09:00", "end" => "18:00", "is_working" => true },
+  "tuesday" => { "start" => "09:00", "end" => "18:00", "is_working" => true },
+  "wednesday" => { "start" => "09:00", "end" => "18:00", "is_working" => true },
+  "thursday" => { "start" => "09:00", "end" => "18:00", "is_working" => true },
+  "friday" => { "start" => "09:00", "end" => "18:00", "is_working" => true },
+  "saturday" => { "start" => "10:00", "end" => "16:00", "is_working" => true },
+  "sunday" => { "start" => "10:00", "end" => "14:00", "is_working" => false }
 }
 
-# Расширенное расписание (работает каждый день)
+# Расширенные рабочие часы
 extended_working_hours = {
-  "monday" => { "start" => "07:00", "end" => "21:00", "is_working_day" => true },
-  "tuesday" => { "start" => "07:00", "end" => "21:00", "is_working_day" => true },
-  "wednesday" => { "start" => "07:00", "end" => "21:00", "is_working_day" => true },
-  "thursday" => { "start" => "07:00", "end" => "21:00", "is_working_day" => true },
-  "friday" => { "start" => "07:00", "end" => "21:00", "is_working_day" => true },
-  "saturday" => { "start" => "08:00", "end" => "20:00", "is_working_day" => true },
-  "sunday" => { "start" => "09:00", "end" => "18:00", "is_working_day" => true }
+  "monday" => { "start" => "08:00", "end" => "20:00", "is_working" => true },
+  "tuesday" => { "start" => "08:00", "end" => "20:00", "is_working" => true },
+  "wednesday" => { "start" => "08:00", "end" => "20:00", "is_working" => true },
+  "thursday" => { "start" => "08:00", "end" => "20:00", "is_working" => true },
+  "friday" => { "start" => "08:00", "end" => "20:00", "is_working" => true },
+  "saturday" => { "start" => "09:00", "end" => "18:00", "is_working" => true },
+  "sunday" => { "start" => "10:00", "end" => "16:00", "is_working" => true }
 }
 
-# Конфигурация сервисных точек
+# Конфигурация сервисных точек с динамическими ID
 service_points_config = [
   # Киев - 3 точки
   {
     partner: partners[0],
     name: 'ШиноСервіс Експрес на Хрещатику',
-    description: 'Повний спектр послуг з шиномонтажу та балансування коліс. Сучасне обладнання та досвідчені майстри.',
-    city: cities.find { |c| c.name == 'Київ' } || cities[0],
+    description: 'Швидкий та якісний шиномонтаж у центрі Києва',
+    city: cities.find { |c| c.name == 'Київ' } || cities.first,
     address: 'вул. Хрещатик, 22',
-    contact_phone: '+380 67 123 45 67',
+    contact_phone: '+380 44 555 55 55',
     is_active: true,
     work_status: 'working',
     latitude: 50.450001,
     longitude: 30.523333,
-    working_hours: extended_working_hours,
-         posts_config: [
-       { 
-         name: "Експрес-пост", 
-         post_number: 1, 
-         slot_duration: 30, 
-         category_ids: [6], # Техническое обслуживание
-         description: "Швидкий шиномонтаж та балансування"
-       },
-       { 
-         name: "Стандартний пост", 
-         post_number: 2, 
-         slot_duration: 45, 
-         category_ids: [6], # Техническое обслуживание
-         description: "Повний спектр послуг"
-       },
-       { 
-         name: "VIP пост", 
-         post_number: 3, 
-         slot_duration: 60, 
-         category_ids: [7], # Дополнительные услуги
-         description: "Преміум обслуговування"
-       }
-     ]
+    working_hours: default_working_hours,
+    posts_config: [
+      { 
+        name: "Легковий пост", 
+        post_number: 1, 
+        slot_duration: 30, 
+        category_ids: [shino_category_id],
+        description: "Обслуговування легкових авто"
+      },
+      { 
+        name: "Універсальний пост", 
+        post_number: 2, 
+        slot_duration: 45, 
+        category_ids: [tech_category_id],
+        description: "Універсальне обслуговування"
+      },
+      { 
+        name: "Грузовий пост", 
+        post_number: 3, 
+        slot_duration: 60, 
+        category_ids: [additional_category_id],
+        description: "Обслуговування вантажних авто"
+      }
+    ]
   },
   {
     partner: partners[0],
     name: 'ШиноСервіс Експрес на Оболоні',
-    description: 'Швидкий та якісний шиномонтаж для легкових автомобілів',
-    city: cities.find { |c| c.name == 'Київ' } || cities[0],
-    address: 'пр. Оболонський, 45',
-    contact_phone: '+380 67 123 45 68',
+    description: 'Зручний шиномонтаж на Оболоні',
+    city: cities.find { |c| c.name == 'Київ' } || cities.first,
+    address: 'пр. Оболонський, 15',
+    contact_phone: '+380 44 555 55 56',
     is_active: true,
     work_status: 'working',
-    latitude: 50.501747,
-    longitude: 30.497137,
-    working_hours: default_working_hours,
-         posts_config: [
-       { 
-         name: "Пост №1", 
-         post_number: 1, 
-         slot_duration: 30, 
-         category_ids: [6],
-         description: "Шиномонтаж та балансування"
-       },
-       { 
-         name: "Пост №2", 
-         post_number: 2, 
-         slot_duration: 45, 
-         category_ids: [7],
-         description: "Комплексне обслуговування"
-       }
-     ]
-  },
-  {
-    partner: partners[1],
-    name: 'АвтоШина Плюс на Позняках',
-    description: 'Сучасний шиномонтаж з новітнім обладнанням',
-    city: cities.find { |c| c.name == 'Київ' } || cities[0],
-    address: 'вул. Драгоманова, 17',
-    contact_phone: '+380 50 987 65 45',
-    is_active: true,
-    work_status: 'working',
-    latitude: 50.411747,
-    longitude: 30.627137,
+    latitude: 50.517651,
+    longitude: 30.498583,
     working_hours: default_working_hours,
     posts_config: [
-             { 
-         name: "Універсальний пост", 
-         post_number: 1, 
-         slot_duration: 40, 
-         category_ids: [6],
-         description: "Універсальний пост для всіх типів робіт"
-       }
+      { 
+        name: "Пост №1", 
+        post_number: 1, 
+        slot_duration: 35, 
+        category_ids: [shino_category_id],
+        description: "Основний пост"
+      },
+      { 
+        name: "Пост №2", 
+        post_number: 2, 
+        slot_duration: 40, 
+        category_ids: [tech_category_id],
+        description: "Додатковий пост"
+      }
+    ]
+  },
+  {
+    partner: partners[1] || partners[0],
+    name: 'АвтоШина Плюс на Позняках',
+    description: 'Професійний шиномонтаж та ремонт коліс',
+    city: cities.find { |c| c.name == 'Київ' } || cities.first,
+    address: 'вул. Драгоманова, 2а',
+    contact_phone: '+380 50 987 65 43',
+    is_active: true,
+    work_status: 'working',
+    latitude: 50.396706,
+    longitude: 30.636063,
+    working_hours: extended_working_hours,
+    posts_config: [
+      { 
+        name: "Швидкий пост", 
+        post_number: 1, 
+        slot_duration: 25, 
+        category_ids: [shino_category_id],
+        description: "Експрес-обслуговування"
+      },
+      { 
+        name: "Стандартний пост", 
+        post_number: 2, 
+        slot_duration: 45, 
+        category_ids: [shino_category_id],
+        description: "Стандартне обслуговування"
+      },
+      { 
+        name: "Преміум пост", 
+        post_number: 3, 
+        slot_duration: 60, 
+        category_ids: [tech_category_id],
+        description: "Преміум обслуговування"
+      }
     ]
   },
   
   # Львів - 2 точки
   {
-    partner: partners[1],
+    partner: partners[1] || partners[0],
     name: 'АвтоШина Плюс центр',
-    description: 'Професійний шиномонтаж та зберігання шин',
+    description: 'Центральна точка у Львові',
     city: cities.find { |c| c.name == 'Львів' } || cities[1],
-    address: 'вул. Личаківська, 45',
-    contact_phone: '+380 50 987 65 43',
+    address: 'пл. Ринок, 1',
+    contact_phone: '+380 32 555 55 55',
     is_active: true,
     work_status: 'working',
-    latitude: 49.842957,
-    longitude: 24.031111,
-    working_hours: extended_working_hours,
-         posts_config: [
-       { 
-         name: "Швидкий пост", 
-         post_number: 1, 
-         slot_duration: 25, 
-         category_ids: [6],
-         description: "Експрес-обслуговування"
-       },
-       { 
-         name: "Стандартний пост", 
-         post_number: 2, 
-         slot_duration: 45, 
-         category_ids: [6],
-         description: "Стандартне обслуговування"
-       },
-       { 
-         name: "Грузовий пост", 
-         post_number: 3, 
-         slot_duration: 60, 
-         category_ids: [7],
-         description: "Обслуговування вантажних авто"
-       }
-     ]
+    latitude: 49.841952,
+    longitude: 24.031563,
+    working_hours: default_working_hours,
+    posts_config: [
+      { 
+        name: "Центральний пост", 
+        post_number: 1, 
+        slot_duration: 40, 
+        category_ids: [shino_category_id],
+        description: "Центральний пост обслуговування"
+      },
+      { 
+        name: "Експрес пост", 
+        post_number: 2, 
+        slot_duration: 30, 
+        category_ids: [shino_category_id],
+        description: "Швидке обслуговування"
+      },
+      { 
+        name: "Грузовий пост", 
+        post_number: 3, 
+        slot_duration: 60, 
+        category_ids: [additional_category_id],
+        description: "Обслуговування вантажних авто"
+      }
+    ]
   },
   {
-    partner: partners[1],
+    partner: partners[1] || partners[0],
     name: 'АвтоШина Плюс на Сихові',
     description: 'Шиномонтаж та ремонт дисків',
     city: cities.find { |c| c.name == 'Львів' } || cities[1],
@@ -183,30 +200,30 @@ service_points_config = [
     latitude: 49.816721,
     longitude: 24.056284,
     working_hours: default_working_hours,
-         posts_config: [
-       { 
-         name: "Пост №1", 
-         post_number: 1, 
-         slot_duration: 30, 
-         category_ids: [6],
-         description: "Шиномонтаж та ремонт дисків"
-       },
-       { 
-         name: "Пост №2", 
-         post_number: 2, 
-         slot_duration: 40, 
-         category_ids: [7],
-         description: "Шиномонтаж та балансування"
-       }
-     ]
+    posts_config: [
+      { 
+        name: "Пост №1", 
+        post_number: 1, 
+        slot_duration: 30, 
+        category_ids: [shino_category_id],
+        description: "Шиномонтаж та ремонт дисків"
+      },
+      { 
+        name: "Пост №2", 
+        post_number: 2, 
+        slot_duration: 40, 
+        category_ids: [tech_category_id],
+        description: "Шиномонтаж та балансування"
+      }
+    ]
   },
   
-  # Одеса - 2 точки
+  # Одеса - 2 точки (используем города из Киевской области, так как Одеса может отсутствовать)
   {
     partner: partners[2] || partners[0],
     name: 'ШинМайстер Одеса Центр',
     description: 'Найкращі послуги шиномонтажу в місті',
-    city: cities.find { |c| c.name == 'Одеса' } || cities[2],
+    city: cities.find { |c| c.name == 'Бориспіль' } || cities[2],
     address: 'вул. Дерибасівська, 12',
     contact_phone: '+380 63 555 55 55',
     is_active: true,
@@ -214,35 +231,35 @@ service_points_config = [
     latitude: 46.482526,
     longitude: 30.723309,
     working_hours: extended_working_hours,
-         posts_config: [
-       { 
-         name: "Експрес", 
-         post_number: 1, 
-         slot_duration: 25, 
-         category_ids: [6],
-         description: "Швидке обслуговування"
-       },
-       { 
-         name: "Стандарт", 
-         post_number: 2, 
-         slot_duration: 40, 
-         category_ids: [6],
-         description: "Стандартне обслуговування"
-       },
-       { 
-         name: "Преміум", 
-         post_number: 3, 
-         slot_duration: 60, 
-         category_ids: [7],
-         description: "Преміум обслуговування"
-       }
-     ]
+    posts_config: [
+      { 
+        name: "Експрес", 
+        post_number: 1, 
+        slot_duration: 25, 
+        category_ids: [shino_category_id],
+        description: "Швидке обслуговування"
+      },
+      { 
+        name: "Стандарт", 
+        post_number: 2, 
+        slot_duration: 40, 
+        category_ids: [shino_category_id],
+        description: "Стандартне обслуговування"
+      },
+      { 
+        name: "Преміум", 
+        post_number: 3, 
+        slot_duration: 60, 
+        category_ids: [tech_category_id],
+        description: "Преміум обслуговування"
+      }
+    ]
   },
   {
     partner: partners[2] || partners[0],
     name: 'ШинМайстер Одеса Пересип',
     description: 'Швидкий шиномонтаж для всіх типів авто',
-    city: cities.find { |c| c.name == 'Одеса' } || cities[2],
+    city: cities.find { |c| c.name == 'Бориспіль' } || cities[2],
     address: 'вул. Чорноморського Козацтва, 70',
     contact_phone: '+380 63 555 55 56',
     is_active: true,
@@ -250,15 +267,15 @@ service_points_config = [
     latitude: 46.562526,
     longitude: 30.773309,
     working_hours: default_working_hours,
-         posts_config: [
-       { 
-         name: "Універсальний", 
-         post_number: 1, 
-         slot_duration: 35, 
-         category_ids: [6],
-         description: "Універсальне обслуговування"
-       }
-     ]
+    posts_config: [
+      { 
+        name: "Універсальний", 
+        post_number: 1, 
+        slot_duration: 35, 
+        category_ids: [shino_category_id],
+        description: "Універсальне обслуговування"
+      }
+    ]
   }
 ]
 
@@ -301,6 +318,12 @@ created_points.each do |item|
     # Получаем первую доступную категорию из списка
     primary_category_id = post_config[:category_ids].first
     
+    # Проверяем, что категория существует
+    unless ServiceCategory.exists?(id: primary_category_id)
+      puts "    ❌ Category ID #{primary_category_id} not found, using first available category"
+      primary_category_id = categories.first.id
+    end
+    
     service_post = ServicePost.create!(
       service_point: service_point,
       name: post_config[:name],
@@ -310,10 +333,19 @@ created_points.each do |item|
       service_category_id: primary_category_id,
       is_active: true,
       has_custom_schedule: false,
-      working_days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+      working_days: {
+        "monday" => true,
+        "tuesday" => true,
+        "wednesday" => true,
+        "thursday" => true,
+        "friday" => true,
+        "saturday" => true,
+        "sunday" => false
+      }
     )
     
-    puts "    ✅ Created post: #{service_post.name} (#{service_post.slot_duration}min, Category: #{ServiceCategory.find(primary_category_id).name})"
+    category_name = ServiceCategory.find(primary_category_id).name
+    puts "    ✅ Created post: #{service_post.name} (#{service_post.slot_duration}min, Category: #{category_name})"
   end
 end
 
