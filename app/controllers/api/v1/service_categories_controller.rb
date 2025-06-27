@@ -52,6 +52,66 @@ module Api
       def show
         render json: category_json(@service_category, include_services: true)
       end
+
+      # GET /api/v1/service_categories/by_city/:city_name
+      def by_city
+        city_name = params[:city_name]
+        
+        if city_name.blank?
+          return render json: { error: 'Название города обязательно' }, status: :bad_request
+        end
+
+        # Найти город
+        city = City.where("LOWER(name) = LOWER(?)", city_name).first
+        
+        unless city
+          return render json: { 
+            error: 'Город не найден',
+            data: [],
+            total_count: 0 
+          }, status: :not_found
+        end
+
+        # Получить категории услуг, доступные в этом городе
+        @service_categories = ServiceCategory
+          .joins(services: { service_point_services: { service_post: :service_point } })
+          .where(service_points: { city_id: city.id, is_active: true })
+          .where(is_active: true)
+          .distinct
+          .includes(:services)
+
+        # Подсчитать количество сервисных точек для каждой категории
+        categories_with_stats = @service_categories.map do |category|
+          service_points_count = ServicePoint
+            .joins(service_posts: { service_point_services: { service: :category } })
+            .where(city_id: city.id, is_active: true)
+            .where(service_categories: { id: category.id })
+            .distinct
+            .count
+
+          services_count = category.services
+            .joins(service_point_services: { service_post: :service_point })
+            .where(service_points: { city_id: city.id, is_active: true })
+            .distinct
+            .count
+
+          category.as_json.merge({
+            'service_points_count' => service_points_count,
+            'services_count' => services_count,
+            'city_name' => city.name
+          })
+        end
+
+        render json: {
+          data: categories_with_stats,
+          city: {
+            id: city.id,
+            name: city.name,
+            region: city.region&.name
+          },
+          total_count: categories_with_stats.length
+        }
+      end
       
       # POST /api/v1/service_categories
       def create

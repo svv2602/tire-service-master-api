@@ -218,6 +218,9 @@ Rails.application.routes.draw do
       resources :car_types, only: [:index, :show]
       resources :tire_types, only: [:index, :show]
       resources :service_categories do
+        collection do
+          get 'by_city/:city_name', to: 'service_categories#by_city', as: 'by_city'
+        end
         resources :services
       end
       resources :services
