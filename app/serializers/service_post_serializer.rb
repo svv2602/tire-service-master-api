@@ -3,7 +3,7 @@ class ServicePostSerializer < ActiveModel::Serializer
   attributes :id, :post_number, :name, :slot_duration, :is_active, :description, 
              :created_at, :updated_at, :display_name, :slot_duration_in_seconds,
              :has_custom_schedule, :working_days, :custom_hours, :working_days_list,
-             :category_name
+             :category_name, :service_category_id
   
   belongs_to :service_point, serializer: ServicePointBasicSerializer
   belongs_to :service_category, serializer: ServiceCategorySerializer
