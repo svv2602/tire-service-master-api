@@ -168,6 +168,33 @@ module Api
         render json: response_data, status: :ok
       end
       
+      # PUT /api/v1/auth/profile
+      # Обновление профиля текущего пользователя
+      def update_profile
+        user_params = params.require(:user).permit(:first_name, :last_name, :email, :phone)
+        
+        if current_user.update(user_params)
+          response_data = {
+            user: {
+              id: current_user.id,
+              email: current_user.email,
+              first_name: current_user.first_name,
+              last_name: current_user.last_name,
+              phone: current_user.phone,
+              email_verified: current_user.email_verified,
+              phone_verified: current_user.phone_verified,
+              role: current_user.role.name,
+              is_active: current_user.is_active?,
+              client_id: current_user.client&.id
+            }
+          }
+          
+          render json: response_data, status: :ok
+        else
+          render json: { errors: current_user.errors }, status: :unprocessable_entity
+        end
+      end
+      
       private
       
       def auth_params

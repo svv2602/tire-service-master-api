@@ -29,6 +29,7 @@ Rails.application.routes.draw do
       post 'auth/logout', to: 'auth#logout'
       get 'auth/me', to: 'auth#me'
       post 'auth/refresh', to: 'auth#refresh'
+      put 'auth/profile', to: 'auth#update_profile'
       
       # Клиентский API доступности (упрощенный)
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
