@@ -59,7 +59,11 @@ module Api
               id: city.id,
               name: city.name,
               region_id: city.region_id,
-              region_name: city.region.name,
+              region: {
+                id: city.region.id,
+                name: city.region.name,
+                code: city.region.code
+              },
               service_points_count: service_points_count,
               is_active: city.is_active
             }
@@ -73,12 +77,18 @@ module Api
         city = City.includes(:region, :service_points).find(params[:id])
         
         render json: {
-          id: city.id,
-          name: city.name,
-          region_id: city.region_id,
-          region_name: city.region.name,
-          service_points_count: city.service_points.where(is_active: true).count,
-          is_active: city.is_active
+          data: {
+            id: city.id,
+            name: city.name,
+            region_id: city.region_id,
+            region: {
+              id: city.region.id,
+              name: city.region.name,
+              code: city.region.code
+            },
+            service_points_count: city.service_points.where(is_active: true).count,
+            is_active: city.is_active
+          }
         }
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Город не найден' }, status: :not_found
