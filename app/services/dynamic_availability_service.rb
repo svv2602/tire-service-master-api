@@ -162,7 +162,7 @@ class DynamicAvailabilityService
   end
 
   # Проверка доступности конкретного времени
-  def self.check_availability_at_time(service_point_id, date, time, duration_minutes = nil, exclude_booking_id: nil)
+  def self.check_availability_at_time(service_point_id, date, time, duration_minutes = nil, exclude_booking_id: nil, category_id: nil)
     service_point = ServicePoint.find(service_point_id)
     
     # Проверяем рабочие часы
@@ -179,8 +179,12 @@ class DynamicAvailabilityService
     
     return { available: false, reason: 'Вне рабочих часов' } if check_time < opening_time || check_time >= closing_time
     
-    # Получаем доступные слоты для проверки реальной доступности
-    available_slots = available_slots_for_date(service_point_id, date)
+    # Если указана категория, используем слоты для конкретной категории
+    available_slots = if category_id.present?
+      available_slots_for_category(service_point_id, date, category_id)
+    else
+      available_slots_for_date(service_point_id, date)
+    end
     
     # Ищем слот, который начинается в указанное время
     matching_slot = available_slots.find { |slot| slot[:start_time] == check_time.strftime('%H:%M') }
@@ -203,26 +207,33 @@ class DynamicAvailabilityService
       }
     end
     
-    # Получаем количество активных постов, работающих в этот день
-    day_key = case date.wday
-    when 0 then 'sunday'
-    when 1 then 'monday'
-    when 2 then 'tuesday'
-    when 3 then 'wednesday'
-    when 4 then 'thursday'
-    when 5 then 'friday'
-    when 6 then 'saturday'
-    end
-    
-    total_posts = service_point.service_posts.active.select do |post|
-      if post.has_custom_schedule && post.working_days.present?
-        post.working_days[day_key] == true || post.working_days[day_key.to_s] == true
-      else
-        # Пост работает по расписанию точки
-        day_schedule = service_point.working_hours[day_key]
-        day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+    # Получаем количество активных постов для данной категории или всех постов
+    if category_id.present?
+      # Для конкретной категории
+      category_posts = service_point.service_posts.where(service_category_id: category_id, is_active: true)
+      total_posts = category_posts.count
+    else
+      # Для всех постов
+      day_key = case date.wday
+      when 0 then 'sunday'
+      when 1 then 'monday'
+      when 2 then 'tuesday'
+      when 3 then 'wednesday'
+      when 4 then 'thursday'
+      when 5 then 'friday'
+      when 6 then 'saturday'
       end
-    end.count
+      
+      total_posts = service_point.service_posts.active.select do |post|
+        if post.has_custom_schedule && post.working_days.present?
+          post.working_days[day_key] == true || post.working_days[day_key.to_s] == true
+        else
+          # Пост работает по расписанию точки
+          day_schedule = service_point.working_hours[day_key]
+          day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+        end
+      end.count
+    end
     
     return { available: false, reason: 'Нет активных постов' } if total_posts.zero?
     
@@ -425,16 +436,27 @@ class DynamicAvailabilityService
   def self.available_slots_for_category(service_point_id, date, category_id)
     service_point = ServicePoint.find(service_point_id)
     
+    # Преобразуем строку даты в объект Date
+    date = Date.parse(date) if date.is_a?(String)
+    
     # Получаем посты только для указанной категории
-    category_posts = service_point.posts_for_category(category_id)
+    category_posts = service_point.service_posts.where(service_category_id: category_id, is_active: true)
     return [] if category_posts.empty?
     
     # Получаем рабочие часы для данной даты
     schedule_info = get_schedule_for_date(service_point, date)
     return [] unless schedule_info[:is_working]
     
-    # Определяем день недели
-    day_key = date.strftime('%A').downcase
+    # Определяем день недели  
+    day_key = case date.wday
+    when 0 then 'sunday'
+    when 1 then 'monday'
+    when 2 then 'tuesday'
+    when 3 then 'wednesday'
+    when 4 then 'thursday'
+    when 5 then 'friday'
+    when 6 then 'saturday'
+    end
     
     # Фильтруем посты, работающие в этот день
     working_posts = category_posts.select do |post|
@@ -443,26 +465,23 @@ class DynamicAvailabilityService
     
     return [] if working_posts.empty?
     
-    # Берем параметры от первого поста
-    first_post = working_posts.first
-    
-    # Определяем время работы
-    start_time_str = first_post.start_time_for_day(day_key)
-    end_time_str = first_post.end_time_for_day(day_key)
-    slot_duration = first_post.slot_duration
-    
-    start_time = Time.parse("#{date} #{start_time_str}")
-    end_time = Time.parse("#{date} #{end_time_str}")
-    
-    # Генерируем слоты только для постов данной категории
+    # Генерируем слоты для каждого работающего поста
     available_slots = []
-    current_time = start_time
     
-    while current_time + slot_duration.minutes <= end_time
-      slot_end_time = current_time + slot_duration.minutes
+    working_posts.each do |post|
+      # Определяем время работы для этого поста
+      start_time_str = post.start_time_for_day(day_key)
+      end_time_str = post.end_time_for_day(day_key)
+      slot_duration = post.slot_duration
       
-      # Проверяем каждый пост категории на доступность
-      working_posts.each_with_index do |post, index|
+      start_time = Time.parse("#{date} #{start_time_str}")
+      end_time = Time.parse("#{date} #{end_time_str}")
+      
+      current_time = start_time
+      
+      while current_time + slot_duration.minutes <= end_time
+        slot_end_time = current_time + slot_duration.minutes
+        
         # Проверяем пересечения с бронированиями для этого поста
         bookings_count = Booking.where(
           service_point_id: service_point_id,
@@ -489,9 +508,9 @@ class DynamicAvailabilityService
             datetime: current_time
           }
         end
+        
+        current_time = slot_end_time
       end
-      
-      current_time = slot_end_time
     end
     
     # Сортируем по времени, затем по номеру поста

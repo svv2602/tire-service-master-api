@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест бронирования для существующих пользователей</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .request-data {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            border-left: 4px solid #007bff;
+        }
+        .response-data {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin-top: 10px;
+        }
+        .success {
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Тест бронирования для существующих пользователей</h1>
+        <p>Этот тест проверяет различные сценарии создания бронирования когда пользователь уже существует в системе.</p>
+    </div>
+
+    <!-- Тест 1: Проверка существующего пользователя -->
+    <div class="container">
+        <div class="test-section">
+            <h3>Тест 1: Проверка существующего пользователя</h3>
+            <p>Проверяем API check_exists для поиска пользователя по телефону и email</p>
+            <button onclick="testCheckUserExists()">Запустить тест</button>
+            <span id="test1-status" class="status pending">Ожидание</span>
+            
+            <div class="request-data" id="test1-request"></div>
+            <div class="response-data" id="test1-response"></div>
+        </div>
+    </div>
+
+    <!-- Тест 2: Создание бронирования с существующими данными -->
+    <div class="container">
+        <div class="test-section">
+            <h3>Тест 2: Создание бронирования с существующими данными</h3>
+            <p>Пытаемся создать бронирование с данными существующего пользователя</p>
+            <button onclick="testCreateBookingExistingUser()">Запустить тест</button>
+            <span id="test2-status" class="status pending">Ожидание</span>
+            
+            <div class="request-data" id="test2-request"></div>
+            <div class="response-data" id="test2-response"></div>
+        </div>
+    </div>
+
+    <!-- Тест 3: Создание бронирования с client_id -->
+    <div class="container">
+        <div class="test-section">
+            <h3>Тест 3: Создание бронирования с client_id</h3>
+            <p>Создаем бронирование, передавая client_id вместо данных клиента</p>
+            <button onclick="testCreateBookingWithClientId()">Запустить тест</button>
+            <span id="test3-status" class="status pending">Ожидание</span>
+            
+            <div class="request-data" id="test3-request"></div>
+            <div class="response-data" id="test3-response"></div>
+        </div>
+    </div>
+
+    <!-- Тест 4: Создание бронирования с новыми данными -->
+    <div class="container">
+        <div class="test-section">
+            <h3>Тест 4: Создание бронирования с новыми данными</h3>
+            <p>Создаем бронирование с уникальными данными нового пользователя</p>
+            <button onclick="testCreateBookingNewUser()">Запустить тест</button>
+            <span id="test4-status" class="status pending">Ожидание</span>
+            
+            <div class="request-data" id="test4-request"></div>
+            <div class="response-data" id="test4-response"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+
+        // Утилиты для отображения результатов
+        function showRequest(testId, data) {
+            document.getElementById(`${testId}-request`).textContent = 
+                'REQUEST:\n' + JSON.stringify(data, null, 2);
+        }
+
+        function showResponse(testId, response, isError = false) {
+            const element = document.getElementById(`${testId}-response`);
+            const statusElement = document.getElementById(`${testId}-status`);
+            
+            element.textContent = 'RESPONSE:\n' + JSON.stringify(response, null, 2);
+            element.className = `response-data ${isError ? 'error' : 'success'}`;
+            
+            statusElement.textContent = isError ? 'Ошибка' : 'Успех';
+            statusElement.className = `status ${isError ? 'error' : 'success'}`;
+        }
+
+        // Тест 1: Проверка существующего пользователя
+        async function testCheckUserExists() {
+            const testId = 'test1';
+            const statusElement = document.getElementById(`${testId}-status`);
+            statusElement.textContent = 'Выполняется...';
+            statusElement.className = 'status pending';
+
+            const requestData = {
+                phone: '+380671234567',
+                email: 'test@test.com'
+            };
+
+            showRequest(testId, requestData);
+
+            try {
+                const response = await fetch(`${API_BASE}/users/check_exists?${new URLSearchParams(requestData)}`);
+                const result = await response.json();
+                showResponse(testId, result, !response.ok);
+            } catch (error) {
+                showResponse(testId, { error: error.message }, true);
+            }
+        }
+
+        // Тест 2: Создание бронирования с существующими данными
+        async function testCreateBookingExistingUser() {
+            const testId = 'test2';
+            const statusElement = document.getElementById(`${testId}-status`);
+            statusElement.textContent = 'Выполняется...';
+            statusElement.className = 'status pending';
+
+            const requestData = {
+                client: {
+                    first_name: "Тест",
+                    last_name: "Тестов",
+                    phone: "+380671234567",
+                    email: "test@test.com"
+                },
+                booking: {
+                    service_point_id: 44,
+                    service_category_id: 6,
+                    booking_date: "2025-01-28",
+                    start_time: "10:00",
+                    service_recipient_first_name: "Тест",
+                    service_recipient_last_name: "Тестов",
+                    service_recipient_phone: "+380671234567",
+                    service_recipient_email: "test@test.com",
+                    notes: "Тестовое бронирование"
+                },
+                car: {
+                    car_type_id: 1
+                }
+            };
+
+            showRequest(testId, requestData);
+
+            try {
+                const response = await fetch(`${API_BASE}/client_bookings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                const result = await response.json();
+                showResponse(testId, result, !response.ok);
+            } catch (error) {
+                showResponse(testId, { error: error.message }, true);
+            }
+        }
+
+        // Тест 3: Создание бронирования с client_id
+        async function testCreateBookingWithClientId() {
+            const testId = 'test3';
+            const statusElement = document.getElementById(`${testId}-status`);
+            statusElement.textContent = 'Выполняется...';
+            statusElement.className = 'status pending';
+
+            const requestData = {
+                client_id: 1, // Используем ID существующего клиента
+                booking: {
+                    service_point_id: 44,
+                    service_category_id: 6,
+                    booking_date: "2025-01-28",
+                    start_time: "11:00",
+                    service_recipient_first_name: "Тест",
+                    service_recipient_last_name: "Тестов",
+                    service_recipient_phone: "+380671234567",
+                    service_recipient_email: "test@test.com",
+                    notes: "Тестовое бронирование с client_id"
+                },
+                car: {
+                    car_type_id: 1
+                }
+            };
+
+            showRequest(testId, requestData);
+
+            try {
+                const response = await fetch(`${API_BASE}/client_bookings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                const result = await response.json();
+                showResponse(testId, result, !response.ok);
+            } catch (error) {
+                showResponse(testId, { error: error.message }, true);
+            }
+        }
+
+        // Тест 4: Создание бронирования с новыми данными
+        async function testCreateBookingNewUser() {
+            const testId = 'test4';
+            const statusElement = document.getElementById(`${testId}-status`);
+            statusElement.textContent = 'Выполняется...';
+            statusElement.className = 'status pending';
+
+            const timestamp = Date.now();
+            const requestData = {
+                client: {
+                    first_name: "Новый",
+                    last_name: "Пользователь",
+                    phone: `+38067${timestamp.toString().slice(-7)}`,
+                    email: `newuser${timestamp}@test.com`
+                },
+                booking: {
+                    service_point_id: 44,
+                    service_category_id: 6,
+                    booking_date: "2025-01-28",
+                    start_time: "12:00",
+                    service_recipient_first_name: "Новый",
+                    service_recipient_last_name: "Пользователь",
+                    service_recipient_phone: `+38067${timestamp.toString().slice(-7)}`,
+                    service_recipient_email: `newuser${timestamp}@test.com`,
+                    notes: "Тестовое бронирование нового пользователя"
+                },
+                car: {
+                    car_type_id: 1
+                }
+            };
+
+            showRequest(testId, requestData);
+
+            try {
+                const response = await fetch(`${API_BASE}/client_bookings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                const result = await response.json();
+                showResponse(testId, result, !response.ok);
+            } catch (error) {
+                showResponse(testId, { error: error.message }, true);
+            }
+        }
+
+        // Автозапуск первого теста
+        window.onload = function() {
+            setTimeout(testCheckUserExists, 1000);
+        };
+    </script>
+</body>
+</html> 

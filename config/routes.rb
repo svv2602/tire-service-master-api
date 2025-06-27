@@ -86,6 +86,9 @@ Rails.application.routes.draw do
         member do
           patch :toggle_active
         end
+        collection do
+          get :check_exists
+        end
       end
       
       # Администраторы

@@ -79,6 +79,47 @@ module Api
         end
       end
       
+      # Проверка существования пользователя по телефону или email
+      def check_exists
+        phone = params[:phone]
+        email = params[:email]
+        
+        if phone.blank? && email.blank?
+          render json: { error: 'Необходимо указать телефон или email' }, status: :bad_request
+          return
+        end
+        
+        user = nil
+        
+        # Поиск по телефону
+        if phone.present?
+          normalized_phone = phone.gsub(/[^\d+]/, '')
+          user = User.find_by(phone: normalized_phone)
+        end
+        
+        # Поиск по email, если не найден по телефону
+        if user.nil? && email.present?
+          user = User.find_by(email: email.downcase)
+        end
+        
+        if user
+          render json: {
+            exists: true,
+            user: {
+              id: user.id,
+              first_name: user.first_name,
+              last_name: user.last_name,
+              email: user.email,
+              phone: user.phone,
+              role: user.role.name,
+              client_id: user.client&.id
+            }
+          }
+        else
+          render json: { exists: false }
+        end
+      end
+      
       private
       
       def set_user

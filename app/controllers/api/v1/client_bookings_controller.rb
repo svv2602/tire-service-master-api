@@ -261,20 +261,34 @@ module Api
         end
 
         client_data = client_params
+        Rails.logger.info("find_or_create_client: client_data = #{client_data}")
         
-        # Ищем существующего пользователя по телефону или email
-        user = if client_data[:phone].present?
-          User.find_by(phone: client_data[:phone])
-        elsif client_data[:email].present?
-          User.find_by(email: client_data[:email])
-        end
-
-        # Если нашли пользователя, возвращаем его client
-        if user&.client
+        # Ищем существующего пользователя по телефону И по email отдельно
+        user_by_phone = client_data[:phone].present? ? User.find_by(phone: client_data[:phone]) : nil
+        user_by_email = client_data[:email].present? ? User.find_by(email: client_data[:email]) : nil
+        
+        Rails.logger.info("find_or_create_client: user_by_phone = #{user_by_phone&.id}")
+        Rails.logger.info("find_or_create_client: user_by_email = #{user_by_email&.id}")
+        
+        # Если нашли пользователя по любому из полей, возвращаем информацию
+        existing_user = user_by_phone || user_by_email
+        
+        if existing_user
+          conflict_field = user_by_phone ? 'телефон' : 'email'
+          Rails.logger.info("find_or_create_client: Found existing user, returning conflict")
           render json: { 
-            error: 'Клиент уже существует',
-            details: ['Пожалуйста, войдите в систему для создания бронирования']
-          }, status: :unprocessable_entity
+            error: 'Пользователь уже существует',
+            details: ["Пользователь с таким #{conflict_field} уже зарегистрирован. Пожалуйста, войдите в систему для создания бронирования"],
+            existing_user: {
+              id: existing_user.id,
+              first_name: existing_user.first_name,
+              last_name: existing_user.last_name,
+              email: existing_user.email,
+              phone: existing_user.phone,
+              role: existing_user.role.name,
+              client_id: existing_user.client&.id
+            }
+          }, status: :conflict # Используем статус 409 Conflict вместо 422
           return nil
         end
 
@@ -316,7 +330,9 @@ module Api
           booking_data[:service_point_id].to_i,
           Date.parse(booking_data[:booking_date]),
           Time.parse("#{booking_data[:booking_date]} #{booking_data[:start_time]}"),
-          calculate_duration_minutes
+          calculate_duration_minutes,
+          exclude_booking_id: nil,
+          category_id: booking_data[:service_category_id]
         )
       end
       
@@ -461,18 +477,26 @@ module Api
           if booking_data[:service_point_id].present? && booking_data[:start_time].present?
             service_point = ServicePoint.find_by(id: booking_data[:service_point_id])
             if service_point
-              # Получаем доступные слоты для указанной даты
+              # Получаем доступные слоты для указанной даты и категории
               date = Date.parse(booking_data[:booking_date])
-              available_slots = DynamicAvailabilityService.available_slots_for_date(service_point.id, date)
+              
+              # Если указана категория, используем слоты для категории
+              available_slots = if booking_data[:service_category_id].present?
+                DynamicAvailabilityService.available_slots_for_category(
+                  service_point.id, date, booking_data[:service_category_id]
+                )
+              else
+                DynamicAvailabilityService.available_slots_for_date(service_point.id, date)
+              end
               
               # Ищем слот, который начинается в указанное время
               matching_slot = available_slots.find { |slot| slot[:start_time] == booking_data[:start_time] }
               
               if matching_slot
-                Rails.logger.info("calculate_duration_minutes: Используем длительность слота #{matching_slot[:duration_minutes]} мин для времени #{booking_data[:start_time]}")
+                Rails.logger.info("calculate_duration_minutes: Используем длительность слота #{matching_slot[:duration_minutes]} мин для времени #{booking_data[:start_time]} (категория: #{booking_data[:service_category_id]})")
                 return matching_slot[:duration_minutes]
               else
-                Rails.logger.warn("calculate_duration_minutes: Слот не найден для времени #{booking_data[:start_time]}, доступные слоты: #{available_slots.map { |s| s[:start_time] }}")
+                Rails.logger.warn("calculate_duration_minutes: Слот не найден для времени #{booking_data[:start_time]} и категории #{booking_data[:service_category_id]}, доступные слоты: #{available_slots.map { |s| s[:start_time] }}")
               end
             end
           end
@@ -496,10 +520,9 @@ module Api
       def booking_params_for_duration
         params.require(:booking).permit(
           :service_point_id,
+          :service_category_id,
           :booking_date,
-          :start_time,
-          :notes,
-          :total_price
+          :start_time
         )
       end
       
@@ -613,6 +636,7 @@ module Api
         # Получаем параметры
         params_data = params.require(:booking).permit(
           :service_point_id,
+          :service_category_id,
           :booking_date,
           :start_time,
           :notes,
