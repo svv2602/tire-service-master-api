@@ -31,6 +31,12 @@ Rails.application.routes.draw do
       post 'auth/refresh', to: 'auth#refresh'
       put 'auth/profile', to: 'auth#update_profile'
       
+      # Автомобили текущего клиента
+      get 'auth/me/cars', to: 'auth#my_cars'
+      post 'auth/me/cars', to: 'auth#create_car'
+      patch 'auth/me/cars/:car_id', to: 'auth#update_car'
+      delete 'auth/me/cars/:car_id', to: 'auth#delete_car'
+      
       # Клиентский API доступности (упрощенный)
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
       post 'bookings/check_availability', to: 'availability#client_check_availability'

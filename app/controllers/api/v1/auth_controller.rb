@@ -194,11 +194,92 @@ module Api
           render json: { errors: current_user.errors }, status: :unprocessable_entity
         end
       end
+
+      # GET /api/v1/auth/me/cars
+      # Получение автомобилей текущего клиента
+      def my_cars
+        unless current_user.client?
+          render json: { error: 'Доступно только для клиентов' }, status: :forbidden
+          return
+        end
+
+        cars = current_user.client.cars.includes(:brand, :model, :car_type)
+        render json: cars, each_serializer: ClientCarSerializer
+      end
+
+      # POST /api/v1/auth/me/cars
+      # Создание автомобиля для текущего клиента
+      def create_car
+        unless current_user.client?
+          render json: { error: 'Доступно только для клиентов' }, status: :forbidden
+          return
+        end
+
+        car = current_user.client.cars.build(car_params)
+
+        if car.save
+          render json: car, serializer: ClientCarSerializer, status: :created
+        else
+          render json: { errors: car.errors }, status: :unprocessable_entity
+        end
+      end
+
+      # PATCH /api/v1/auth/me/cars/:car_id
+      # Обновление автомобиля текущего клиента
+      def update_car
+        unless current_user.client?
+          render json: { error: 'Доступно только для клиентов' }, status: :forbidden
+          return
+        end
+
+        car = current_user.client.cars.find(params[:car_id])
+
+        if car.update(car_params)
+          render json: car, serializer: ClientCarSerializer
+        else
+          render json: { errors: car.errors }, status: :unprocessable_entity
+        end
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Автомобиль не найден' }, status: :not_found
+      end
+
+      # DELETE /api/v1/auth/me/cars/:car_id
+      # Удаление автомобиля текущего клиента
+      def delete_car
+        unless current_user.client?
+          render json: { error: 'Доступно только для клиентов' }, status: :forbidden
+          return
+        end
+
+        car = current_user.client.cars.find(params[:car_id])
+
+        if car.bookings.exists?
+          # Если есть бронирования с этой машиной, просто помечаем как неактивную
+          if car.update(is_active: false)
+            render json: { message: 'Автомобиль был помечен как неактивный' }
+          else
+            render json: { errors: car.errors }, status: :unprocessable_entity
+          end
+        else
+          # Если бронирований нет, можем полностью удалить
+          if car.destroy
+            render json: { message: 'Автомобиль был успешно удален' }
+          else
+            render json: { errors: car.errors }, status: :unprocessable_entity
+          end
+        end
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Автомобиль не найден' }, status: :not_found
+      end
       
       private
       
       def auth_params
         params.permit(:email, :password)
+      end
+
+      def car_params
+        params.require(:car).permit(:brand_id, :model_id, :year, :license_plate, :car_type_id, :is_primary)
       end
 
       def get_role_permissions(role_name)

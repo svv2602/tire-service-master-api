@@ -1,22 +1,22 @@
 class ClientCarSerializer < ActiveModel::Serializer
-  attributes :id, :year, :is_primary, :created_at, :updated_at
-  
-  belongs_to :brand, class_name: 'CarBrand', foreign_key: 'car_brand_id'
-  belongs_to :model, class_name: 'CarModel', foreign_key: 'car_model_id'
-  belongs_to :car_type, optional: true
+  attributes :id, :brand_id, :model_id, :car_type_id, :year, :license_plate, :is_primary, :created_at, :updated_at
   
   def brand
-    {
-      id: object.brand.id,
-      name: object.brand.name
-    }
+    if object.brand
+      {
+        id: object.brand.id,
+        name: object.brand.name
+      }
+    end
   end
   
   def model
-    {
-      id: object.model.id,
-      name: object.model.name
-    }
+    if object.model
+      {
+        id: object.model.id,
+        name: object.model.name
+      }
+    end
   end
   
   def car_type
@@ -26,8 +26,6 @@ class ClientCarSerializer < ActiveModel::Serializer
         name: object.car_type.name,
         description: object.car_type.description
       }
-    else
-      nil
     end
   end
 end
