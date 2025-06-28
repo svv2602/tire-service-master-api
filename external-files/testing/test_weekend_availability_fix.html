@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест исправления доступности выходных дней</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-title {
+            color: #2196F3;
+            border-bottom: 2px solid #2196F3;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .api-test {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .result.success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .result.error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .result.info { background: #d1ecf1; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Тест исправления доступности выходных дней</h1>
+    
+    <div class="test-container">
+        <h2 class="test-title">Описание проблемы</h2>
+        <p><strong>Проблема:</strong> Сервисная точка "АвтоШина Плюс центр" имеет пост с индивидуальным расписанием, который работает в воскресенье, но календарь блокирует воскресенья как выходные дни.</p>
+        
+        <p><strong>Ожидаемое поведение:</strong></p>
+        <ul>
+            <li>Если хотя бы один пост работает в выходной день, этот день должен быть доступен для бронирования</li>
+            <li>При настройке индивидуального расписания должно появляться подтверждение</li>
+            <li>API должно корректно определять доступность дней с учетом индивидуальных графиков</li>
+        </ul>
+        
+        <p><strong>Тестируемая точка:</strong> АвтоШина Плюс центр (ID: 4) - имеет пост "Експрес пост" с индивидуальным расписанием, работающий в воскресенье</p>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">1. Проверка API доступности дня</h2>
+        <div class="api-test">
+            <h4>Тест нового endpoint /check</h4>
+            <button onclick="testDayAvailabilityAPI()">Проверить доступность воскресенья</button>
+            <button onclick="testDayAvailabilityWithCategory()">Проверить с категорией шиномонтаж</button>
+            <div id="dayAvailabilityResult" class="result"></div>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">2. Проверка существующих API</h2>
+        <div class="api-test">
+            <h4>Проверка доступных времен на воскресенье</h4>
+            <button onclick="testAvailableTimesAPI()">Проверить доступные времена</button>
+            <div id="availableTimesResult" class="result"></div>
+        </div>
+        
+        <div class="api-test">
+            <h4>Проверка детальной информации о дне</h4>
+            <button onclick="testDayDetailsAPI()">Проверить детали дня</button>
+            <button onclick="testDayDetailsWithCategory()">Проверить с категорией</button>
+            <div id="dayDetailsResult" class="result"></div>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">3. Тест сервисной точки</h2>
+        <div class="api-test">
+            <h4>Информация о сервисной точке</h4>
+            <button onclick="testServicePointInfo()">Получить информацию о точке</button>
+            <div id="servicePointResult" class="result"></div>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">4. Ссылки для ручного тестирования</h2>
+        <p>Откройте в новых вкладках для проверки фронтенда:</p>
+        <ul>
+            <li><a href="http://localhost:3008/client/booking" target="_blank">Страница бронирования</a></li>
+            <li><a href="http://localhost:3008/admin/service-points/4" target="_blank">Админка сервисной точки</a></li>
+        </ul>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        
+        // ID сервисной точки "АвтоШина Плюс центр" во Львове
+        const SERVICE_POINT_ID = 4; // Точка с постом, работающим в воскресенье
+        
+        // Воскресенье для тестирования
+        const SUNDAY_DATE = '2025-06-29'; // Воскресенье
+        
+        async function makeAPICall(url, options = {}) {
+            try {
+                console.log('API Call:', url);
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+                
+                const data = await response.json();
+                console.log('API Response:', data);
+                
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    data: data
+                };
+            } catch (error) {
+                console.error('API Error:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+        
+        async function testDayAvailabilityAPI() {
+            const resultDiv = document.getElementById('dayAvailabilityResult');
+            resultDiv.textContent = 'Проверяем доступность без категории...';
+            resultDiv.className = 'result info';
+            
+            const url = `${API_BASE}/service_points/${SERVICE_POINT_ID}/availability/${SUNDAY_DATE}/check`;
+            const result = await makeAPICall(url);
+            
+            if (result.success) {
+                const isAvailable = result.data.is_available;
+                resultDiv.className = `result ${isAvailable ? 'success' : 'error'}`;
+                resultDiv.textContent = `✅ API работает!\n\nРезультат: ${isAvailable ? 'День ДОСТУПЕН' : 'День НЕДОСТУПЕН'}\n\nДанные:\n${JSON.stringify(result.data, null, 2)}`;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Ошибка API: ${result.error || result.data?.error || 'Неизвестная ошибка'}\nСтатус: ${result.status}`;
+            }
+        }
+        
+        async function testDayAvailabilityWithCategory() {
+            const resultDiv = document.getElementById('dayAvailabilityResult');
+            resultDiv.textContent = 'Проверяем доступность с категорией шиномонтаж...';
+            resultDiv.className = 'result info';
+            
+            const url = `${API_BASE}/service_points/${SERVICE_POINT_ID}/availability/${SUNDAY_DATE}/check?category_id=1`;
+            const result = await makeAPICall(url);
+            
+            if (result.success) {
+                const isAvailable = result.data.is_available;
+                resultDiv.className = `result ${isAvailable ? 'success' : 'error'}`;
+                resultDiv.textContent = `✅ API работает!\n\nРезультат с категорией: ${isAvailable ? 'День ДОСТУПЕН' : 'День НЕДОСТУПЕН'}\n\nДанные:\n${JSON.stringify(result.data, null, 2)}`;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Ошибка API: ${result.error || result.data?.error || 'Неизвестная ошибка'}\nСтатус: ${result.status}`;
+            }
+        }
+        
+        async function testAvailableTimesAPI() {
+            const resultDiv = document.getElementById('availableTimesResult');
+            resultDiv.textContent = 'Проверяем...';
+            resultDiv.className = 'result info';
+            
+            const url = `${API_BASE}/service_points/${SERVICE_POINT_ID}/availability/${SUNDAY_DATE}`;
+            const result = await makeAPICall(url);
+            
+            if (result.success) {
+                const timesCount = result.data.available_times?.length || 0;
+                resultDiv.className = `result ${timesCount > 0 ? 'success' : 'warning'}`;
+                resultDiv.textContent = `✅ API работает!\n\nДоступных времен: ${timesCount}\n\nПервые несколько времен:\n${result.data.available_times?.slice(0, 5).map(t => `${t.time} (${t.available_posts} постов)`).join('\n') || 'Нет доступных времен'}`;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Ошибка API: ${result.error || result.data?.error || 'Неизвестная ошибка'}\nСтатус: ${result.status}`;
+            }
+        }
+        
+        async function testDayDetailsAPI() {
+            const resultDiv = document.getElementById('dayDetailsResult');
+            resultDiv.textContent = 'Проверяем детали дня...';
+            resultDiv.className = 'result info';
+            
+            const url = `${API_BASE}/service_points/${SERVICE_POINT_ID}/availability/${SUNDAY_DATE}/details`;
+            const result = await makeAPICall(url);
+            
+            if (result.success) {
+                const isWorking = result.data.is_working;
+                const message = result.data.message;
+                resultDiv.className = `result ${isWorking ? 'success' : (message ? 'warning' : 'error')}`;
+                resultDiv.textContent = `✅ API работает!\n\nРаботает: ${isWorking ? 'ДА' : 'НЕТ'}\nСообщение: ${message || 'Нет'}\nВсего постов: ${result.data.total_posts}\nОткрытие: ${result.data.opening_time}\nЗакрытие: ${result.data.closing_time}`;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Ошибка API: ${result.error || result.data?.error || 'Неизвестная ошибка'}\nСтатус: ${result.status}`;
+            }
+        }
+        
+        async function testDayDetailsWithCategory() {
+            const resultDiv = document.getElementById('dayDetailsResult');
+            resultDiv.textContent = 'Проверяем детали дня с категорией...';
+            resultDiv.className = 'result info';
+            
+            const url = `${API_BASE}/service_points/${SERVICE_POINT_ID}/availability/${SUNDAY_DATE}/details?category_id=1`;
+            const result = await makeAPICall(url);
+            
+            if (result.success) {
+                const isWorking = result.data.is_working;
+                const message = result.data.message;
+                const summary = result.data.summary;
+                resultDiv.className = `result ${isWorking ? 'success' : (message ? 'warning' : 'error')}`;
+                resultDiv.textContent = `✅ API работает!\n\nРаботает: ${isWorking ? 'ДА' : 'НЕТ'}\nСообщение: ${message || 'Нет'}\nВсего постов: ${result.data.total_posts}\nВсего слотов: ${summary?.total_slots}\nДоступно: ${summary?.available_slots}\nЗанято: ${summary?.occupied_slots}`;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Ошибка API: ${result.error || result.data?.error || 'Неизвестная ошибка'}\nСтатус: ${result.status}`;
+            }
+        }
+        
+        async function testServicePointInfo() {
+            const resultDiv = document.getElementById('servicePointResult');
+            resultDiv.textContent = 'Проверяем...';
+            resultDiv.className = 'result info';
+            
+            const url = `${API_BASE}/service_points/${SERVICE_POINT_ID}`;
+            const result = await makeAPICall(url);
+            
+            if (result.success) {
+                const postsCount = result.data.service_posts?.length || 0;
+                const customSchedulePosts = result.data.service_posts?.filter(p => p.has_custom_schedule) || [];
+                
+                resultDiv.className = 'result success';
+                resultDiv.textContent = `✅ Информация о сервисной точке:\n\nНазвание: ${result.data.name}\nАдрес: ${result.data.address}\nВсего постов: ${postsCount}\nПостов с индивидуальным расписанием: ${customSchedulePosts.length}\n\nПосты с индивидуальным расписанием:\n${customSchedulePosts.map(p => `- ${p.name} (№${p.post_number}): работает ${p.working_days_list?.join(', ') || 'не настроено'}`).join('\n')}`;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Ошибка API: ${result.error || result.data?.error || 'Неизвестная ошибка'}\nСтатус: ${result.status}`;
+            }
+        }
+        
+        // Автоматически запускаем проверку информации о точке при загрузке
+        document.addEventListener('DOMContentLoaded', () => {
+            testServicePointInfo();
+        });
+    </script>
+</body>
+</html> 

@@ -179,13 +179,21 @@ class Api::V1::AvailabilityController < ApplicationController
   end
   
   # GET /api/v1/service_points/:service_point_id/availability/:date/details
-  # Детальная информация о загрузке на день
+  # Получение детальной информации о загрузке дня
   def day_details
     date = parse_date(params[:date])
     return if date.nil? # Если parse_date уже отрендерил ошибку, выходим
     
+    category_id = params[:category_id]&.to_i
+    
     begin
-      details = DynamicAvailabilityService.day_occupancy_details(@service_point.id, date)
+      if category_id.present?
+        # Получаем детали для конкретной категории
+        details = DynamicAvailabilityService.day_occupancy_details_for_category(@service_point.id, date, category_id)
+      else
+        # Получаем общие детали по всем постам
+        details = DynamicAvailabilityService.day_occupancy_details(@service_point.id, date)
+      end
       
       render json: {
         service_point_id: @service_point.id,
@@ -342,6 +350,34 @@ class Api::V1::AvailabilityController < ApplicationController
       render json: { 
         error: "Ошибка получения слотов: #{e.message}" 
       }, status: :internal_server_error
+    end
+  end
+  
+  # GET /api/v1/service_points/:service_point_id/availability/:date/check
+  # Быстрая проверка доступности дня (для календаря)
+  def check_day_availability
+    date = parse_date(params[:date])
+    return if date.nil?
+    
+    category_id = params[:category_id]&.to_i
+    
+    begin
+      if category_id.present?
+        # Проверяем доступность для конкретной категории
+        has_working_posts = DynamicAvailabilityService.send(:has_working_posts_for_category_on_date?, @service_point, date, category_id)
+      else
+        # Проверяем общую доступность (хотя бы один пост работает)
+        has_working_posts = DynamicAvailabilityService.send(:has_any_working_posts_on_date?, @service_point, date)
+      end
+      
+      render json: {
+        service_point_id: @service_point.id,
+        date: date.strftime('%Y-%m-%d'),
+        is_available: has_working_posts,
+        category_id: category_id
+      }
+    rescue => e
+      render json: { error: "Внутренняя ошибка сервера: #{e.message}" }, status: :internal_server_error
     end
   end
   
