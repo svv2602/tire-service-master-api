@@ -177,16 +177,20 @@ class DynamicAvailabilityService
   def self.check_availability_at_time(service_point_id, date, time, duration_minutes = nil, exclude_booking_id: nil, category_id: nil)
     service_point = ServicePoint.find(service_point_id)
     
-    # Проверяем рабочие часы
-    schedule_info = get_schedule_for_date(service_point, date)
-    return { available: false, reason: 'Не рабочий день' } unless schedule_info[:is_working]
+    # Проверяем есть ли работающие посты в этот день (новая логика)
+    if category_id.present?
+      return { available: false, reason: 'Не рабочий день' } unless has_working_posts_for_category_on_date?(service_point, date, category_id)
+      # Получаем рабочие часы для категории
+      working_hours_info = get_working_hours_for_category(service_point, date, category_id)
+    else
+      return { available: false, reason: 'Не рабочий день' } unless has_any_working_posts_on_date?(service_point, date)
+      # Получаем рабочие часы для всех постов
+      working_hours_info = get_working_hours_for_all_posts(service_point, date)
+    end
     
-    # Преобразуем время из объектов Time в строки времени, затем создаем новые объекты с нужной датой
-    opening_time_str = schedule_info[:opening_time].strftime('%H:%M:%S')
-    closing_time_str = schedule_info[:closing_time].strftime('%H:%M:%S')
-    
-    opening_time = Time.parse("#{date} #{opening_time_str}")
-    closing_time = Time.parse("#{date} #{closing_time_str}")
+    # Проверяем время в рамках рабочих часов
+    opening_time = Time.parse("#{date} #{working_hours_info[:opening_time].strftime('%H:%M:%S')}")
+    closing_time = Time.parse("#{date} #{working_hours_info[:closing_time].strftime('%H:%M:%S')}")
     check_time = time.is_a?(String) ? Time.parse("#{date} #{time}") : time
     
     return { available: false, reason: 'Вне рабочих часов' } if check_time < opening_time || check_time >= closing_time
