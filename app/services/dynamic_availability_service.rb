@@ -9,16 +9,29 @@ class DynamicAvailabilityService
   def self.all_slots_for_date(service_point_id, date)
     service_point = ServicePoint.find(service_point_id)
     
-    # Получаем рабочие часы для данной даты
-    schedule_info = get_schedule_for_date(service_point, date)
-    return [] unless schedule_info[:is_working]
+    # Проверяем есть ли работающие посты в этот день (новая логика)
+    return [] unless has_any_working_posts_on_date?(service_point, date)
     
     # Определяем день недели
-    day_key = date.strftime('%A').downcase
+    day_key = case date.wday
+    when 0 then 'sunday'
+    when 1 then 'monday'
+    when 2 then 'tuesday'
+    when 3 then 'wednesday'
+    when 4 then 'thursday'
+    when 5 then 'friday'
+    when 6 then 'saturday'
+    end
     
     # Получаем все активные посты, работающие в этот день
     working_posts = service_point.service_posts.active.select do |post|
-      post.working_on_day?(day_key)
+      if post.has_custom_schedule && post.working_days.present?
+        post.working_days[day_key] == true || post.working_days[day_key.to_s] == true
+      else
+        # Пост работает по расписанию точки
+        day_schedule = service_point.working_hours[day_key]
+        day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+      end
     end
     
     return [] if working_posts.empty?
@@ -107,9 +120,8 @@ class DynamicAvailabilityService
   def self.available_times_for_date(service_point_id, date, min_duration_minutes = nil)
     service_point = ServicePoint.find(service_point_id)
     
-    # Получаем рабочие часы для данной даты
-    schedule_info = get_schedule_for_date(service_point, date)
-    return [] unless schedule_info[:is_working]
+    # Проверяем есть ли работающие посты в этот день (новая логика)
+    return [] unless has_any_working_posts_on_date?(service_point, date)
     
     # Получаем все доступные слоты от постов
     individual_slots = available_slots_for_date(service_point_id, date)
@@ -294,9 +306,14 @@ class DynamicAvailabilityService
   # Получение детальной информации о загрузке на день (по слотам бронирования)
   def self.day_occupancy_details(service_point_id, date)
     service_point = ServicePoint.find(service_point_id)
-    schedule_info = get_schedule_for_date(service_point, date)
     
-    return { is_working: false } unless schedule_info[:is_working]
+    # Проверяем есть ли хотя бы один работающий пост в указанную дату
+    unless has_any_working_posts_on_date?(service_point, date)
+      return { 
+        is_working: false,
+        message: "В выбранную дату сервисная точка не работает. Пожалуйста, выберите другую дату."
+      }
+    end
     
     # Получаем все доступные слоты для этого дня
     available_slots = available_slots_for_date(service_point_id, date)
@@ -310,10 +327,13 @@ class DynamicAvailabilityService
     
     occupancy_percentage = total_slots > 0 ? (occupied_slots_count.to_f / total_slots * 100).round(1) : 0
     
+    # Получаем рабочие часы с учетом индивидуальных графиков постов
+    working_hours_info = get_working_hours_for_all_posts(service_point, date)
+    
     {
       is_working: true,
-      opening_time: schedule_info[:opening_time].strftime('%H:%M'),
-      closing_time: schedule_info[:closing_time].strftime('%H:%M'),
+      opening_time: working_hours_info[:opening_time].strftime('%H:%M'),
+      closing_time: working_hours_info[:closing_time].strftime('%H:%M'),
       total_posts: service_point.service_posts.active.count,
       summary: {
         total_slots: total_slots,
@@ -384,9 +404,11 @@ class DynamicAvailabilityService
   def self.get_all_possible_slots_for_date(service_point_id, date)
     service_point = ServicePoint.find(service_point_id)
     
-    # Получаем рабочие часы для данной даты
-    schedule_info = get_schedule_for_date(service_point, date)
-    return [] unless schedule_info[:is_working]
+    # Проверяем есть ли хотя бы один работающий пост в указанную дату
+    # (не полагаемся только на общее расписание, учитываем индивидуальные графики)
+    unless has_any_working_posts_on_date?(service_point, date)
+      return []
+    end
     
     # Определяем день недели
     day_key = case date.wday
@@ -819,5 +841,34 @@ class DynamicAvailabilityService
         day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
       end
     end
+  end
+
+  # Получает рабочие часы с учетом всех работающих постов (любых категорий)
+  def self.get_working_hours_for_all_posts(service_point, date)
+    day_key = case date.wday
+    when 0 then 'sunday'
+    when 1 then 'monday'
+    when 2 then 'tuesday'
+    when 3 then 'wednesday'
+    when 4 then 'thursday'
+    when 5 then 'friday'
+    when 6 then 'saturday'
+    end
+    
+    # Получаем все работающие посты
+    all_posts = service_point.service_posts.where(is_active: true)
+    working_posts = all_posts.select { |post| post.working_on_day?(day_key) }
+    
+    # Находим самое раннее время открытия и самое позднее время закрытия
+    opening_times = working_posts.map { |post| post.start_time_for_day(day_key) }
+    closing_times = working_posts.map { |post| post.end_time_for_day(day_key) }
+    
+    earliest_opening = opening_times.min || '09:00'
+    latest_closing = closing_times.max || '18:00'
+    
+    {
+      opening_time: Time.parse("#{date} #{earliest_opening}:00"),
+      closing_time: Time.parse("#{date} #{latest_closing}:00")
+    }
   end
 end 

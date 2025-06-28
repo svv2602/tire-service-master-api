@@ -27,14 +27,14 @@ class Api::V1::AvailabilityController < ApplicationController
         end
       end
       
-      # Проверяем рабочий ли день
-      schedule_info = DynamicAvailabilityService.send(:get_schedule_for_date, @service_point, date)
+      # Проверяем рабочий ли день (новая логика с индивидуальными постами)
+      is_working_day = DynamicAvailabilityService.has_any_working_posts_on_date?(@service_point, date)
       
       render json: {
         service_point_id: @service_point.id,
         service_point_name: @service_point.name,
         date: date.strftime('%Y-%m-%d'),
-        is_working_day: schedule_info[:is_working],
+        is_working_day: is_working_day,
         available_slots: available_times.map do |slot|
           {
             time: slot[:time],
