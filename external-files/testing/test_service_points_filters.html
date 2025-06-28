@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест фильтров сервисных точек</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f5f5f5; 
+        }
+        .test-section { 
+            background: white; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        }
+        .api-test { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-left: 4px solid #007bff; 
+            margin: 10px 0; 
+        }
+        .result { 
+            background: #e8f5e8; 
+            padding: 10px; 
+            border: 1px solid #4caf50; 
+            border-radius: 4px; 
+            margin: 10px 0; 
+        }
+        .error { 
+            background: #ffe8e8; 
+            padding: 10px; 
+            border: 1px solid #f44336; 
+            border-radius: 4px; 
+            margin: 10px 0; 
+        }
+        button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+        button:hover { background: #0056b3; }
+        pre { 
+            background: #f8f9fa; 
+            padding: 10px; 
+            border-radius: 4px; 
+            overflow-x: auto; 
+            font-size: 12px; 
+        }
+        .filter-test {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .chip {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin: 2px;
+        }
+        .chip.active { background: #4caf50; color: white; }
+        .chip.inactive { background: #f44336; color: white; }
+        .chip.working { background: #4caf50; color: white; }
+        .chip.temporarily_closed { background: #ff9800; color: white; }
+        .chip.maintenance { background: #2196f3; color: white; }
+        .chip.permanently_closed { background: #f44336; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тест фильтров сервисных точек в админке</h1>
+    
+    <div class="test-section">
+        <h2>📋 Цель тестирования</h2>
+        <p>Проверить работу новых фильтров по активности и состоянию работы в админке сервисных точек.</p>
+        <ul>
+            <li>✅ Все точки отображаются в таблице</li>
+            <li>✅ Фильтр по активности работает корректно</li>
+            <li>✅ Фильтр по состоянию работы работает корректно</li>
+            <li>✅ Комбинация фильтров работает правильно</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 API тестирование</h2>
+        
+        <div class="api-test">
+            <h3>1. Все сервисные точки</h3>
+            <button onclick="testAllServicePoints()">Загрузить все точки</button>
+            <div id="allPointsResult"></div>
+        </div>
+
+        <div class="api-test">
+            <h3>2. Фильтр по активности</h3>
+            <button onclick="testActiveFilter(true)">Только активные</button>
+            <button onclick="testActiveFilter(false)">Только неактивные</button>
+            <div id="activeFilterResult"></div>
+        </div>
+
+        <div class="api-test">
+            <h3>3. Фильтр по состоянию работы</h3>
+            <button onclick="testWorkStatusFilter('working')">Рабочие</button>
+            <button onclick="testWorkStatusFilter('temporarily_closed')">Временно закрытые</button>
+            <button onclick="testWorkStatusFilter('maintenance')">На техобслуживании</button>
+            <div id="workStatusResult"></div>
+        </div>
+
+        <div class="api-test">
+            <h3>4. Комбинированные фильтры</h3>
+            <button onclick="testCombinedFilters()">Активные + Рабочие</button>
+            <button onclick="testCombinedFilters(true, 'temporarily_closed')">Активные + Временно закрытые</button>
+            <div id="combinedResult"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🎯 Тест логики бронирования</h2>
+        <p>Проверяем, что для бронирования показываются только активные И работающие точки</p>
+        
+        <div class="api-test">
+            <h3>API бронирования (только active + working)</h3>
+            <button onclick="testBookingAPI()">Точки для бронирования</button>
+            <div id="bookingResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        
+        async function makeApiCall(url) {
+            try {
+                console.log('API запрос:', url);
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                console.log('API ответ:', data);
+                return data;
+            } catch (error) {
+                console.error('Ошибка API:', error);
+                throw error;
+            }
+        }
+
+        function formatServicePoint(point) {
+            const activeChip = `<span class="chip ${point.is_active ? 'active' : 'inactive'}">${point.is_active ? 'Активна' : 'Неактивна'}</span>`;
+            const statusChip = `<span class="chip ${point.work_status}">${getWorkStatusLabel(point.work_status)}</span>`;
+            return `
+                <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 4px;">
+                    <strong>${point.name}</strong> (ID: ${point.id})<br>
+                    Город: ${point.city?.name || 'Не указан'}<br>
+                    ${activeChip} ${statusChip}
+                </div>
+            `;
+        }
+
+        function getWorkStatusLabel(status) {
+            const labels = {
+                'working': 'Рабочая',
+                'temporarily_closed': 'Временно закрыта',
+                'maintenance': 'На техобслуживании',
+                'permanently_closed': 'Закрыта навсегда'
+            };
+            return labels[status] || status;
+        }
+
+        async function testAllServicePoints() {
+            const resultDiv = document.getElementById('allPointsResult');
+            resultDiv.innerHTML = '<p>Загрузка...</p>';
+            
+            try {
+                const data = await makeApiCall(`${API_BASE}/service_points`);
+                const points = data.data || [];
+                
+                let html = `<div class="result">
+                    <h4>✅ Результат: найдено ${points.length} точек</h4>
+                    <div class="filter-test">`;
+                
+                points.forEach(point => {
+                    html += formatServicePoint(point);
+                });
+                
+                html += '</div></div>';
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        async function testActiveFilter(isActive) {
+            const resultDiv = document.getElementById('activeFilterResult');
+            resultDiv.innerHTML = '<p>Загрузка...</p>';
+            
+            try {
+                const data = await makeApiCall(`${API_BASE}/service_points?is_active=${isActive}`);
+                const points = data.data || [];
+                
+                let html = `<div class="result">
+                    <h4>✅ Фильтр "is_active=${isActive}": найдено ${points.length} точек</h4>`;
+                
+                points.forEach(point => {
+                    html += formatServicePoint(point);
+                });
+                
+                html += '</div>';
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        async function testWorkStatusFilter(status) {
+            const resultDiv = document.getElementById('workStatusResult');
+            resultDiv.innerHTML = '<p>Загрузка...</p>';
+            
+            try {
+                const data = await makeApiCall(`${API_BASE}/service_points?work_status=${status}`);
+                const points = data.data || [];
+                
+                let html = `<div class="result">
+                    <h4>✅ Фильтр "work_status=${status}": найдено ${points.length} точек</h4>`;
+                
+                points.forEach(point => {
+                    html += formatServicePoint(point);
+                });
+                
+                html += '</div>';
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        async function testCombinedFilters(isActive = true, workStatus = 'working') {
+            const resultDiv = document.getElementById('combinedResult');
+            resultDiv.innerHTML = '<p>Загрузка...</p>';
+            
+            try {
+                const data = await makeApiCall(`${API_BASE}/service_points?is_active=${isActive}&work_status=${workStatus}`);
+                const points = data.data || [];
+                
+                let html = `<div class="result">
+                    <h4>✅ Комбинированный фильтр (is_active=${isActive}, work_status=${workStatus}): найдено ${points.length} точек</h4>`;
+                
+                points.forEach(point => {
+                    html += formatServicePoint(point);
+                });
+                
+                html += '</div>';
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        async function testBookingAPI() {
+            const resultDiv = document.getElementById('bookingResult');
+            resultDiv.innerHTML = '<p>Загрузка...</p>';
+            
+            try {
+                // Тестируем API для бронирования - должны показываться только активные И работающие
+                const data = await makeApiCall(`${API_BASE}/service_points/by_category?category_id=1&city_id=8`);
+                const points = data.data || [];
+                
+                let html = `<div class="result">
+                    <h4>✅ API бронирования (Львов, категория 1): найдено ${points.length} точек</h4>
+                    <p><strong>Ожидается:</strong> только точки с is_active=true И work_status='working'</p>`;
+                
+                points.forEach(point => {
+                    html += formatServicePoint(point);
+                });
+                
+                html += '</div>';
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        // Автозапуск при загрузке страницы
+        window.onload = function() {
+            console.log('🧪 Страница тестирования фильтров сервисных точек загружена');
+            console.log('📍 Для полного тестирования нажмите кнопки выше');
+        };
+    </script>
+</body>
+</html> 

@@ -1,7 +1,7 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details, :by_category, :posts_by_category]
+      skip_before_action :authenticate_request, only: [:show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details, :by_category, :posts_by_category]
       before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses, :client_search, :by_category]
       
       # GET /api/v1/service_points
