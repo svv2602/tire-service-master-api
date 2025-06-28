@@ -1,7 +1,7 @@
 module Api
   module V1
     class ServiceCategoriesController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show]
+      skip_before_action :authenticate_request, only: [:index, :show, :by_city, :by_city_id]
       before_action :set_service_category, only: [:show, :update, :destroy]
       before_action :authorize_admin!, only: [:create, :update, :destroy]
       
@@ -92,6 +92,73 @@ module Api
           services_count = category.services
             .joins(service_point_services: { service_post: :service_point })
             .where(service_points: { city_id: city.id, is_active: true })
+            .distinct
+            .count
+
+          category.as_json.merge({
+            'service_points_count' => service_points_count,
+            'services_count' => services_count,
+            'city_name' => city.name
+          })
+        end
+
+        render json: {
+          data: categories_with_stats,
+          city: {
+            id: city.id,
+            name: city.name,
+            region: city.region&.name
+          },
+          total_count: categories_with_stats.length
+        }
+      end
+
+      # GET /api/v1/service_categories/by_city_id/:city_id
+      def by_city_id
+        city_id = params[:city_id]
+        
+        if city_id.blank?
+          return render json: { error: 'ID города обязателен' }, status: :bad_request
+        end
+
+        # Найти город по ID
+        city = City.find_by(id: city_id)
+        
+        unless city
+          return render json: { 
+            error: 'Город не найден',
+            data: [],
+            total_count: 0 
+          }, status: :not_found
+        end
+
+        # Получить категории услуг, доступные в этом городе
+        # Логика: через service_posts, которые привязаны к service_category_id
+        @service_categories = ServiceCategory
+          .joins("INNER JOIN service_posts ON service_posts.service_category_id = service_categories.id")
+          .joins("INNER JOIN service_points ON service_points.id = service_posts.service_point_id")
+          .where("service_points.city_id = ? AND service_points.is_active = true", city.id)
+          .where("service_posts.is_active = true")
+          .where(is_active: true)
+          .distinct
+
+        # Подсчитать количество сервисных точек для каждой категории
+        categories_with_stats = @service_categories.map do |category|
+          # Подсчет сервисных точек для категории в данном городе
+          service_points_count = ServicePoint
+            .joins(:service_posts)
+            .where("service_points.city_id = ? AND service_points.is_active = true", city.id)
+            .where("service_posts.service_category_id = ? AND service_posts.is_active = true", category.id)
+            .distinct
+            .count
+
+          # Подсчет услуг для категории в данном городе (через service_point_services)
+          services_count = Service
+            .joins(:service_point_services)
+            .joins("INNER JOIN service_points ON service_points.id = service_point_services.service_point_id")
+            .where("service_points.city_id = ? AND service_points.is_active = true", city.id)
+            .where("services.category_id = ?", category.id)
+            .where("service_point_services.is_available = true")
             .distinct
             .count
 

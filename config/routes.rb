@@ -148,6 +148,7 @@ Rails.application.routes.draw do
           post 'availability/check', to: 'availability#check_time'
           get 'availability/:date/next', to: 'availability#next_available', as: 'next_available'
           get 'availability/:date/details', to: 'availability#day_details', as: 'day_details'
+          get 'availability/:date/check', to: 'availability#check_day_availability', as: 'check_day_availability'
         end
         
         resources :schedule_templates, only: [:index, :show, :create, :update, :destroy]
@@ -223,6 +224,7 @@ Rails.application.routes.draw do
       resources :service_categories do
         collection do
           get 'by_city/:city_name', to: 'service_categories#by_city', as: 'by_city'
+          get 'by_city_id/:city_id', to: 'service_categories#by_city_id', as: 'by_city_id'
         end
         resources :services
       end
