@@ -658,9 +658,17 @@ module Api
                          (working_hours[day_key]['is_working_day'] == 'true' || 
                           working_hours[day_key]['is_working_day'] == true)
         
-        Rails.logger.info "Is working day: #{is_working_day}"
+        # Проверяем, есть ли активные посты с индивидуальным расписанием для этого дня
+        has_working_posts_with_custom_schedule = service_point.service_posts.active.any? do |post|
+          post.has_custom_schedule && post.working_days.present? && 
+          (post.working_days[day_key] == true || post.working_days[day_key.to_s] == true)
+        end
         
-        if is_working_day && all_times.any?
+        Rails.logger.info "Is working day: #{is_working_day}"
+        Rails.logger.info "Has working posts with custom schedule: #{has_working_posts_with_custom_schedule}"
+        
+        # Показываем расписание, если день рабочий ИЛИ есть активные посты с индивидуальным расписанием
+        if (is_working_day || has_working_posts_with_custom_schedule) && all_times.any?
           # Для каждого уникального времени создаем preview_slot
           all_times.each do |time_str|
             # Находим все слоты, которые начинаются в это время
@@ -691,7 +699,9 @@ module Api
           service_point_id: service_point.id,
           date: date,
           day_key: day_key,
-          is_working_day: is_working_day,
+          is_working_day: is_working_day || has_working_posts_with_custom_schedule,
+          is_working_day_by_schedule: is_working_day,
+          has_working_posts_with_custom_schedule: has_working_posts_with_custom_schedule,
           preview_slots: preview_slots,
           total_active_posts: service_point.service_posts.active.count,
           raw_available_slots: available_slots, # Оригинальные слоты с учетом индивидуальных интервалов
