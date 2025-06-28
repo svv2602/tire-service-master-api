@@ -20,6 +20,16 @@ module Api
         # Фильтрация по городу
         @service_points = @service_points.by_city(params[:city_id]) if params[:city_id].present?
         
+        # Фильтрация по активности (is_active)
+        if params[:is_active].present?
+          @service_points = @service_points.where(is_active: params[:is_active] == 'true')
+        end
+        
+        # Фильтрация по состоянию работы (work_status)
+        if params[:work_status].present?
+          @service_points = @service_points.where(work_status: params[:work_status])
+        end
+        
         # Фильтрация по удобствам (amenities)
         if params[:amenity_ids].present?
           amenity_ids = params[:amenity_ids].to_s.split(',').map(&:strip)
@@ -432,9 +442,10 @@ module Api
         return render json: { error: 'Параметр category_id обязателен' }, status: :bad_request unless category_id
         
         # Сначала получаем ID сервисных точек с постами указанной категории
+        # Фильтруем только по активным точкам И работающим (work_status: 'working')
         service_point_ids = ServicePost.where(service_category_id: category_id, is_active: true)
                                        .joins(:service_point)
-                                       .where(service_points: { is_active: true })
+                                       .where(service_points: { is_active: true, work_status: 'working' })
                                        .pluck(:service_point_id)
                                        .uniq
         
