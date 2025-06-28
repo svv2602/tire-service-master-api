@@ -590,9 +590,8 @@ class DynamicAvailabilityService
     category_posts = service_point.service_posts.where(service_category_id: category_id, is_active: true)
     return [] if category_posts.empty?
     
-    # Получаем рабочие часы для данной даты
-    schedule_info = get_schedule_for_date(service_point, date)
-    return [] unless schedule_info[:is_working]
+    # Проверяем есть ли работающие посты для данной категории в этот день (новая логика)
+    return [] unless has_working_posts_for_category_on_date?(service_point, date, category_id)
     
     # Определяем день недели  
     day_key = case date.wday
