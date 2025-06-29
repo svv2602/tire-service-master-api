@@ -9,13 +9,18 @@ priority_seeds = [
   'user_roles.rb',           # Сначала создаем роли пользователей
   'create_admin_user.rb',    # Создаем основного администратора
   'test_users.rb',           # Создаем тестовых пользователей с разными ролями
+  '02_regions_and_cities.rb',   # Создаем регионы и города
   'partners.rb',             # Создаем партнеров
   'clients.rb',              # Создаем клиентов
   'car_types.rb',            # Создаем типы автомобилей
   'car_brands_and_models.rb', # Создаем бренды и модели автомобилей
   'services.rb',             # Создаем услуги для сервисных точек
+  'service_points_improved.rb', # Создаем сервисные точки
   'schedule_generation.rb',  # Создаем шаблоны расписания
-  'articles_multilang.rb'    # Создаем многоязычные статьи
+  '04_service_point_photos.rb', # Добавляем фотографии сервисных точек
+  '05_reviews.rb',           # Создаем отзывы
+  'articles_multilang.rb',   # Создаем многоязычные статьи
+  'page_content.rb'          # Создаем контент страниц
 ]
 
 # Исключаемые файлы (устаревшие или временные)
@@ -42,19 +47,7 @@ priority_seeds.each do |seed_name|
   end
 end
 
-# Явно загружаем schedule_generation.rb для сервисных точек
-puts "\n=== Загрузка расписания для сервисных точек ==="
-schedule_path = File.join(Rails.root, 'db', 'seeds', 'schedule_generation.rb')
-if File.exist?(schedule_path)
-  begin
-    load schedule_path
-  rescue => e
-    puts "Ошибка при загрузке schedule_generation.rb: #{e.message}"
-    puts e.backtrace.join("\n")
-  end
-else
-  puts "Файл schedule_generation.rb не найден, пропускаем"
-end
+# Примечание: schedule_generation.rb уже загружен в приоритетных сидах
 
 # Затем выполняем остальные сидеры
 Dir[File.join(Rails.root, 'db', 'seeds', '*.rb')].sort.each do |seed|

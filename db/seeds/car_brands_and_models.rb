@@ -1,9 +1,4 @@
-# Очищаем существующие данные
-puts 'Cleaning car brands and models...'
-CarModel.delete_all
-CarBrand.delete_all
-
-# Создаем бренды и модели
+# Создаем бренды и модели (безопасно, без удаления существующих)
 puts 'Creating car brands and models...'
 
 brands_data = [
@@ -30,18 +25,16 @@ brands_data = [
 ]
 
 brands_data.each do |brand_data|
-  puts "Creating brand: #{brand_data[:name]}"
-  brand = CarBrand.create!(
-    name: brand_data[:name],
-    is_active: true
-  )
+  puts "Creating/updating brand: #{brand_data[:name]}"
+  brand = CarBrand.find_or_create_by(name: brand_data[:name]) do |b|
+    b.is_active = true
+  end
 
   brand_data[:models].each do |model_name|
-    puts "  - Creating model: #{model_name}"
-    brand.car_models.create!(
-      name: model_name,
-      is_active: true
-    )
+    puts "  - Creating/updating model: #{model_name}"
+    brand.car_models.find_or_create_by(name: model_name) do |m|
+      m.is_active = true
+    end
   end
 end
 
