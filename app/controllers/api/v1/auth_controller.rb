@@ -1,4 +1,6 @@
 # Универсальный контроллер для аутентификации всех типов пользователей
+require_relative '../../../services/auth/json_web_token'
+
 module Api
   module V1
     class AuthController < BaseController
