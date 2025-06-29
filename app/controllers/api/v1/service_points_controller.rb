@@ -611,7 +611,7 @@ module Api
             temp_post.is_active = true if temp_post.is_active.nil?
             temp_post.slot_duration = 60 if temp_post.slot_duration.nil? || temp_post.slot_duration <= 0
             
-            Rails.logger.info "Processed post: name=#{temp_post.name}, post_number=#{temp_post.post_number}, is_active=#{temp_post.is_active}, slot_duration=#{temp_post.slot_duration}"
+            Rails.logger.info "Processed post: name=#{temp_post.name}, post_number=#{temp_post.post_number}, is_active=#{temp_post.is_active}, slot_duration=#{temp_post.slot_duration}, has_custom_schedule=#{temp_post.has_custom_schedule}, working_days=#{temp_post.working_days}"
             
             temp_posts << temp_post
           end
@@ -622,12 +622,30 @@ module Api
         
         # Присваиваем временные посты
         temp_service_point.define_singleton_method(:service_posts) do
-          OpenStruct.new(
+          # Создаем объект, который эмулирует ActiveRecord коллекцию
+          collection = OpenStruct.new(
+            # Возвращаем все посты для итерации
+            to_a: temp_posts,
+            each: lambda { |&block| temp_posts.each(&block) },
+            any?: lambda { |&block| temp_posts.any?(&block) },
+            select: lambda { |&block| temp_posts.select(&block) },
+            count: temp_posts.count,
+            # Методы для активных постов
             active: OpenStruct.new(
+              to_a: temp_posts.select { |p| p.is_active },
               count: temp_posts.count { |p| p.is_active },
-              ordered_by_post_number: temp_posts.select { |p| p.is_active }.sort_by(&:post_number)
+              ordered_by_post_number: temp_posts.select { |p| p.is_active }.sort_by(&:post_number),
+              each: lambda { |&block| temp_posts.select { |p| p.is_active }.each(&block) },
+              any?: lambda { |&block| temp_posts.select { |p| p.is_active }.any?(&block) }
             )
           )
+          
+          # Добавляем метод respond_to? для проверки наличия методов
+          collection.define_singleton_method(:respond_to?) do |method_name|
+            [:active, :to_a, :each, :any?, :select, :count].include?(method_name.to_sym)
+          end
+          
+          collection
         end
         
         temp_service_point
@@ -636,7 +654,8 @@ module Api
       # Генерирует данные preview расписания для любой сервисной точки (включая временные)
       def generate_schedule_preview_data(service_point, date)
         # Используем DynamicAvailabilityService с временными данными
-        available_slots = calculate_temp_available_slots(service_point, date)
+        # Для live preview не учитываем реальные бронирования
+        available_slots = calculate_temp_available_slots(service_point, date, ignore_bookings: true)
         
         # Собираем все уникальные времена из доступных слотов
         all_times = available_slots.map { |slot| slot[:start_time] }.uniq.sort
@@ -659,9 +678,31 @@ module Api
                           working_hours[day_key]['is_working_day'] == true)
         
         # Проверяем, есть ли активные посты с индивидуальным расписанием для этого дня
-        has_working_posts_with_custom_schedule = service_point.service_posts.active.any? do |post|
-          post.has_custom_schedule && post.working_days.present? && 
-          (post.working_days[day_key] == true || post.working_days[day_key.to_s] == true)
+        if service_point.service_posts.respond_to?(:active)
+          # Реальная ActiveRecord коллекция
+          posts_to_check = service_point.service_posts.active.to_a
+        else
+          # Временная коллекция из OpenStruct - получаем массив напрямую
+          posts_to_check = service_point.service_posts.active.to_a
+        end
+        
+        Rails.logger.info "Posts to check count: #{posts_to_check.length}"
+        
+        has_working_posts_with_custom_schedule = false
+        posts_to_check.each do |post|
+          Rails.logger.info "Checking post: #{post.name} (ID: #{post.id || 'temp'}), has_custom_schedule: #{post.has_custom_schedule}, working_days: #{post.working_days}"
+          
+          if post.has_custom_schedule && post.working_days.present?
+            day_value = post.working_days[day_key] || post.working_days[day_key.to_s]
+            is_working = day_value == true || day_value == 'true'
+            Rails.logger.info "Post #{post.name} working on #{day_key}: #{is_working} (day_value: #{day_value})"
+            if is_working
+              has_working_posts_with_custom_schedule = true
+              break
+            end
+          else
+            Rails.logger.info "Post #{post.name} has no custom schedule or working_days"
+          end
         end
         
         Rails.logger.info "Is working day: #{is_working_day}"
@@ -676,7 +717,7 @@ module Api
             
             # Подсчитываем доступность на это время
             available_posts_count = slots_at_time.length
-            total_posts = service_point.service_posts.active.count
+            total_posts = posts_to_check.count
             
             preview_slots << {
               time: time_str,
@@ -703,7 +744,7 @@ module Api
           is_working_day_by_schedule: is_working_day,
           has_working_posts_with_custom_schedule: has_working_posts_with_custom_schedule,
           preview_slots: preview_slots,
-          total_active_posts: service_point.service_posts.active.count,
+          total_active_posts: posts_to_check.count,
           raw_available_slots: available_slots, # Оригинальные слоты с учетом индивидуальных интервалов
           # Данные для управления кешем на фронтенде
           cache_timestamp: (service_point.respond_to?(:updated_at) ? service_point.updated_at : Time.current).to_i,
@@ -713,16 +754,20 @@ module Api
       end
       
       # Рассчитывает доступные слоты для временной сервисной точки
-      def calculate_temp_available_slots(service_point, date)
+      def calculate_temp_available_slots(service_point, date, ignore_bookings: false)
         available_slots = []
         
         # Определяем день недели
         day_key = date.strftime('%A').downcase
         
         # Проходим по всем активным постам временной сервисной точки
-        service_point.service_posts.active.ordered_by_post_number.each do |service_post|
+        active_posts = service_point.service_posts.respond_to?(:active) ? 
+                       service_point.service_posts.active.ordered_by_post_number : 
+                       service_point.service_posts.select(&:is_active).sort_by(&:post_number)
+        
+        active_posts.each do |service_post|
           # Проверяем, работает ли пост в этот день
-          next unless post_working_on_day?(service_post, day_key)
+          next unless post_working_on_day?(service_post, day_key, service_point)
           
           # Определяем время работы поста
           start_time_str = post_start_time_for_day(service_post, day_key, service_point)
@@ -736,8 +781,15 @@ module Api
           while current_time + service_post.slot_duration.minutes <= end_time
             slot_end_time = current_time + service_post.slot_duration.minutes
             
-            # Проверяем доступность слота (используем реальную БД для проверки бронирований)
-            is_available = !DynamicAvailabilityService.is_slot_occupied?(service_point.id, service_post.id, date, current_time, slot_end_time)
+            # Проверяем доступность слота
+            # Для live preview (ignore_bookings: true) считаем все слоты доступными
+            # Для реального расчета проверяем реальные бронирования
+            is_available = if ignore_bookings
+              true # Для предварительного просмотра все слоты доступны
+            else
+              # Для реального бронирования используем проверку БД
+              !DynamicAvailabilityService.is_slot_occupied?(service_point.id, service_post.id, date, current_time, slot_end_time)
+            end
             
             if is_available
               available_slots << {
@@ -760,30 +812,28 @@ module Api
       end
       
       # Проверяет работает ли пост в указанный день (для временных постов)
-      def post_working_on_day?(service_post, day_key)
+      def post_working_on_day?(service_post, day_key, service_point = nil)
         Rails.logger.info "=== Checking if post works on #{day_key} ==="
-        Rails.logger.info "Post: #{service_post.name}, has_custom_schedule: #{service_post.has_custom_schedule}"
+        Rails.logger.info "Post: #{service_post.name} (ID: #{service_post.id}), has_custom_schedule: #{service_post.has_custom_schedule}"
         Rails.logger.info "Working days: #{service_post.working_days}"
         
         if service_post.has_custom_schedule && service_post.working_days.present?
           # Проверяем работает ли пост в этот день согласно индивидуальному расписанию
-          is_working = service_post.working_days[day_key] == true || service_post.working_days[day_key.to_s] == true
-          Rails.logger.info "Custom schedule result: #{is_working}"
+          day_value_string = service_post.working_days[day_key.to_s]
+          day_value_symbol = service_post.working_days[day_key]
+          is_working = day_value_string == true || day_value_symbol == true
+          Rails.logger.info "Custom schedule - day_value_string: #{day_value_string}, day_value_symbol: #{day_value_symbol}, result: #{is_working}"
           is_working
         else
-          # Используем общее расписание точки - проверяем, работает ли точка в этот день
-          begin
-            working_hours = service_post.service_point.working_hours
-          rescue
-            # Для временных постов service_point может быть недоступен, получаем из переданных данных
-            working_hours = nil
-          end
+          # Используем общее расписание точки - получаем working_hours из переданного service_point или из базы
+          working_hours = service_point&.working_hours || service_post.service_point&.working_hours
           
-          Rails.logger.info "Service point working hours: #{working_hours}"
+          Rails.logger.info "No custom schedule, using service point working hours: #{working_hours}"
           
           if working_hours && working_hours[day_key].present?
-            is_working = working_hours[day_key]['is_working_day'] == true || working_hours[day_key]['is_working_day'] == 'true'
-            Rails.logger.info "General schedule result: #{is_working}"
+            day_schedule = working_hours[day_key]
+            is_working = day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true'
+            Rails.logger.info "General schedule - day_schedule: #{day_schedule}, result: #{is_working}"
             is_working
           else
             Rails.logger.info "No working hours data, defaulting to false"
