@@ -20,8 +20,11 @@ module Api
         
         # Логируем входящие параметры
         Rails.logger.info "=== CLIENT BOOKING CREATE START ==="
-        Rails.logger.info "Params: #{params.to_unsafe_h}"
+        Rails.logger.info "Raw params: #{params.to_unsafe_h}"
         Rails.logger.info "Current user: #{current_user&.id}"
+        Rails.logger.info "Client params present: #{params[:client].present?}"
+        Rails.logger.info "Booking params present: #{params[:booking].present?}"
+        Rails.logger.info "Car params present: #{params[:car].present?}"
         
         # Создаем или находим клиента
         @client = find_or_create_client
