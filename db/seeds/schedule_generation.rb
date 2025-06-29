@@ -30,13 +30,13 @@ if Weekday.count == 0
   puts "  Creating weekdays..."
   
   weekdays_data = [
-    { name: "Понедельник", sort_order: 1 },
-    { name: "Вторник", sort_order: 2 },
-    { name: "Среда", sort_order: 3 },
-    { name: "Четверг", sort_order: 4 },
-    { name: "Пятница", sort_order: 5 },
-    { name: "Суббота", sort_order: 6 },
-    { name: "Воскресенье", sort_order: 7 }
+    { name: "Понедельник", short_name: "Пн", sort_order: 1 },
+    { name: "Вторник", short_name: "Вт", sort_order: 2 },
+    { name: "Среда", short_name: "Ср", sort_order: 3 },
+    { name: "Четверг", short_name: "Чт", sort_order: 4 },
+    { name: "Пятница", short_name: "Пт", sort_order: 5 },
+    { name: "Суббота", short_name: "Сб", sort_order: 6 },
+    { name: "Воскресенье", short_name: "Вс", sort_order: 7 }
   ]
   
   weekdays_data.each do |day_data|
