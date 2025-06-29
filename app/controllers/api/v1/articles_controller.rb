@@ -1,7 +1,7 @@
 module Api
   module V1
     class ArticlesController < ApiController
-      skip_before_action :authenticate_request, only: [:show, :categories]
+      skip_before_action :authenticate_request, only: [:index, :show, :categories]
       before_action :authorize_admin, except: [:index, :show, :categories]
       before_action :set_article, only: [:show, :update, :destroy]
       
