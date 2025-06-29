@@ -12,17 +12,27 @@ if service_points.empty?
   exit
 end
 
-# Примеры URL фотографий (можно заменить на реальные)
-photo_urls = [
-  'https://images.unsplash.com/photo-1632823471565-1ecdf2d0d6e8?w=800&h=600&fit=crop',
-  'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop',
-  'https://images.unsplash.com/photo-1563720223185-11003d516935?w=800&h=600&fit=crop',
-  'https://images.unsplash.com/photo-1581833971358-2c8b550f87b3?w=800&h=600&fit=crop',
-  'https://images.unsplash.com/photo-1592853625511-ad0edcc69c07?w=800&h=600&fit=crop',
-  'https://images.unsplash.com/photo-1606577924006-27d39b132ae2?w=800&h=600&fit=crop',
-  'https://images.unsplash.com/photo-1572949645841-094f3f3fd847?w=800&h=600&fit=crop',
-  'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=800&h=600&fit=crop'
+# Локальные файлы изображений из папки public/image
+local_image_files = [
+  Rails.root.join('public', 'image', '1.jpeg').to_s,
+  Rails.root.join('public', 'image', '2.jpeg').to_s,
+  Rails.root.join('public', 'image', '3.jpeg').to_s,
+  Rails.root.join('public', 'image', '4.jpeg').to_s,
+  Rails.root.join('public', 'image', 'img_calc.png').to_s
 ]
+
+# Проверяем доступность файлов
+available_files = local_image_files.select { |file| File.exist?(file) }
+
+if available_files.empty?
+  puts "⚠️  Локальные файлы изображений не найдены"
+  puts "   Пропускаем создание фотографий"
+  puts "   Файлы искались в: #{local_image_files.join(', ')}"
+  exit
+end
+
+puts "📁 Найдено изображений: #{available_files.count}"
+puts "📁 Доступные файлы: #{available_files.map { |f| File.basename(f) }.join(', ')}"
 
 # Типы фотографий
 photo_types = ['exterior', 'interior', 'equipment', 'workspace']
@@ -37,7 +47,7 @@ service_points.each do |service_point|
   photos_count = [2, 3].sample
   
   photos_count.times do |index|
-    photo_url = photo_urls.sample
+    image_file = available_files.sample
     photo_type = photo_types.sample
     
     # Проверяем, не существует ли уже такая фотография
@@ -47,7 +57,7 @@ service_points.each do |service_point|
     )
     
     if existing_photo
-      # Обновляем существующую
+      # Обновляем существующую (без файла, только метаданные)
       existing_photo.update!(
         description: "#{photo_type.capitalize} фото #{service_point.name}",
         sort_order: index + 1,
@@ -56,15 +66,32 @@ service_points.each do |service_point|
       updated_count += 1
       puts "    ✏️  Обновлено фото: #{photo_type}"
     else
-      # Создаем новую
-      ServicePointPhoto.create!(
-        service_point: service_point,
-        description: "#{photo_type.capitalize} фото #{service_point.name}",
-        sort_order: index + 1,
-        is_main: index == 0
-      )
-      created_count += 1
-      puts "    ✨ Создано фото: #{photo_type}"
+      # Создаем новую запись с прикреплением файла
+      begin
+        photo = ServicePointPhoto.new(
+          service_point: service_point,
+          description: "#{photo_type.capitalize} фото #{service_point.name}",
+          sort_order: index + 1,
+          is_main: index == 0
+        )
+        
+        # Прикрепляем файл изображения
+        photo.file.attach(
+          io: File.open(image_file),
+          filename: File.basename(image_file),
+          content_type: case File.extname(image_file).downcase
+                       when '.jpg', '.jpeg' then 'image/jpeg'
+                       when '.png' then 'image/png'
+                       else 'image/jpeg'
+                       end
+        )
+        
+        photo.save!
+        created_count += 1
+        puts "    ✨ Создано фото: #{photo_type} (#{File.basename(image_file)})"
+      rescue => e
+        puts "    ❌ Ошибка создания фото #{photo_type}: #{e.message}"
+      end
     end
   end
 end
@@ -78,9 +105,9 @@ puts "  Всего фотографий в системе: #{ServicePointPhoto.c
 # Статистика по сервисным точкам
 puts ""
 puts "📈 Фотографии по сервисным точкам:"
-ServicePoint.includes(:service_point_photos).each do |sp|
-  photos_count = sp.service_point_photos.count
-  primary_photo = sp.service_point_photos.find_by(is_main: true)
+ServicePoint.includes(:photos).each do |sp|
+  photos_count = sp.photos.count
+  primary_photo = sp.photos.find_by(is_main: true)
   puts "  #{sp.name}: #{photos_count} фото#{primary_photo ? ' (есть главное)' : ' (нет главного)'}"
 end
 
