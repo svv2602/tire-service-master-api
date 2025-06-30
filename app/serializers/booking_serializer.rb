@@ -105,19 +105,33 @@ class BookingSerializer < ActiveModel::Serializer
   end
 
   def service_point
-    if object.service_point
-      {
-        id: object.service_point.id,
-        name: object.service_point.name,
-        address: object.service_point.address,
-        phone: object.service_point.phone,
-        city: object.service_point.city ? {
-          id: object.service_point.city.id,
-          name: object.service_point.city.name
-        } : nil,
-        partner_name: object.service_point.partner&.name
-      }
-    else
+    # ✅ Безопасная загрузка service_point с обработкой ошибок
+    begin
+      service_point_obj = object.service_point
+      if service_point_obj
+        {
+          id: service_point_obj.id,
+          name: service_point_obj.name,
+          address: service_point_obj.address,
+          phone: service_point_obj.phone,
+          city: service_point_obj.city ? {
+            id: service_point_obj.city.id,
+            name: service_point_obj.city.name
+          } : nil,
+          partner_name: service_point_obj.partner&.name
+        }
+      else
+        {
+          id: object.service_point_id,
+          name: "Точка обслуживания ##{object.service_point_id}",
+          address: nil,
+          phone: nil,
+          city: nil,
+          partner_name: nil
+        }
+      end
+    rescue => e
+      # Если возникла ошибка при загрузке ассоциации, возвращаем базовую информацию
       {
         id: object.service_point_id,
         name: "Точка обслуживания ##{object.service_point_id}",

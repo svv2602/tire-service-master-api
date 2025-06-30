@@ -174,8 +174,14 @@ module Api
       end
       
       # POST /api/v1/clients/:client_id/bookings
+      # POST /api/v1/bookings (для гостевых бронирований)
       def create
-        @client = Client.find(params[:client_id])
+        # ✅ Поддержка гостевых бронирований (client_id может быть null)
+        if params[:client_id].present?
+          @client = Client.find(params[:client_id])
+        else
+          @client = nil # Гостевое бронирование
+        end
         
         # Для Swagger API тестов, возвращаем заглушку
         if ENV['SWAGGER_DRY_RUN']
@@ -251,7 +257,7 @@ module Api
           # Build the mock response ensuring status ID is always present
           mock_booking = {
             id: Time.now.to_i,
-            client_id: @client.id,
+            client_id: @client&.id, # ✅ Поддержка гостевых бронирований
             service_point_id: params[:booking][:service_point_id],
             car_id: nil,
             car_type_id: car_type_id,
@@ -292,7 +298,12 @@ module Api
         end
         
         # Подготовка данных для создания бронирования
-        @booking = @client.bookings.new(booking_params)
+        # ✅ Поддержка гостевых бронирований
+        if @client
+          @booking = @client.bookings.new(booking_params)
+        else
+          @booking = Booking.new(booking_params.merge(client_id: nil))
+        end
         
         # Установка статуса по умолчанию, если он не указан
         @booking.status_id ||= BookingStatus.pending_id
@@ -676,7 +687,12 @@ module Api
         # Получаем параметры из запроса
         permitted_params = params.require(:booking).permit(
           :service_point_id, :car_id, :car_type_id, :booking_date, :start_time, :end_time,
-          :payment_method, :notes, :status_id, :payment_status_id
+          :payment_method, :notes, :status_id, :payment_status_id,
+          # ✅ Поля для гостевых бронирований (данные получателя услуги)
+          :service_recipient_first_name, :service_recipient_last_name,
+          :service_recipient_phone, :service_recipient_email,
+          # ✅ Поля для гостевых бронирований (данные автомобиля)
+          :car_brand, :car_model, :license_plate
         )
         
         # Явно конвертируем status_id и payment_status_id в integer, если они присутствуют
@@ -703,7 +719,12 @@ module Api
         if current_user.admin? || current_user.partner? || current_user.manager?
           permitted_params += [
             :booking_date, :start_time, :end_time, :payment_status_id, 
-            :payment_method, :total_price, :car_id, :car_type_id
+            :payment_method, :total_price, :car_id, :car_type_id,
+            # ✅ Добавляем поля для редактирования данных получателя услуги (гостевые бронирования)
+            :service_recipient_first_name, :service_recipient_last_name,
+            :service_recipient_phone, :service_recipient_email,
+            # ✅ Добавляем поля для редактирования данных автомобиля (гостевые бронирования)
+            :car_brand, :car_model, :license_plate
           ]
         end
         
