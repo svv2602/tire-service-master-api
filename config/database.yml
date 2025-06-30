@@ -23,14 +23,14 @@ default: &default
 
 development:
   <<: *default
-  database: tire_service_development
+  database: tire_service_dev_new
 
 test:
   <<: *default
-  database: tvoya_shina_test
+  database: tire_service_test_new
 
 production:
   <<: *default
-  database: tvoya_shina_production
+  database: tire_service_prod_new
   username: <%= ENV['POSTGRES_USER'] %>
   password: <%= ENV['POSTGRES_PASSWORD'] %>
