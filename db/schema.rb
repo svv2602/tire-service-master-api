@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_26_121747) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_30_065155) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -111,7 +111,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_121747) do
   end
 
   create_table "bookings", force: :cascade do |t|
-    t.bigint "client_id", null: false
+    t.bigint "client_id"
     t.bigint "service_point_id", null: false
     t.bigint "car_id"
     t.date "booking_date", null: false
@@ -136,11 +136,13 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_26_121747) do
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_id"], name: "index_bookings_on_car_id"
     t.index ["car_type_id"], name: "index_bookings_on_car_type_id"
+    t.index ["client_id"], name: "index_bookings_guest_only", where: "(client_id IS NULL)"
     t.index ["client_id"], name: "index_bookings_on_client_id"
     t.index ["payment_status_id"], name: "index_bookings_on_payment_status_id"
     t.index ["service_category_id"], name: "index_bookings_on_service_category_id"
     t.index ["service_point_id", "booking_date", "start_time"], name: "idx_bookings_service_point_date_time"
     t.index ["service_point_id"], name: "index_bookings_on_service_point_id"
+    t.index ["service_recipient_phone"], name: "index_bookings_on_guest_phone"
     t.index ["service_recipient_phone"], name: "index_bookings_on_service_recipient_phone"
     t.index ["status_id"], name: "index_bookings_on_status_id"
   end

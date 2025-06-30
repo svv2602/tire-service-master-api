@@ -3,7 +3,7 @@ class Booking < ApplicationRecord
   include AASM
   
   # Связи
-  belongs_to :client
+  belongs_to :client, optional: true  # ✅ Делаем связь опциональной для гостевых бронирований
   belongs_to :service_point
   belongs_to :car, class_name: 'ClientCar', optional: true
   belongs_to :car_type
@@ -20,7 +20,7 @@ class Booking < ApplicationRecord
   validates :start_time, presence: true
   validates :end_time, presence: true
   validates :car_type_id, presence: true
-  validates :client_id, presence: true
+  # validates :client_id, presence: true  # ❌ Убираем обязательную валидацию client_id
   validates :service_point_id, presence: true
   validates :status_id, presence: true
   
@@ -76,6 +76,11 @@ class Booking < ApplicationRecord
       .where('start_time <= ? AND end_time > ?', time, time)
       .where.not(status_id: BookingStatus.canceled_statuses)
   }
+  
+  # ✅ Новые скоупы для работы с гостевыми бронированиями
+  scope :guest_bookings, -> { where(client_id: nil) }
+  scope :client_bookings, -> { where.not(client_id: nil) }
+  scope :by_guest_phone, ->(phone) { where(client_id: nil, service_recipient_phone: phone) }
   
   # Helper method для получения имени статуса по ID
   def self.status_name_for_id(status_id)
@@ -219,6 +224,27 @@ class Booking < ApplicationRecord
     service_recipient_full_name.presence || service_recipient_phone
   end
   
+  # ✅ Методы для работы с гостевыми бронированиями
+  def guest_booking?
+    client_id.nil?
+  end
+  
+  def client_booking?
+    client_id.present?
+  end
+  
+  def contact_name
+    "#{service_recipient_first_name} #{service_recipient_last_name}".strip
+  end
+  
+  def contact_phone
+    service_recipient_phone
+  end
+  
+  def contact_email
+    service_recipient_email
+  end
+  
   # Проверяет, является ли получатель услуги тем же лицом, что и заказчик
   def self_service?
     return false unless client&.user
@@ -230,15 +256,29 @@ class Booking < ApplicationRecord
   
   # Возвращает контактную информацию для уведомлений
   def contact_info_for_notifications
-    {
-      recipient_name: service_recipient_full_name,
-      recipient_phone: service_recipient_phone,
-      recipient_email: service_recipient_email,
-      booker_name: "#{client.user.first_name} #{client.user.last_name}".strip,
-      booker_phone: client.user.phone,
-      booker_email: client.user.email,
-      is_self_service: self_service?
-    }
+    if client_booking?
+      {
+        recipient_name: service_recipient_full_name,
+        recipient_phone: service_recipient_phone,
+        recipient_email: service_recipient_email,
+        booker_name: "#{client.user.first_name} #{client.user.last_name}".strip,
+        booker_phone: client.user.phone,
+        booker_email: client.user.email,
+        is_self_service: self_service?
+      }
+    else
+      # ✅ Для гостевых бронирований используем данные получателя услуги
+      {
+        recipient_name: service_recipient_full_name,
+        recipient_phone: service_recipient_phone,
+        recipient_email: service_recipient_email,
+        booker_name: service_recipient_full_name,
+        booker_phone: service_recipient_phone,
+        booker_email: service_recipient_email,
+        is_self_service: true,  # Для гостей всегда self-service
+        is_guest_booking: true
+      }
+    end
   end
   
   # Проверка пересечения с другими бронированиями
@@ -269,6 +309,7 @@ class Booking < ApplicationRecord
   
   def car_belongs_to_client
     return unless car_id.present?
+    return unless client_id.present?  # ✅ Пропускаем валидацию для гостевых бронирований
     
     unless car&.client_id == client_id
       errors.add(:car_id, "must belong to the client")

@@ -3,7 +3,7 @@ class BookingSerializer < ActiveModel::Serializer
              :status_id, :payment_status_id, :cancellation_reason_id, :cancellation_comment, 
              :total_price, :payment_method, :notes, :created_at, :updated_at, :car_type_id,
              :status, :payment_status, :service_point, :client, :car_type, :car,
-             :car_brand, :car_model, :license_plate, :service_recipient
+             :car_brand, :car_model, :license_plate, :service_recipient, :is_guest_booking
   
   def status
     # In Swagger dry run mode, or if status is nil, provide a default
@@ -89,7 +89,7 @@ class BookingSerializer < ActiveModel::Serializer
         phone: object.client.user.phone,
         email: object.client.user.email
       }
-    else
+    elsif object.client_id.present?
       {
         id: object.client_id,
         name: "Клиент ##{object.client_id}",
@@ -98,6 +98,9 @@ class BookingSerializer < ActiveModel::Serializer
         phone: nil,
         email: nil
       }
+    else
+      # ✅ Для гостевых бронирований возвращаем nil
+      nil
     end
   end
 
@@ -158,7 +161,12 @@ class BookingSerializer < ActiveModel::Serializer
       full_name: object.service_recipient_full_name,
       phone: object.service_recipient_phone,
       email: object.service_recipient_email,
-      is_self_service: object.self_service?
+      is_self_service: object.client_booking? ? object.self_service? : true
     }
+  end
+  
+  # ✅ Новый атрибут для определения типа бронирования
+  def is_guest_booking
+    object.guest_booking?
   end
 end

@@ -26,11 +26,10 @@ module Api
         Rails.logger.info "Booking params present: #{params[:booking].present?}"
         Rails.logger.info "Car params present: #{params[:car].present?}"
         
-        # Создаем или находим клиента
+        # Создаем или находим клиента (может быть nil для гостевых бронирований)
         @client = find_or_create_client
-        return unless @client
         
-        Rails.logger.info "Client found/created: #{@client.id}"
+        Rails.logger.info "Client found/created: #{@client&.id || 'GUEST_BOOKING'}"
         
         # Проверяем доступность времени
         availability_check = perform_availability_check
@@ -254,75 +253,10 @@ module Api
           end
         end
 
-        # Проверяем наличие данных клиента для создания
-        unless params[:client].present?
-          render json: { 
-            error: 'Данные клиента обязательны',
-            details: ['Необходимо указать данные клиента или client_id']
-          }, status: :unprocessable_entity
-          return nil
-        end
-
-        client_data = client_params
-        Rails.logger.info("find_or_create_client: client_data = #{client_data}")
-        
-        # Ищем существующего пользователя по телефону И по email отдельно
-        user_by_phone = client_data[:phone].present? ? User.find_by(phone: client_data[:phone]) : nil
-        user_by_email = client_data[:email].present? ? User.find_by(email: client_data[:email]) : nil
-        
-        Rails.logger.info("find_or_create_client: user_by_phone = #{user_by_phone&.id}")
-        Rails.logger.info("find_or_create_client: user_by_email = #{user_by_email&.id}")
-        
-        # Если нашли пользователя по любому из полей, возвращаем информацию
-        existing_user = user_by_phone || user_by_email
-        
-        if existing_user
-          conflict_field = user_by_phone ? 'телефон' : 'email'
-          Rails.logger.info("find_or_create_client: Found existing user, returning conflict")
-          render json: { 
-            error: 'Пользователь уже существует',
-            details: ["Пользователь с таким #{conflict_field} уже зарегистрирован. Пожалуйста, войдите в систему для создания бронирования"],
-            existing_user: {
-              id: existing_user.id,
-              first_name: existing_user.first_name,
-              last_name: existing_user.last_name,
-              email: existing_user.email,
-              phone: existing_user.phone,
-              role: existing_user.role.name,
-              client_id: existing_user.client&.id
-            }
-          }, status: :conflict # Используем статус 409 Conflict вместо 422
-          return nil
-        end
-
-        # Получаем роль клиента
-        client_role = UserRole.find_by(name: 'client')
-        unless client_role
-          render json: { 
-            error: 'Системная ошибка: роль клиента не настроена' 
-          }, status: :internal_server_error
-          return nil
-        end
-
-        # Создаем нового гостевого клиента
-        user = User.create!(
-          email: client_data[:email].presence || generate_guest_email,
-          phone: client_data[:phone],
-          first_name: client_data[:first_name],
-          last_name: client_data[:last_name],
-          password: SecureRandom.hex(12), # Случайный пароль для гостя
-          role: client_role,
-          is_active: true
-        )
-
-        # Client создается автоматически в коллбэке
-        user.client
-      rescue ActiveRecord::RecordInvalid => e
-        render json: { 
-          error: 'Ошибка при создании клиента',
-          details: e.record.errors.full_messages 
-        }, status: :unprocessable_entity
-        nil
+        # ✅ НОВАЯ ЛОГИКА: Возвращаем nil для гостевых бронирований
+        # Если нет авторизованного пользователя и client_id, создаем гостевое бронирование
+        Rails.logger.info("find_or_create_client: Creating guest booking (client_id will be nil)")
+        return nil
       end
       
       # Проверяет доступность времени для записи
@@ -365,7 +299,7 @@ module Api
         
         # Создаем бронирование
         booking_data = booking_params.merge(
-          client_id: @client.id,
+          client_id: @client&.id,  # ✅ Может быть nil для гостевых бронирований
           car_type_id: car_type.id,
           status_id: BookingStatus.find_by(name: 'pending')&.id
         )
@@ -585,18 +519,18 @@ module Api
             address: booking.service_point.address,
             phone: booking.service_point.contact_phone
           },
-          client: {
+          client: booking.client_booking? ? {
             name: "#{booking.client.user.first_name} #{booking.client.user.last_name}",
             phone: booking.client.user.phone,
             email: booking.client.user.email
-          },
+          } : nil,
           service_recipient: {
             first_name: booking.service_recipient_first_name,
             last_name: booking.service_recipient_last_name,
             full_name: booking.service_recipient_full_name,
             phone: booking.service_recipient_phone,
             email: booking.service_recipient_email,
-            is_self_service: booking.self_service?
+            is_self_service: booking.client_booking? ? booking.self_service? : true
           },
           car_info: car_info,
           services: booking.booking_services.includes(:service).map do |bs|
@@ -687,51 +621,54 @@ module Api
           return
         end
         
-        client_data = params[:client]
-        unless client_data
+        # ✅ Для гостевых бронирований валидируем только обязательные поля получателя услуги
+        booking_data = params[:booking]
+        unless booking_data
           render json: { 
-            error: 'Данные клиента обязательны',
-            details: ['Необходимо указать данные клиента или client_id']
+            error: 'Данные бронирования обязательны',
+            details: ['Необходимо указать данные бронирования']
           }, status: :unprocessable_entity
           return
         end
 
-        # Проверяем обязательные поля
+        # ✅ Проверяем обязательные поля получателя услуги для гостевых бронирований
         required_fields = []
-        required_fields << 'first_name' if client_data[:first_name].blank?
-        required_fields << 'phone' if client_data[:phone].blank?
+        required_fields << 'service_recipient_first_name' if booking_data[:service_recipient_first_name].blank?
+        required_fields << 'service_recipient_last_name' if booking_data[:service_recipient_last_name].blank?
+        required_fields << 'service_recipient_phone' if booking_data[:service_recipient_phone].blank?
         
         # Проверяем формат телефона
-        if client_data[:phone].present?
-          phone = client_data[:phone].gsub(/[^\d+]/, '')
+        if booking_data[:service_recipient_phone].present?
+          phone = booking_data[:service_recipient_phone].gsub(/[^\d+]/, '')
           unless phone.match?(/\A\+38\d{10}\z/)
             required_fields << 'phone_format'
           end
         end
         
         # Проверяем формат email если он указан
-        if client_data[:email].present?
-          unless client_data[:email].match?(URI::MailTo::EMAIL_REGEXP)
+        if booking_data[:service_recipient_email].present?
+          unless booking_data[:service_recipient_email].match?(URI::MailTo::EMAIL_REGEXP)
             required_fields << 'email_format'
           end
         end
         
         # Проверяем длину имени
-        if client_data[:first_name].present? && client_data[:first_name].length < 2
+        if booking_data[:service_recipient_first_name].present? && booking_data[:service_recipient_first_name].length < 2
           required_fields << 'first_name_length'
         end
         
-        # Проверяем длину фамилии если она указана
-        if client_data[:last_name].present? && client_data[:last_name].length < 2
+        # Проверяем длину фамилии
+        if booking_data[:service_recipient_last_name].present? && booking_data[:service_recipient_last_name].length < 2
           required_fields << 'last_name_length'
         end
         
         if required_fields.any?
           error_messages = {
-            'first_name' => 'Имя обязательно для заполнения',
+            'service_recipient_first_name' => 'Имя получателя услуги обязательно для заполнения',
+            'service_recipient_last_name' => 'Фамилия получателя услуги обязательна для заполнения',
             'first_name_length' => 'Имя должно быть не менее 2 символов',
             'last_name_length' => 'Фамилия должна быть не менее 2 символов',
-            'phone' => 'Телефон обязателен для заполнения',
+            'service_recipient_phone' => 'Телефон получателя услуги обязателен для заполнения',
             'phone_format' => 'Неверный формат телефона. Используйте формат +38XXXXXXXXXX',
             'email_format' => 'Неверный формат email'
           }

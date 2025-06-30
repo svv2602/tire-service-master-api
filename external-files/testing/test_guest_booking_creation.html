@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест создания гостевого бронирования</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тест создания гостевого бронирования</h1>
+    <p>Проверка API для создания бронирований без аутентификации клиента</p>
+
+    <div class="test-section info">
+        <h3>📋 Тестовые данные</h3>
+        <pre id="testData"></pre>
+    </div>
+
+    <div class="test-section">
+        <h3>1️⃣ Создание гостевого бронирования</h3>
+        <p>Создаем бронирование без передачи client_id</p>
+        <button onclick="createGuestBooking()">Создать гостевое бронирование</button>
+        <div id="guestBookingResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2️⃣ Проверка созданного бронирования</h3>
+        <p>Проверяем, что бронирование создалось с client_id = null</p>
+        <button onclick="checkBooking()" disabled id="checkBookingBtn">Проверить бронирование</button>
+        <div id="checkBookingResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3️⃣ Создание авторизованного бронирования</h3>
+        <p>Для сравнения создаем бронирование с аутентификацией</p>
+        <button onclick="loginAndCreateBooking()">Войти и создать бронирование</button>
+        <div id="authBookingResult" class="result"></div>
+    </div>
+
+    <script>
+        let createdBookingId = null;
+        let authToken = null;
+
+        // Тестовые данные
+        const testData = {
+            guestBooking: {
+                booking: {
+                    service_point_id: 1,
+                    service_category_id: 1,
+                    booking_date: "2025-07-15",
+                    start_time: "10:00",
+                    service_recipient_first_name: "Гость",
+                    service_recipient_last_name: "Тестовый",
+                    service_recipient_phone: "+380671234567",
+                    service_recipient_email: "guest@test.com",
+                    notes: "Гостевое бронирование для тестирования"
+                },
+                car: {
+                    car_type_id: 1,
+                    car_brand: "Toyota",
+                    car_model: "Camry",
+                    license_plate: "AA1234BB"
+                },
+                services: [],
+                duration_minutes: 60
+            },
+            authUser: {
+                email: "client@test.com",
+                password: "client123"
+            }
+        };
+
+        document.getElementById('testData').textContent = JSON.stringify(testData, null, 2);
+
+        async function apiRequest(url, options = {}) {
+            try {
+                const response = await fetch(`http://localhost:8000${url}`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+                        ...options.headers
+                    },
+                    ...options
+                });
+
+                const data = await response.json();
+                return { 
+                    success: response.ok, 
+                    status: response.status, 
+                    data 
+                };
+            } catch (error) {
+                return { 
+                    success: false, 
+                    error: error.message 
+                };
+            }
+        }
+
+        async function createGuestBooking() {
+            console.log('🚀 Создание гостевого бронирования...');
+            
+            const result = await apiRequest('/api/v1/client_bookings', {
+                method: 'POST',
+                body: JSON.stringify(testData.guestBooking)
+            });
+
+            const resultDiv = document.getElementById('guestBookingResult');
+            
+            if (result.success) {
+                createdBookingId = result.data.id;
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    <h4>✅ Гостевое бронирование создано успешно!</h4>
+                    <p><strong>ID бронирования:</strong> ${result.data.id}</p>
+                    <p><strong>Client ID:</strong> ${result.data.client_id || 'null (гостевое)'}</p>
+                    <p><strong>Получатель:</strong> ${result.data.service_recipient?.first_name} ${result.data.service_recipient?.last_name}</p>
+                    <p><strong>Телефон:</strong> ${result.data.service_recipient?.phone}</p>
+                    <p><strong>Статус:</strong> ${result.data.status?.name}</p>
+                    <pre>${JSON.stringify(result.data, null, 2)}</pre>
+                `;
+                document.getElementById('checkBookingBtn').disabled = false;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h4>❌ Ошибка создания бронирования</h4>
+                    <p><strong>Статус:</strong> ${result.status}</p>
+                    <pre>${JSON.stringify(result.data || result.error, null, 2)}</pre>
+                `;
+            }
+        }
+
+        async function checkBooking() {
+            if (!createdBookingId) {
+                alert('Сначала создайте бронирование');
+                return;
+            }
+
+            console.log('🔍 Проверка созданного бронирования...');
+            
+            const result = await apiRequest(`/api/v1/bookings/${createdBookingId}`);
+
+            const resultDiv = document.getElementById('checkBookingResult');
+            
+            if (result.success) {
+                const booking = result.data;
+                const isGuestBooking = booking.client_id === null;
+                
+                resultDiv.className = `result ${isGuestBooking ? 'success' : 'error'}`;
+                resultDiv.innerHTML = `
+                    <h4>${isGuestBooking ? '✅' : '❌'} Проверка бронирования</h4>
+                    <p><strong>Тип:</strong> ${isGuestBooking ? 'Гостевое бронирование' : 'Клиентское бронирование'}</p>
+                    <p><strong>Client ID:</strong> ${booking.client_id || 'null'}</p>
+                    <p><strong>Получатель:</strong> ${booking.service_recipient?.first_name} ${booking.service_recipient?.last_name}</p>
+                    <p><strong>Контакты:</strong> ${booking.service_recipient?.phone}, ${booking.service_recipient?.email}</p>
+                    <p><strong>Дата:</strong> ${booking.booking_date} ${booking.start_time}</p>
+                    <pre>${JSON.stringify(booking, null, 2)}</pre>
+                `;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h4>❌ Ошибка получения бронирования</h4>
+                    <p><strong>Статус:</strong> ${result.status}</p>
+                    <pre>${JSON.stringify(result.data || result.error, null, 2)}</pre>
+                `;
+            }
+        }
+
+        async function loginAndCreateBooking() {
+            console.log('🔐 Авторизация и создание бронирования...');
+            
+            // Сначала авторизуемся
+            const loginResult = await apiRequest('/api/v1/auth/login', {
+                method: 'POST',
+                body: JSON.stringify(testData.authUser)
+            });
+
+            if (!loginResult.success) {
+                const resultDiv = document.getElementById('authBookingResult');
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h4>❌ Ошибка авторизации</h4>
+                    <pre>${JSON.stringify(loginResult.data || loginResult.error, null, 2)}</pre>
+                `;
+                return;
+            }
+
+            authToken = loginResult.data.token;
+            console.log('✅ Авторизация успешна');
+
+            // Теперь создаем бронирование с аутентификацией
+            const bookingData = {
+                ...testData.guestBooking,
+                booking: {
+                    ...testData.guestBooking.booking,
+                    service_recipient_first_name: "Авторизованный",
+                    service_recipient_last_name: "Клиент",
+                    service_recipient_phone: "+380671234568",
+                    booking_date: "2025-07-16",
+                    notes: "Бронирование авторизованного клиента"
+                }
+            };
+
+            const bookingResult = await apiRequest('/api/v1/client_bookings', {
+                method: 'POST',
+                body: JSON.stringify(bookingData)
+            });
+
+            const resultDiv = document.getElementById('authBookingResult');
+            
+            if (bookingResult.success) {
+                const booking = bookingResult.data;
+                const hasClientId = booking.client_id !== null;
+                
+                resultDiv.className = `result ${hasClientId ? 'success' : 'error'}`;
+                resultDiv.innerHTML = `
+                    <h4>${hasClientId ? '✅' : '❌'} Авторизованное бронирование</h4>
+                    <p><strong>Тип:</strong> ${hasClientId ? 'Клиентское бронирование' : 'Гостевое бронирование'}</p>
+                    <p><strong>Client ID:</strong> ${booking.client_id || 'null'}</p>
+                    <p><strong>Получатель:</strong> ${booking.service_recipient?.first_name} ${booking.service_recipient?.last_name}</p>
+                    <p><strong>Клиент:</strong> ${booking.client?.name || 'N/A'}</p>
+                    <pre>${JSON.stringify(booking, null, 2)}</pre>
+                `;
+            } else {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h4>❌ Ошибка создания авторизованного бронирования</h4>
+                    <p><strong>Статус:</strong> ${bookingResult.status}</p>
+                    <pre>${JSON.stringify(bookingResult.data || bookingResult.error, null, 2)}</pre>
+                `;
+            }
+        }
+
+        // Запускаем первый тест автоматически через 1 секунду
+        setTimeout(() => {
+            console.log('🎬 Автоматический запуск тестирования...');
+            createGuestBooking();
+        }, 1000);
+    </script>
+</body>
+</html> 
