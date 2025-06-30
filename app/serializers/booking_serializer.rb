@@ -2,6 +2,7 @@ class BookingSerializer < ActiveModel::Serializer
   attributes :id, :client_id, :service_point_id, :car_id, :booking_date, :start_time, :end_time, 
              :status_id, :payment_status_id, :cancellation_reason_id, :cancellation_comment, 
              :total_price, :payment_method, :notes, :created_at, :updated_at, :car_type_id,
+             :service_category_id,
              :status, :payment_status, :service_point, :client, :car_type, :car,
              :car_brand, :car_model, :license_plate, :service_recipient, :is_guest_booking
   

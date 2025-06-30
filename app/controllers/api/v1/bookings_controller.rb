@@ -719,7 +719,7 @@ module Api
         if current_user.admin? || current_user.partner? || current_user.manager?
           permitted_params += [
             :booking_date, :start_time, :end_time, :payment_status_id, 
-            :payment_method, :total_price, :car_id, :car_type_id,
+            :payment_method, :total_price, :car_id, :car_type_id, :service_category_id,
             # ✅ Добавляем поля для редактирования данных получателя услуги (гостевые бронирования)
             :service_recipient_first_name, :service_recipient_last_name,
             :service_recipient_phone, :service_recipient_email,
