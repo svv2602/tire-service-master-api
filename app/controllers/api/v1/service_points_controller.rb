@@ -29,6 +29,11 @@ module Api
           @service_points = policy_scope(ServicePoint)
         end
         
+        # Фильтрация по региону
+        if params[:region_id].present?
+          @service_points = @service_points.joins(:city).where(cities: { region_id: params[:region_id] })
+        end
+        
         # Фильтрация по городу
         @service_points = @service_points.by_city(params[:city_id]) if params[:city_id].present?
         
