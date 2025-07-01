@@ -9,20 +9,22 @@ class ServicePointStatus < ApplicationRecord
   scope :active, -> { where(is_active: true) }
   scope :sorted, -> { order(sort_order: :asc) }
   
-  # Предопределенные статусы
-  def self.active_id
-    find_by(name: 'active').id
-  end
+  # ПРИМЕЧАНИЕ: Методы ниже устарели после миграции на новую систему статусов (is_active + work_status)
+  # Оставлены для обратной совместимости, но не должны использоваться в новом коде
   
-  def self.temporarily_closed_id
-    find_by(name: 'temporarily_closed').id
-  end
-  
-  def self.closed_id
-    find_by(name: 'closed').id
-  end
-  
-  def self.maintenance_id
-    find_by(name: 'maintenance').id
-  end
+  # def self.active_id
+  #   find_by(name: 'active')&.id
+  # end
+  # 
+  # def self.temporarily_closed_id
+  #   find_by(name: 'temporarily_closed')&.id
+  # end
+  # 
+  # def self.closed_id
+  #   find_by(name: 'closed')&.id
+  # end
+  # 
+  # def self.maintenance_id
+  #   find_by(name: 'maintenance')&.id
+  # end
 end

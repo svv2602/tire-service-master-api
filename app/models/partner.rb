@@ -45,11 +45,6 @@ class Partner < ApplicationRecord
     # Если активация не указана явно, инвертируем текущее значение
     new_status = activate.nil? ? !is_active : activate
     
-    # Задаем соответствующий статус для сервисных точек
-    new_service_point_status_id = new_status ? 
-      ServicePointStatus.active_id : 
-      ServicePointStatus.temporarily_closed_id
-    
     # Получаем роль клиента для изменения ролей пользователей
     client_role = UserRole.find_by(name: 'client')
     partner_role = UserRole.find_by(name: 'partner')
@@ -61,7 +56,13 @@ class Partner < ApplicationRecord
       update!(is_active: new_status)
       
       # 2. Обновляем статус всех сервисных точек партнера
-      service_points.update_all(status_id: new_service_point_status_id)
+      if new_status
+        # При активации партнера восстанавливаем рабочий статус сервисных точек
+        service_points.update_all(is_active: true, work_status: 'working')
+      else
+        # При деактивации партнера переводим все точки в состояние "временно закрыта"
+        service_points.update_all(is_active: true, work_status: 'temporarily_closed')
+      end
       
       # 3. Если активируем или необходимо изменить роли пользователей
       if change_user_roles && user.present?

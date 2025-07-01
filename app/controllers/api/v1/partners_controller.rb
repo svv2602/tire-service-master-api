@@ -78,8 +78,9 @@ module Api
             Rails.logger.info("Создание пользователя с данными: #{user_data.inspect}")
             
             @user = User.new(user_data)
-            # Устанавливаем роль партнера (id: 4)
-            @user.role_id = 4
+            # Устанавливаем роль партнера
+            partner_role = UserRole.find_by(name: 'partner')
+            @user.role_id = partner_role&.id || 4
             # Отключаем автоматическое создание партнера
             @user.skip_role_specific_record = true
             
@@ -192,7 +193,7 @@ module Api
             first_name: 'Тест',
             last_name: 'Партнер',
             phone: "+38067#{Random.rand(1000000..9999999)}",
-            role: UserRole.find_by(name: 'operator')
+            role: UserRole.find_by(name: 'partner')
           )
           
           # Создаем партнера
@@ -326,6 +327,24 @@ module Api
       
       # DELETE /api/v1/partners/:id
       def destroy
+        # Проверяем, активен ли партнер
+        if @partner.is_active
+          # Если партнер активен, сначала деактивируем его
+          if @partner.toggle_active(false)
+            render json: {
+              action: 'deactivated',
+              message: 'Партнер был деактивирован. Теперь вы можете его удалить.',
+              partner: @partner.as_json(include: { user: { only: [:id, :email, :phone, :first_name, :last_name] } })
+            }, status: :ok
+          else
+            render json: { 
+              error: 'Не удалось деактивировать партнера',
+              message: 'Произошла ошибка при деактивации партнера. Попробуйте еще раз.'
+            }, status: :unprocessable_entity
+          end
+          return
+        end
+
         # Проверяем, есть ли у партнера сервисные точки
         if @partner.service_points.exists?
           render json: { 
