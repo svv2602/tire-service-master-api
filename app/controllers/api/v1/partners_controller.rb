@@ -9,6 +9,11 @@ module Api
       def index
         @partners = Partner.includes(:user, :region, :city).all
         
+        # Фильтрация по статусу активности
+        if params[:is_active].present?
+          @partners = @partners.where(is_active: params[:is_active] == 'true')
+        end
+        
         # Поиск по имени компании, контактному лицу или номеру телефона пользователя (регистронезависимый)
         if params[:query].present?
           @partners = @partners.joins(:user).where(
