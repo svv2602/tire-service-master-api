@@ -114,6 +114,7 @@ Rails.application.routes.draw do
         # Активация/деактивация партнера
         member do
           patch 'toggle_active', to: 'partners#toggle_active'
+          get 'related_data', to: 'partners#related_data'
         end
       end
       

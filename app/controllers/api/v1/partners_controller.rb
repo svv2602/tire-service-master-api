@@ -1,7 +1,7 @@
 module Api
   module V1
     class PartnersController < ApiController
-      before_action :set_partner, only: [:show, :update, :destroy, :toggle_active]
+      before_action :set_partner, only: [:show, :update, :destroy, :toggle_active, :related_data]
       before_action :authorize_admin, except: [:index, :show, :create, :create_test, :toggle_active]
       skip_before_action :authenticate_request, only: [:index, :create_test, :create]
       
@@ -182,6 +182,36 @@ module Api
         }, status: :unprocessable_entity
       end
       
+      # GET /api/v1/partners/:id/related_data
+      def related_data
+        authorize @partner, :show?
+        
+        service_points = @partner.service_points.includes(:city)
+        operators = @partner.operators.includes(:user)
+        
+        render json: {
+          service_points_count: service_points.count,
+          operators_count: operators.count,
+          service_points: service_points.map do |sp|
+            {
+              id: sp.id,
+              name: sp.name,
+              is_active: sp.is_active
+            }
+          end,
+          operators: operators.map do |op|
+            {
+              id: op.id,
+              user: {
+                first_name: op.user.first_name,
+                last_name: op.user.last_name,
+                email: op.user.email
+              }
+            }
+          end
+        }
+      end
+
       # POST /api/v1/partners/create_test
       def create_test
         ActiveRecord::Base.transaction do
