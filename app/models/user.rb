@@ -12,14 +12,14 @@ class User < ApplicationRecord
   has_one :manager, dependent: :destroy
   has_one :operator, dependent: :destroy
   has_many :authored_articles, class_name: 'Article', foreign_key: 'author_id', dependent: :destroy
-  has_many :social_accounts, class_name: 'UserSocialAccount', dependent: :destroy
+  # has_many :social_accounts, class_name: 'UserSocialAccount', dependent: :destroy # Временно закомментировано - таблица не существует
   has_many :system_logs, dependent: :nullify
-  has_many :notifications, dependent: :destroy
-  has_many :notification_settings, dependent: :destroy
+  has_many :notifications, as: :recipient, dependent: :destroy
+  # has_many :notification_settings, dependent: :destroy # Временно закомментировано - таблица не существует
   
   # Валидации
   validates :email, uniqueness: { case_sensitive: false, allow_blank: true }, format: { with: URI::MailTo::EMAIL_REGEXP, allow_blank: true }
-  validates :phone, uniqueness: true, presence: true
+  validates :phone, uniqueness: { case_sensitive: false }, presence: true
   validates :role_id, presence: true
   validates :first_name, presence: true, length: { minimum: 2, maximum: 50 }
   validates :last_name, length: { minimum: 2, maximum: 50, allow_blank: true }
