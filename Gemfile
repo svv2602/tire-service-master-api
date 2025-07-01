@@ -47,7 +47,7 @@ gem "active_model_serializers", "~> 0.10.13"
 gem "pundit", "~> 2.3"
 
 # Background processing & jobs
-gem "sidekiq", "~> 7.1"
+gem "sidekiq", "~> 8.0"
 
 # Monitoring and debugging
 gem "sentry-ruby"
