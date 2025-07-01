@@ -54,11 +54,7 @@ module Api
       
       # GET /api/v1/partners/:id
       def show
-        render json: @partner.as_json(include: { 
-          user: { only: [:id, :email, :phone, :first_name, :last_name] },
-          region: { only: [:id, :name, :code] },
-          city: { only: [:id, :name] }
-        })
+        render json: partner_json(@partner)
       end
       
       # POST /api/v1/partners
@@ -141,11 +137,7 @@ module Api
           raise StandardError.new("Партнер не был создан")
         end
         
-        render json: @partner.as_json(include: { 
-          user: { only: [:id, :email, :phone, :first_name, :last_name] },
-          region: { only: [:id, :name, :code] },
-          city: { only: [:id, :name] }
-        }), status: :created
+        render json: partner_json(@partner), status: :created
         
       rescue ActiveRecord::RecordInvalid => e
         Rails.logger.error("🚨 ActiveRecord::RecordInvalid в создании партнера: #{e.message}")
@@ -253,9 +245,31 @@ module Api
       
       # PUT /api/v1/partners/:id
       def update
-        Rails.logger.info("Обновление партнера ID: #{params[:id]}")
-        Rails.logger.info("Исходные параметры: #{params[:partner].inspect}")
-        Rails.logger.info("Обработанные параметры: #{partner_params.inspect}")
+        Rails.logger.info("=== ОБНОВЛЕНИЕ ПАРТНЕРА ===")
+        Rails.logger.info("Partner ID: #{params[:id]}")
+        Rails.logger.info("Content Type: #{request.content_type}")
+        Rails.logger.info("Raw params keys: #{params.keys}")
+        Rails.logger.info("Partner params keys: #{params[:partner]&.keys}")
+        Rails.logger.info("Logo param present: #{params[:partner]&.key?(:logo)}")
+        Rails.logger.info("Logo param class: #{params[:partner]&.dig(:logo)&.class}")
+        Rails.logger.info("Logo param value: #{params[:partner]&.dig(:logo).inspect}")
+        
+        # Обрабатываем удаление логотипа
+        if params[:partner]&.dig(:logo) == 'null' || params[:partner]&.dig(:logo) == nil
+          Rails.logger.info "Removing logo"
+          @partner.logo.purge if @partner.logo.attached?
+        end
+
+        # Проверяем, есть ли новый файл логотипа
+        if params[:partner]&.dig(:logo).respond_to?(:read)
+          Rails.logger.info "✅ New logo file detected: #{params[:partner][:logo].original_filename}"
+          Rails.logger.info "File size: #{params[:partner][:logo].size} bytes"
+          Rails.logger.info "File content type: #{params[:partner][:logo].content_type}"
+        else
+          Rails.logger.info "❌ No valid logo file found in params"
+        end
+        
+        Rails.logger.info("Processed partner_params: #{partner_params.inspect}")
         
         ActiveRecord::Base.transaction do
           # Обновляем данные пользователя, если они переданы
@@ -281,12 +295,15 @@ module Api
         end
         
         Rails.logger.info("Партнер после обновления: region_id=#{@partner.region_id}, city_id=#{@partner.city_id}")
+        Rails.logger.info("Logo attached after update: #{@partner.logo.attached?}")
+        if @partner.logo.attached?
+          Rails.logger.info("Logo URL: #{Rails.application.routes.url_helpers.rails_blob_url(@partner.logo, host: request.base_url)}")
+        end
         
-        render json: @partner.as_json(include: { 
-          user: { only: [:id, :email, :phone, :first_name, :last_name] },
-          region: { only: [:id, :name, :code] },
-          city: { only: [:id, :name] }
-        })
+        response_json = partner_json(@partner)
+        Rails.logger.info("Response JSON logo field: #{response_json['logo']}")
+        
+        render json: response_json
         
       rescue ActiveRecord::RecordInvalid => e
         errors = {}
@@ -438,7 +455,7 @@ module Api
       def partner_params
         permitted_params = params.require(:partner).permit(
           :company_name, :company_description, :contact_person, 
-          :logo_url, :website, :tax_number, :legal_address,
+          :logo_url, :logo, :website, :tax_number, :legal_address,
           :region_id, :city_id, :is_active,
           user_attributes: [:email, :password, :password_confirmation, :phone, :first_name, :last_name, :role_id]
         )
@@ -458,6 +475,26 @@ module Api
             message: 'Для выполнения этого действия требуются права администратора.'
           }, status: :unauthorized
         end
+      end
+
+      def partner_json(partner)
+        json = partner.as_json(include: { 
+          user: { only: [:id, :email, :phone, :first_name, :last_name] },
+          region: { only: [:id, :name, :code] },
+          city: { only: [:id, :name] }
+        })
+
+        # Добавляем URL логотипа, если он есть
+        if partner.logo.attached?
+          json['logo'] = Rails.application.routes.url_helpers.rails_blob_url(
+            partner.logo,
+            host: request.base_url
+          )
+        else
+          json['logo'] = partner.logo_url # Fallback на старое поле logo_url
+        end
+
+        json
       end
     end
   end

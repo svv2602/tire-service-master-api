@@ -1,4 +1,7 @@
 class Partner < ApplicationRecord
+  # Active Storage
+  has_one_attached :logo
+
   # Связи
   belongs_to :user
   belongs_to :region, optional: true
@@ -18,6 +21,7 @@ class Partner < ApplicationRecord
   validates :contact_person, presence: true
   validates :tax_number, uniqueness: true, allow_blank: true
   validates :legal_address, presence: true
+  validate :acceptable_logo
   
   # Скоупы
   scope :with_active_user, -> { joins(:user).where(users: { is_active: true }) }
@@ -114,5 +118,20 @@ class Partner < ApplicationRecord
     Rails.logger.error("Непредвиденная ошибка при изменении активности партнера: #{e.message}")
     Rails.logger.error(e.backtrace.join("\n"))
     false # Возвращаем false при любой другой ошибке
+  end
+
+  private
+
+  def acceptable_logo
+    return unless logo.attached?
+
+    unless logo.blob.byte_size <= 5.megabytes
+      errors.add(:logo, 'слишком большой размер (не более 5MB)')
+    end
+
+    acceptable_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    unless acceptable_types.include?(logo.content_type)
+      errors.add(:logo, 'должен быть изображением (JPEG, PNG, GIF, WebP)')
+    end
   end
 end
