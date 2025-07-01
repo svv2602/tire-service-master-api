@@ -1,15 +1,27 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details, :by_category, :posts_by_category]
+      skip_before_action :authenticate_request, only: [:show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details, :by_category, :posts_by_category]
       before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses, :client_search, :by_category]
       
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points
       def index
+        # Для запросов к конкретному партнеру требуем аутентификацию
+        if params[:partner_id].present?
+          authenticate_request unless current_user.present?
+        end
+        
         if params[:partner_id]
           @partner = Partner.find(params[:partner_id])
-          @service_points = policy_scope(@partner.service_points)
+          
+          # Для админов используем policy_scope(ServicePoint) с фильтрацией по партнеру
+          # Для остальных используем policy_scope(@partner.service_points)
+          if current_user&.admin?
+            @service_points = policy_scope(ServicePoint).where(partner_id: @partner.id)
+          else
+            @service_points = policy_scope(@partner.service_points)
+          end
         elsif params[:manager_id]
           @manager = Manager.find(params[:manager_id])
           @service_points = policy_scope(@manager.service_points)
