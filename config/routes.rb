@@ -104,6 +104,7 @@ Rails.application.routes.draw do
         end
         resources :price_lists, only: [:index, :show, :create, :update, :destroy]
         resources :promotions, only: [:index, :show, :create, :update, :destroy]
+        resources :operators, only: [:index, :create]
         
         # Создание тестовых данных для партнера
         collection do
@@ -313,6 +314,8 @@ Rails.application.routes.draw do
 
       # Маршруты для ролей пользователей
       resources :user_roles, only: [:index, :show]
+
+      resources :operators, only: [:update, :destroy]
     end
   end
 end

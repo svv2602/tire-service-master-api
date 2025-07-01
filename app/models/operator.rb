@@ -1,5 +1,6 @@
 class Operator < ApplicationRecord
   belongs_to :user
+  belongs_to :partner
 
   # Валидации
   validates :position, presence: true

@@ -7,6 +7,7 @@ class Partner < ApplicationRecord
   has_many :service_points, dependent: :destroy
   has_many :price_lists, dependent: :destroy
   has_many :promotions, dependent: :destroy
+  has_many :operators, dependent: :destroy
   
   # Вложенные атрибуты
   accepts_nested_attributes_for :user

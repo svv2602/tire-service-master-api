@@ -223,7 +223,7 @@ module Api
         ActiveRecord::Base.transaction do
           # Обновляем данные пользователя, если они переданы
           if params[:partner][:user_attributes].present? && @partner.user
-            user_update_params = params.require(:partner).require(:user_attributes).permit(:email, :phone, :first_name, :last_name, :password, :password_confirmation)
+            user_update_params = params.require(:partner).require(:user_attributes).permit(:email, :phone, :first_name, :last_name, :password, :password_confirmation, :role_id)
             
             Rails.logger.info("Обновление пользователя с параметрами: #{user_update_params.inspect}")
             
