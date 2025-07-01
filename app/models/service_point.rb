@@ -54,6 +54,9 @@ class ServicePoint < ApplicationRecord
   validates :address, presence: true
   validates :work_status, presence: true, inclusion: { in: work_statuses.keys }
   
+  # Валидация: нельзя активировать сервисную точку, если партнер неактивен
+  validate :partner_must_be_active_to_activate_service_point
+  
   # Геолокация
   validates :latitude, numericality: { greater_than_or_equal_to: -90, less_than_or_equal_to: 90 }, allow_nil: true
   validates :longitude, numericality: { greater_than_or_equal_to: -180, less_than_or_equal_to: 180 }, allow_nil: true
@@ -287,6 +290,13 @@ class ServicePoint < ApplicationRecord
   end
   
   private
+  
+  # Валидация: нельзя активировать сервисную точку, если партнер неактивен
+  def partner_must_be_active_to_activate_service_point
+    if is_active? && partner.present? && !partner.is_active?
+      errors.add(:is_active, 'нельзя активировать, так как партнер неактивен')
+    end
+  end
   
   def calculate_cancellation_rate
     total = bookings.count
