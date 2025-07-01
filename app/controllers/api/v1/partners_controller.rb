@@ -196,16 +196,22 @@ module Api
             {
               id: sp.id,
               name: sp.name,
-              is_active: sp.is_active
+              address: sp.address,
+              is_active: sp.is_active,
+              work_status: sp.work_status
             }
           end,
           operators: operators.map do |op|
             {
               id: op.id,
+              is_active: op.is_active,
+              position: op.position,
               user: {
+                id: op.user.id,
                 first_name: op.user.first_name,
                 last_name: op.user.last_name,
-                email: op.user.email
+                email: op.user.email,
+                is_active: op.user.is_active
               }
             }
           end

@@ -60,11 +60,26 @@ class Partner < ApplicationRecord
         # При активации партнера восстанавливаем рабочий статус сервисных точек
         service_points.update_all(is_active: true, work_status: 'working')
       else
-        # При деактивации партнера переводим все точки в состояние "временно закрыта"
-        service_points.update_all(is_active: true, work_status: 'temporarily_closed')
+        # При деактивации партнера деактивируем все точки и переводим в состояние "временно закрыта"
+        service_points.update_all(is_active: false, work_status: 'temporarily_closed')
       end
       
-      # 3. Если активируем или необходимо изменить роли пользователей
+      # 3. Обновляем статус всех операторов партнера
+      if new_status
+        # При активации партнера активируем всех операторов
+        operators.includes(:user).each do |operator|
+          operator.update!(is_active: true) # Активируем самого оператора
+          operator.user&.update!(is_active: true) if operator.user.present? # Активируем пользователя оператора
+        end
+      else
+        # При деактивации партнера деактивируем всех операторов
+        operators.includes(:user).each do |operator|
+          operator.update!(is_active: false) # Деактивируем самого оператора
+          operator.user&.update!(is_active: false) if operator.user.present? # Деактивируем пользователя оператора
+        end
+      end
+      
+      # 4. Если активируем или необходимо изменить роли пользователей
       if change_user_roles && user.present?
         if !new_status
           # При деактивации меняем роль пользователя партнера на "client"

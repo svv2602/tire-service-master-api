@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест полной деактивации партнера</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .button:hover { background: #0056b3; }
+        .button.danger { background: #dc3545; }
+        .button.danger:hover { background: #c82333; }
+        .button.success { background: #28a745; }
+        .button.success:hover { background: #218838; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 3px; }
+        .status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .data-display { background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
+        .loading { color: #6c757d; font-style: italic; }
+        .partner-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .service-point, .operator { margin: 10px 0; padding: 10px; border: 1px solid #eee; border-radius: 3px; }
+        .active { border-left: 4px solid #28a745; }
+        .inactive { border-left: 4px solid #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Тест полной деактивации партнера</h1>
+        
+        <div class="section">
+            <h2>📋 Информация о партнере</h2>
+            <div id="partnerInfo" class="data-display loading">Загрузка информации о партнере...</div>
+            
+            <div class="partner-info">
+                <div>
+                    <h3>🏢 Сервисные точки</h3>
+                    <div id="servicePoints" class="loading">Загрузка...</div>
+                </div>
+                <div>
+                    <h3>👥 Операторы</h3>
+                    <div id="operators" class="loading">Загрузка...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>⚡ Управление статусом</h2>
+            <button class="button danger" onclick="deactivatePartner()">❌ Деактивировать партнера</button>
+            <button class="button success" onclick="activatePartner()">✅ Активировать партнера</button>
+            <button class="button" onclick="refreshData()">🔄 Обновить данные</button>
+        </div>
+
+        <div class="section">
+            <h2>📊 Результаты операций</h2>
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const PARTNER_ID = 1;
+
+        // Функция для отображения статуса
+        function showStatus(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            resultsDiv.appendChild(statusDiv);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        // Функция для выполнения API запросов
+        async function makeRequest(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        // Загрузка информации о партнере
+        async function loadPartnerInfo() {
+            try {
+                const partner = await makeRequest(`${API_BASE}/partners/${PARTNER_ID}`);
+                
+                document.getElementById('partnerInfo').innerHTML = `
+ID: ${partner.id}
+Компания: ${partner.company_name}
+Контактное лицо: ${partner.contact_person}
+Статус: ${partner.is_active ? '✅ Активен' : '❌ Неактивен'}
+Email пользователя: ${partner.user?.email || 'Не указан'}
+Статус пользователя: ${partner.user?.is_active ? '✅ Активен' : '❌ Неактивен'}`;
+
+                showStatus(`Информация о партнере загружена. Статус: ${partner.is_active ? 'Активен' : 'Неактивен'}`, 'success');
+            } catch (error) {
+                document.getElementById('partnerInfo').innerHTML = `Ошибка загрузки: ${error.message}`;
+                showStatus(`Ошибка загрузки партнера: ${error.message}`, 'error');
+            }
+        }
+
+        // Загрузка связанных данных
+        async function loadRelatedData() {
+            try {
+                const data = await makeRequest(`${API_BASE}/partners/${PARTNER_ID}/related_data`);
+                
+                // Отображение сервисных точек
+                const servicePointsDiv = document.getElementById('servicePoints');
+                if (data.service_points && data.service_points.length > 0) {
+                    servicePointsDiv.innerHTML = data.service_points.map(sp => `
+                        <div class="service-point ${sp.is_active ? 'active' : 'inactive'}">
+                            <strong>${sp.name}</strong><br>
+                            📍 ${sp.address}<br>
+                            📊 Статус: ${sp.is_active ? '✅ Активна' : '❌ Неактивна'}<br>
+                            🔧 Рабочий статус: ${sp.work_status === 'working' ? '🟢 Работает' : 
+                                               sp.work_status === 'temporarily_closed' ? '🟡 Временно закрыта' : 
+                                               '🔴 Закрыта'}
+                        </div>
+                    `).join('');
+                } else {
+                    servicePointsDiv.innerHTML = '<div class="status info">Сервисные точки отсутствуют</div>';
+                }
+
+                // Отображение операторов
+                const operatorsDiv = document.getElementById('operators');
+                if (data.operators && data.operators.length > 0) {
+                    operatorsDiv.innerHTML = data.operators.map(op => `
+                        <div class="operator ${op.user?.is_active ? 'active' : 'inactive'}">
+                            <strong>${op.user?.email || 'Email не указан'}</strong><br>
+                            👤 Имя: ${op.user?.first_name || 'Не указано'} ${op.user?.last_name || ''}<br>
+                            📊 Статус: ${op.user?.is_active ? '✅ Активен' : '❌ Неактивен'}
+                        </div>
+                    `).join('');
+                } else {
+                    operatorsDiv.innerHTML = '<div class="status info">Операторы отсутствуют</div>';
+                }
+
+                showStatus(`Связанные данные загружены: ${data.service_points?.length || 0} точек, ${data.operators?.length || 0} операторов`, 'success');
+            } catch (error) {
+                document.getElementById('servicePoints').innerHTML = `Ошибка: ${error.message}`;
+                document.getElementById('operators').innerHTML = `Ошибка: ${error.message}`;
+                showStatus(`Ошибка загрузки связанных данных: ${error.message}`, 'error');
+            }
+        }
+
+        // Деактивация партнера
+        async function deactivatePartner() {
+            try {
+                showStatus('Деактивация партнера...', 'info');
+                
+                const result = await makeRequest(`${API_BASE}/partners/${PARTNER_ID}/toggle_active`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ activate: false })
+                });
+
+                showStatus(`✅ Партнер успешно деактивирован: ${result.message}`, 'success');
+                
+                // Обновляем данные
+                setTimeout(() => {
+                    refreshData();
+                }, 1000);
+                
+            } catch (error) {
+                showStatus(`❌ Ошибка деактивации: ${error.message}`, 'error');
+            }
+        }
+
+        // Активация партнера
+        async function activatePartner() {
+            try {
+                showStatus('Активация партнера...', 'info');
+                
+                const result = await makeRequest(`${API_BASE}/partners/${PARTNER_ID}/toggle_active`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ activate: true })
+                });
+
+                showStatus(`✅ Партнер успешно активирован: ${result.message}`, 'success');
+                
+                // Обновляем данные
+                setTimeout(() => {
+                    refreshData();
+                }, 1000);
+                
+            } catch (error) {
+                showStatus(`❌ Ошибка активации: ${error.message}`, 'error');
+            }
+        }
+
+        // Обновление всех данных
+        async function refreshData() {
+            showStatus('🔄 Обновление данных...', 'info');
+            await Promise.all([
+                loadPartnerInfo(),
+                loadRelatedData()
+            ]);
+        }
+
+        // Автоматическая авторизация при загрузке
+        async function autoLogin() {
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@test.com',
+                        password: 'admin123'
+                    })
+                });
+
+                if (response.ok) {
+                    showStatus('✅ Автоматическая авторизация выполнена', 'success');
+                    return true;
+                } else {
+                    throw new Error('Ошибка авторизации');
+                }
+            } catch (error) {
+                showStatus(`❌ Ошибка автоматической авторизации: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', async () => {
+            showStatus('🚀 Инициализация тестовой страницы...', 'info');
+            
+            const loginSuccess = await autoLogin();
+            if (loginSuccess) {
+                await refreshData();
+            } else {
+                showStatus('⚠️ Необходима ручная авторизация. Используйте кнопки управления после входа в систему.', 'error');
+            }
+        });
+    </script>
+</body>
+</html> 
