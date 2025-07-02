@@ -14,8 +14,8 @@ module Api
       
       # Метод для пагинации
       def paginate(collection)
-        page = params[:page].present? ? params[:page].to_i : 1
-        per_page = params[:per_page].present? ? params[:per_page].to_i : 20
+        page = [params[:page].to_i, 1].max  # Минимум 1
+        per_page = [params[:per_page].to_i, 20].max  # Минимум 20
         
         # Ограничиваем per_page
         per_page = [per_page, 100].min
