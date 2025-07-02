@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест фильтрации бронирований по категориям</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f5f5f5; 
+        }
+        .container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+            margin-bottom: 20px; 
+        }
+        .btn { 
+            background: #2196F3; 
+            color: white; 
+            padding: 12px 24px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+        .btn:hover { background: #1976D2; }
+        .btn.success { background: #4CAF50; }
+        .btn.warning { background: #FF9800; }
+        .response { 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            padding: 15px; 
+            border-radius: 4px; 
+            margin: 10px 0; 
+            white-space: pre-wrap; 
+        }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .info { background: #d1ecf1; border-color: #bee5eb; color: #0c5460; }
+        .category { 
+            border-left: 4px solid #2196F3; 
+            padding-left: 15px; 
+            margin: 10px 0; 
+        }
+        .stats { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; 
+            margin: 15px 0; 
+        }
+        .stat-card { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 8px; 
+            text-align: center; 
+        }
+        .stat-number { 
+            font-size: 2em; 
+            font-weight: bold; 
+            color: #2196F3; 
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Тест исправления фильтрации по категориям</h1>
+        <p><strong>Проблема:</strong> При выборе категории "Техническое обслуживание" система показывала занятые слоты от категории "Шиномонтаж"</p>
+        <p><strong>Исправление:</strong> Добавлена фильтрация по service_category_id в запросах бронирований</p>
+        
+        <h3>Тестируемая точка: ШинМайстер Одеса Центр (ID: 6)</h3>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">4</div>
+                <div>Бронирований "Шиномонтаж"</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">0</div>
+                <div>Бронирований "Техобслуживание"</div>
+            </div>
+        </div>
+        
+        <button class="btn" onclick="testAllBookings()">1. Все бронирования на точке</button>
+        <button class="btn warning" onclick="testCategorySlots(3)">2. Слоты категории "Шиномонтаж" (ID: 3)</button>
+        <button class="btn success" onclick="testCategorySlots(1)">3. Слоты категории "Техобслуживание" (ID: 1)</button>
+        <button class="btn" onclick="testCategoryDetails(3)">4. Детали дня - Шиномонтаж</button>
+        <button class="btn" onclick="testCategoryDetails(1)">5. Детали дня - Техобслуживание</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const SERVICE_POINT_ID = 6;
+        const TEST_DATE = '2025-07-03';
+
+        function addResult(title, data, isError = false) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `container`;
+            
+            let content = `<h3>${title}</h3>`;
+            
+            if (isError) {
+                content += `<div class="response error">${data}</div>`;
+            } else if (typeof data === 'object') {
+                content += `<div class="response success">${JSON.stringify(data, null, 2)}</div>`;
+            } else {
+                content += `<div class="response info">${data}</div>`;
+            }
+            
+            div.innerHTML = content;
+            results.appendChild(div);
+        }
+
+        async function testAllBookings() {
+            try {
+                const response = await fetch(`${API_BASE}/bookings?service_point_id=${SERVICE_POINT_ID}&booking_date=${TEST_DATE}`);
+                const data = await response.json();
+                
+                addResult(
+                    '📋 Все бронирования на точке #6 на ' + TEST_DATE,
+                    {
+                        total_bookings: data.length || 0,
+                        bookings: data.slice(0, 5), // Показываем только первые 5
+                        categories: data.reduce((acc, booking) => {
+                            const cat = booking.service_category?.name || 'Неизвестно';
+                            acc[cat] = (acc[cat] || 0) + 1;
+                            return acc;
+                        }, {})
+                    }
+                );
+            } catch (error) {
+                addResult('❌ Ошибка получения бронирований', error.message, true);
+            }
+        }
+
+        async function testCategorySlots(categoryId) {
+            try {
+                const response = await fetch(`${API_BASE}/availability/slots_for_category?service_point_id=${SERVICE_POINT_ID}&category_id=${categoryId}&date=${TEST_DATE}`);
+                const data = await response.json();
+                
+                const categoryName = categoryId === 3 ? 'Шиномонтаж' : 'Техническое обслуживание';
+                
+                addResult(
+                    `🎯 Доступные слоты для категории "${categoryName}" (ID: ${categoryId})`,
+                    {
+                        category_id: categoryId,
+                        service_point_id: SERVICE_POINT_ID,
+                        date: TEST_DATE,
+                        total_slots: data.total_slots || 0,
+                        available_slots: data.slots?.length || 0,
+                        first_few_slots: data.slots?.slice(0, 5) || [],
+                        message: data.slots?.length > 0 ? 
+                            `✅ Найдено ${data.slots.length} доступных слотов` : 
+                            '❌ Нет доступных слотов'
+                    }
+                );
+            } catch (error) {
+                addResult(`❌ Ошибка получения слотов для категории ${categoryId}`, error.message, true);
+            }
+        }
+
+        async function testCategoryDetails(categoryId) {
+            try {
+                const response = await fetch(`${API_BASE}/service_points/${SERVICE_POINT_ID}/availability/${TEST_DATE}/details?category_id=${categoryId}`);
+                const data = await response.json();
+                
+                const categoryName = categoryId === 3 ? 'Шиномонтаж' : 'Техническое обслуживание';
+                
+                addResult(
+                    `📊 Детали загруженности для категории "${categoryName}" (ID: ${categoryId})`,
+                    {
+                        category_id: categoryId,
+                        is_working: data.is_working,
+                        total_posts: data.total_posts,
+                        summary: data.summary,
+                        interpretation: {
+                            total_slots: data.summary?.total_slots || 0,
+                            occupied_slots: data.summary?.occupied_slots || 0,
+                            available_slots: data.summary?.available_slots || 0,
+                            occupancy_percentage: data.summary?.occupancy_percentage || 0
+                        }
+                    }
+                );
+            } catch (error) {
+                addResult(`❌ Ошибка получения деталей для категории ${categoryId}`, error.message, true);
+            }
+        }
+
+        // Автозапуск тестов
+        window.onload = function() {
+            setTimeout(() => {
+                addResult('🚀 Автоматический запуск тестов', 'Начинаем тестирование...');
+                testAllBookings();
+                setTimeout(() => testCategorySlots(3), 1000);  // Шиномонтаж
+                setTimeout(() => testCategorySlots(1), 2000);  // Техобслуживание  
+                setTimeout(() => testCategoryDetails(3), 3000); // Детали Шиномонтаж
+                setTimeout(() => testCategoryDetails(1), 4000); // Детали Техобслуживание
+            }, 1000);
+        };
+    </script>
+</body>
+</html> 
