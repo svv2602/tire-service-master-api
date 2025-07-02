@@ -90,22 +90,16 @@ class DynamicAvailabilityService
   end
 
   # Подсчет количества бронирований в указанное время
+  # В слотовой архитектуре считаем только точные совпадения по времени начала
   def self.count_bookings_at_time(service_point_id, date, start_time, end_time)
     # Преобразуем время в строки для сравнения с БД
     slot_start_str = start_time.strftime('%H:%M:%S')
-    slot_end_str = end_time.strftime('%H:%M:%S')
     
-    # Создаем объекты Time с фиксированной датой для корректного сравнения
-    slot_start_time = Time.parse("2000-01-01 #{slot_start_str}")
-    slot_end_time = Time.parse("2000-01-01 #{slot_end_str}")
-    
+    # В слотовой архитектуре считаем бронирования с точно таким же временем начала
     Booking.where(
       service_point_id: service_point_id, 
-      booking_date: date
-    ).where(
-      "start_time < ? AND end_time > ?", 
-      slot_end_time,
-      slot_start_time
+      booking_date: date,
+      start_time: slot_start_str
     ).where.not(
       status_id: BookingStatus.canceled_statuses
     ).count
@@ -632,19 +626,16 @@ class DynamicAvailabilityService
       while current_time + slot_duration.minutes <= end_time
         slot_end_time = current_time + slot_duration.minutes
         
-        # Проверяем пересечения с бронированиями для этого поста
+        # В слотовой архитектуре проверяем бронирования по точному времени начала
         bookings_count = Booking.where(
           service_point_id: service_point_id,
-          booking_date: date
-        ).where(
-          'start_time < ? AND end_time > ?',
-          slot_end_time.strftime('%H:%M:%S'),
-          current_time.strftime('%H:%M:%S')
+          booking_date: date,
+          start_time: current_time.strftime('%H:%M:%S')
         ).where.not(
           status_id: BookingStatus.canceled_statuses
         ).count
         
-        # Если нет пересечений, слот доступен
+        # Если нет бронирований на это время, слот доступен
         if bookings_count == 0
           available_slots << {
             service_post_id: post.id,
@@ -706,17 +697,16 @@ class DynamicAvailabilityService
   end
 
   # Подсчет занятых постов в конкретное время
+  # В слотовой архитектуре считаем только по точному времени начала
   def self.count_occupied_posts_at_time(service_point_id, date, time, exclude_booking_id: nil)
     # Преобразуем время в строковый формат для сравнения с полями времени в БД
     time_string = time.strftime('%H:%M:%S')
     
+    # Считаем бронирования с точно таким же временем начала
     query = Booking.where(
       service_point_id: service_point_id,
-      booking_date: date
-    ).where(
-      "start_time <= ? AND end_time > ?",
-      time_string,
-      time_string
+      booking_date: date,
+      start_time: time_string
     ).where.not(status_id: BookingStatus.canceled_statuses)
     
     # Исключаем конкретное бронирование если указано
