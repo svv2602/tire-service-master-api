@@ -1,5 +1,5 @@
 class ClientCarSerializer < ActiveModel::Serializer
-  attributes :id, :brand_id, :model_id, :car_type_id, :year, :license_plate, :is_primary, :created_at, :updated_at
+  attributes :id, :brand_id, :model_id, :car_type_id, :year, :license_plate, :is_primary, :created_at, :updated_at, :brand, :model, :car_type
   
   def brand
     if object.brand
