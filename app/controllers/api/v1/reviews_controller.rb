@@ -56,28 +56,45 @@ module Api
           @reviews = @reviews.order(created_at: :desc)
         end
         
+        # Пагинация
+        page = params[:page].to_i > 0 ? params[:page].to_i : 1
+        per_page = [params[:per_page].to_i, 100].min
+        per_page = 25 if per_page <= 0
+        
+        total_items = @reviews.count
+        @reviews = @reviews.offset((page - 1) * per_page).limit(per_page)
+        
         Rails.logger.info("ReviewsController#index: Final @reviews count: #{@reviews.count}")
         Rails.logger.info("ReviewsController#index: Final @reviews IDs: #{@reviews.pluck(:id)}")
+        Rails.logger.info("ReviewsController#index: Pagination - page: #{page}, per_page: #{per_page}, total_items: #{total_items}")
         
-        render json: @reviews.as_json(
-          include: {
-            client: {
-              only: [:id],
-              include: {
-                user: {
-                  only: [:id, :email, :phone, :first_name, :last_name]
+        render json: {
+          data: @reviews.as_json(
+            include: {
+              client: {
+                only: [:id],
+                include: {
+                  user: {
+                    only: [:id, :email, :phone, :first_name, :last_name]
+                  }
                 }
+              },
+              service_point: {
+                only: [:id, :name, :address, :phone]
+              },
+              booking: {
+                only: [:id, :booking_date, :start_time, :end_time]
               }
             },
-            service_point: {
-              only: [:id, :name, :address, :phone]
-            },
-            booking: {
-              only: [:id, :booking_date, :start_time, :end_time]
-            }
-          },
-          methods: [:status]
-        )
+            methods: [:status]
+          ),
+          pagination: {
+            current_page: page,
+            per_page: per_page,
+            total_items: total_items,
+            total_pages: (total_items.to_f / per_page).ceil
+          }
+        }
       end
       
       # GET /api/v1/clients/:client_id/reviews/:id
