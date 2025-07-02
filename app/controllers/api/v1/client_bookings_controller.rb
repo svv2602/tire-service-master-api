@@ -261,13 +261,15 @@ module Api
       
       # Проверяет доступность времени для записи
       def perform_availability_check
-        booking_data = booking_params
+        booking_data = booking_params_for_duration
+        
+        booking_date = booking_data[:booking_date].present? ? Date.parse(booking_data[:booking_date]) : nil
         
         DynamicAvailabilityService.check_availability_at_time(
           booking_data[:service_point_id].to_i,
-          Date.parse(booking_data[:booking_date]),
+          booking_date,
           Time.parse("#{booking_data[:booking_date]} #{booking_data[:start_time]}"),
-          calculate_duration_minutes,
+          nil, # duration_minutes не передаем - сервис определит сам из category_id
           exclude_booking_id: nil,
           category_id: booking_data[:service_category_id]
         )
@@ -288,33 +290,34 @@ module Api
         )
       end
       
+      # Создает услуги для бронирования
+      def create_booking_services(booking)
+        params[:services]&.each do |service_data|
+          service = Service.find_by(id: service_data[:service_id])
+          next unless service
+
+          booking.booking_services.create!(
+            service: service,
+            quantity: service_data[:quantity] || 1,
+            price: service_data[:price] || service.base_price
+          )
+        end
+      rescue StandardError => e
+        Rails.logger.error "Error creating booking services: #{e.message}"
+      end
+      
       # Создает бронирование для клиента
       def create_client_booking
         # Находим тип автомобиля
         car_type = find_or_create_car_type
         return { success: false, errors: ['Тип автомобиля не найден'] } unless car_type
-
-        # Рассчитываем длительность
-        duration = calculate_duration_minutes
         
-        # Создаем бронирование
+        # Создаем бронирование (время уже рассчитано в booking_params)
         booking_data = booking_params.merge(
           client_id: @client&.id,  # ✅ Может быть nil для гостевых бронирований
           car_type_id: car_type.id,
           status_id: BookingStatus.find_by(name: 'pending')&.id
         )
-
-        # Устанавливаем время окончания
-        booking_date = booking_data[:booking_date]
-        start_time = booking_data[:start_time]
-        
-        # Создаем время начала и конца в локальном часовом поясе
-        start_datetime = Time.zone.parse("#{booking_date} #{start_time}")
-        end_datetime = start_datetime + duration.minutes
-        
-        # Сохраняем только время без часового пояса
-        booking_data[:start_time] = start_datetime.strftime('%H:%M')
-        booking_data[:end_time] = end_datetime.strftime('%H:%M')
 
         # Добавляем информацию об автомобиле в notes если она есть
         car_info = car_params
@@ -382,84 +385,14 @@ module Api
         nil
       end
       
-      # Создает услуги для бронирования
-      def create_booking_services(booking)
-        params[:services]&.each do |service_data|
-          service = Service.find_by(id: service_data[:service_id])
-          next unless service
 
-          booking.booking_services.create!(
-            service: service,
-            quantity: service_data[:quantity] || 1,
-            price: service.price,
-            duration_minutes: service.duration_minutes
-          )
-        end
-      rescue StandardError => e
-        Rails.logger.error "Error creating booking services: #{e.message}"
-      end
-      
-      # Рассчитывает продолжительность услуг
-      def calculate_duration_minutes
-        if params[:services].present?
-          # Если есть услуги, используем их общую длительность
-          params[:services].sum do |service_data|
-            service = Service.find_by(id: service_data[:service_id])
-            next 0 unless service
-            (service.duration_minutes || 0) * (service_data[:quantity] || 1)
-          end
-        else
-          # Если нет услуг, ВСЕГДА используем длительность слота сервисной точки
-          booking_data = booking_params_for_duration
-          if booking_data[:service_point_id].present? && booking_data[:start_time].present?
-            service_point = ServicePoint.find_by(id: booking_data[:service_point_id])
-            if service_point
-              # Получаем доступные слоты для указанной даты и категории
-              date = Date.parse(booking_data[:booking_date])
-              
-              # Если указана категория, используем слоты для категории
-              available_slots = if booking_data[:service_category_id].present?
-                DynamicAvailabilityService.available_slots_for_category(
-                  service_point.id, date, booking_data[:service_category_id]
-                )
-              else
-                DynamicAvailabilityService.available_slots_for_date(service_point.id, date)
-              end
-              
-              # Ищем слот, который начинается в указанное время
-              matching_slot = available_slots.find { |slot| slot[:start_time] == booking_data[:start_time] }
-              
-              if matching_slot
-                Rails.logger.info("calculate_duration_minutes: Используем длительность слота #{matching_slot[:duration_minutes]} мин для времени #{booking_data[:start_time]} (категория: #{booking_data[:service_category_id]})")
-                return matching_slot[:duration_minutes]
-              else
-                Rails.logger.warn("calculate_duration_minutes: Слот не найден для времени #{booking_data[:start_time]} и категории #{booking_data[:service_category_id]}, доступные слоты: #{available_slots.map { |s| s[:start_time] }}")
-              end
-            end
-          end
-          
-          # Если не удалось найти слот, используем длительность первого активного поста
-          if booking_data[:service_point_id].present?
-            service_point = ServicePoint.find_by(id: booking_data[:service_point_id])
-            first_post = service_point&.service_posts&.active&.first
-            if first_post&.slot_duration
-              Rails.logger.info("calculate_duration_minutes: Используем длительность первого поста #{first_post.slot_duration} мин как fallback")
-              return first_post.slot_duration
-            end
-          end
-          
-          Rails.logger.warn("calculate_duration_minutes: Используем стандартную длительность 60 мин как последний fallback")
-          60 # Стандартная длительность только как последний fallback
-        end
-      end
       
       # Вспомогательный метод для получения параметров без рекурсии
       def booking_params_for_duration
         params.require(:booking).permit(
-          :service_point_id,
-          :service_category_id,
-          :booking_date,
-          :start_time
+          :client_id, :service_point_id, :service_category_id, :car_type_id,
+          :booking_date, :start_time, :phone, :email, :name, :car_brand, :car_model, :license_plate,
+          :notes, :price
         )
       end
       
@@ -568,30 +501,16 @@ module Api
         )
       end
       
-      # Параметры бронирования
+      # Параметры для создания бронирования
       def booking_params
-        # Получаем параметры
-        params_data = params.require(:booking).permit(
-          :service_point_id,
-          :service_category_id,
-          :booking_date,
-          :start_time,
-          :notes,
-          :total_price,
-          :service_recipient_first_name,
-          :service_recipient_last_name,
-          :service_recipient_phone,
-          :service_recipient_email
+        booking_data = booking_params_for_duration
+        
+        # При бронировании фиксируем только временной слот (start_time)
+        # end_time остается NULL, так как не знаем какой конкретный пост будет назначен
+        booking_data.merge(
+          status: BookingStatus::PENDING,
+          # end_time намеренно не устанавливаем - он будет NULL
         )
-
-        # Добавляем end_time на основе start_time и duration_minutes
-        if params_data[:start_time].present?
-          duration_minutes = calculate_duration_minutes || 60 # По умолчанию 1 час
-          start_time = Time.parse("#{params_data[:booking_date]} #{params_data[:start_time]}")
-          params_data[:end_time] = (start_time + duration_minutes.minutes).strftime('%H:%M')
-        end
-
-        params_data
       end
       
       # Параметры для обновления бронирования
