@@ -76,10 +76,25 @@ module Api
         @bookings = apply_filters(@bookings)
         
         # Добавляем связанные данные для отображения названий вместо ID
-        @bookings = @bookings.includes(:status, :payment_status, :car_type, :service_point, client: :user)
+        @bookings = @bookings.includes(:status, :payment_status, :car_type, :service_category, { service_point: :city }, client: :user)
         
         # Применяем сортировку
-        @bookings = @bookings.order(booking_date: :asc, start_time: :asc)
+        sort_by = params[:sort_by] || 'booking_date'
+        sort_order = params[:sort_order] || 'asc'
+        
+        case sort_by
+        when 'booking_date', 'date'
+          @bookings = @bookings.order(booking_date: sort_order, start_time: sort_order)
+        when 'datetime', 'booking_datetime'
+          # Комбинированная сортировка: сначала по дате, потом по времени
+          @bookings = @bookings.order(booking_date: sort_order, start_time: sort_order)
+        when 'start_time', 'time'
+          @bookings = @bookings.order(start_time: sort_order, booking_date: sort_order)
+        when 'created_at'
+          @bookings = @bookings.order(created_at: sort_order)
+        else
+          @bookings = @bookings.order(booking_date: :asc, start_time: :asc)
+        end
         
         # Применяем пагинацию
         result = paginate(@bookings)
@@ -93,7 +108,11 @@ module Api
             id: booking.service_point&.id,
             name: booking.service_point&.name || "Точка обслуживания ##{booking.service_point_id}",
             address: booking.service_point&.address,
-            partner_name: booking.service_point&.partner&.name
+            partner_name: booking.service_point&.partner&.name,
+            city: booking.service_point&.city ? {
+              id: booking.service_point.city.id,
+              name: booking.service_point.city.name
+            } : nil
           }
           
           booking_hash["client"] = {
@@ -105,6 +124,15 @@ module Api
               phone: booking.client&.user&.phone,
               email: booking.client&.user&.email
             }
+          }
+          
+          # Добавляем информацию о получателе услуги
+          booking_hash["service_recipient"] = {
+            first_name: booking.service_recipient_first_name,
+            last_name: booking.service_recipient_last_name,
+            full_name: booking.service_recipient_full_name,
+            phone: booking.service_recipient_phone,
+            email: booking.service_recipient_email
           }
           
           booking_hash["status"] = {
@@ -123,7 +151,7 @@ module Api
             nil
           end
           
-          booking_hash["car_type"] = if booking.car_type
+                    booking_hash["car_type"] = if booking.car_type
             {
               id: booking.car_type.id,
               name: booking.car_type.name,
@@ -132,7 +160,18 @@ module Api
           else
             nil
           end
-          
+
+          # Добавляем информацию о категории услуг
+          booking_hash["service_category"] = if booking.service_category
+            {
+              id: booking.service_category.id,
+              name: booking.service_category.name,
+              description: booking.service_category.description
+            }
+          else
+            nil
+          end
+
           booking_hash
         end
         
@@ -993,6 +1032,21 @@ module Api
         
         # Фильтрация по статусу
         bookings = bookings.by_status(params[:status_id]) if params[:status_id].present?
+        
+        # Фильтр по городу (через сервисную точку)
+        if params[:city_id].present?
+          bookings = bookings.joins(service_point: :city).where(cities: { id: params[:city_id] })
+        end
+        
+        # Фильтр по сервисной точке
+        if params[:service_point_id].present?
+          bookings = bookings.where(service_point_id: params[:service_point_id])
+        end
+        
+        # Фильтр по категории услуг
+        if params[:service_category_id].present?
+          bookings = bookings.where(service_category_id: params[:service_category_id])
+        end
         
         # Фильтры по времени
         bookings = bookings.upcoming if params[:upcoming].present? && params[:upcoming] == 'true'
