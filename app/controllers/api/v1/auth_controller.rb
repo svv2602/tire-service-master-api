@@ -219,10 +219,24 @@ module Api
 
         car = current_user.client.cars.build(car_params)
 
-        if car.save
-          render json: car, serializer: ClientCarSerializer, status: :created
+        # Проверяем, нужно ли установить автомобиль как основной при создании
+        if car_params[:is_primary] == true || car_params[:is_primary] == 'true'
+          # Сначала сохраняем автомобиль без флага is_primary
+          car.is_primary = false
+          if car.save
+            # Затем безопасно устанавливаем как основной
+            car.mark_as_primary!
+            render json: car.reload, serializer: ClientCarSerializer, status: :created
+          else
+            render json: { errors: car.errors }, status: :unprocessable_entity
+          end
         else
-          render json: { errors: car.errors }, status: :unprocessable_entity
+          # Обычное создание без установки как основной
+          if car.save
+            render json: car, serializer: ClientCarSerializer, status: :created
+          else
+            render json: { errors: car.errors }, status: :unprocessable_entity
+          end
         end
       end
 
@@ -236,10 +250,23 @@ module Api
 
         car = current_user.client.cars.find(params[:car_id])
 
-        if car.update(car_params)
-          render json: car, serializer: ClientCarSerializer
+        # Проверяем, нужно ли установить автомобиль как основной
+        if car_params[:is_primary] == true || car_params[:is_primary] == 'true'
+          # Используем безопасный метод для установки основного автомобиля
+          car.assign_attributes(car_params.except(:is_primary))
+          if car.valid?
+            car.mark_as_primary! unless car.is_primary?
+            render json: car.reload, serializer: ClientCarSerializer
+          else
+            render json: { errors: car.errors }, status: :unprocessable_entity
+          end
         else
-          render json: { errors: car.errors }, status: :unprocessable_entity
+          # Обычное обновление без изменения статуса основного автомобиля
+          if car.update(car_params)
+            render json: car, serializer: ClientCarSerializer
+          else
+            render json: { errors: car.errors }, status: :unprocessable_entity
+          end
         end
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Автомобиль не найден' }, status: :not_found
