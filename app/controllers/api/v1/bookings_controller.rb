@@ -749,10 +749,20 @@ module Api
           return
         end
         
-        # В обычном режиме пытаемся найти запись
+        # В обычном режиме пытаемся найти запись со всеми связанными данными
         begin
-          @booking = Booking.find(params[:id])
+          @booking = Booking.includes(
+            :status, 
+            :payment_status, 
+            :car_type, 
+            :service_category,
+            service_point: [:city, :partner],
+            client: :user
+          ).find(params[:id])
+          
+          Rails.logger.info "✅ Booking ##{@booking.id} loaded successfully with service_point: #{@booking.service_point&.name}"
         rescue ActiveRecord::RecordNotFound
+          Rails.logger.error "❌ Booking ##{params[:id]} not found"
           render json: { error: 'Resource not found' }, status: :not_found
         end
       end

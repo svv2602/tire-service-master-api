@@ -107,10 +107,19 @@ class BookingSerializer < ActiveModel::Serializer
   end
 
   def service_point
-    # ✅ Безопасная загрузка service_point с обработкой ошибок
+    # ✅ Улучшенная загрузка service_point с детальным логированием
     begin
       service_point_obj = object.service_point
+      
+      # Пытаемся загрузить через direct query если association не загружена
+      if service_point_obj.nil? && object.service_point_id.present?
+        Rails.logger.info "🔍 Attempting to load service_point ##{object.service_point_id} via direct query"
+        service_point_obj = ServicePoint.includes(:city, :partner).find_by(id: object.service_point_id)
+      end
+      
       if service_point_obj
+        Rails.logger.info "✅ Service point loaded: #{service_point_obj.name}"
+        
         {
           id: service_point_obj.id,
           name: service_point_obj.name,
@@ -123,9 +132,10 @@ class BookingSerializer < ActiveModel::Serializer
           partner_name: service_point_obj.partner&.name
         }
       else
+        Rails.logger.warn "⚠️ Service point ##{object.service_point_id} not found, using fallback"
         {
           id: object.service_point_id,
-          name: "Точка обслуживания ##{object.service_point_id}",
+          name: "Сервисная точка ##{object.service_point_id}",
           address: nil,
           phone: nil,
           city: nil,
@@ -133,15 +143,44 @@ class BookingSerializer < ActiveModel::Serializer
         }
       end
     rescue => e
-      # Если возникла ошибка при загрузке ассоциации, возвращаем базовую информацию
-      {
-        id: object.service_point_id,
-        name: "Точка обслуживания ##{object.service_point_id}",
-        address: nil,
-        phone: nil,
-        city: nil,
-        partner_name: nil
-      }
+      Rails.logger.error "❌ Error loading service_point ##{object.service_point_id}: #{e.message}"
+      
+      # Последняя попытка - загрузить напрямую без includes
+      begin
+        service_point_obj = ServicePoint.find_by(id: object.service_point_id)
+        if service_point_obj
+          {
+            id: service_point_obj.id,
+            name: service_point_obj.name || "Сервисная точка ##{service_point_obj.id}",
+            address: service_point_obj.address,
+            phone: service_point_obj.phone,
+            city: service_point_obj.city_id ? {
+              id: service_point_obj.city_id,
+              name: City.find_by(id: service_point_obj.city_id)&.name || "Город ##{service_point_obj.city_id}"
+            } : nil,
+            partner_name: service_point_obj.partner_id ? Partner.find_by(id: service_point_obj.partner_id)&.name : nil
+          }
+        else
+          {
+            id: object.service_point_id,
+            name: "Сервисная точка ##{object.service_point_id}",
+            address: nil,
+            phone: nil,
+            city: nil,
+            partner_name: nil
+          }
+        end
+      rescue => final_error
+        Rails.logger.error "❌ Final fallback failed: #{final_error.message}"
+        {
+          id: object.service_point_id,
+          name: "Сервисная точка ##{object.service_point_id}",
+          address: nil,
+          phone: nil,
+          city: nil,
+          partner_name: nil
+        }
+      end
     end
   end
 
