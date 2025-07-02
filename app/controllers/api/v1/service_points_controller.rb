@@ -153,16 +153,58 @@ module Api
       end
       
       # DELETE /api/v1/partners/:partner_id/service_points/:id
+      # Умная логика удаления: деактивация активных точек, полное удаление неактивных (если нет связанных записей)
       def destroy
         authorize @service_point
         
         old_values = @service_point.as_json
         
-        if @service_point.update(is_active: false, work_status: 'suspended')
-          log_action('close', 'service_point', @service_point.id, old_values, @service_point.as_json)
-          render json: { message: 'Service point closed successfully' }
-        else
-          render json: { errors: @service_point.errors }, status: :unprocessable_entity
+        begin
+          if @service_point.is_active?
+            # Если точка активна - деактивируем её
+            if @service_point.update(is_active: false, work_status: 'suspended')
+              log_action('deactivate', 'service_point', @service_point.id, old_values, @service_point.as_json)
+              render json: { 
+                message: 'Сервисная точка деактивирована. Для полного удаления сначала убедитесь, что нет активных бронирований.',
+                action: 'deactivated'
+              }
+            else
+              render json: { errors: @service_point.errors }, status: :unprocessable_entity
+            end
+          else
+            # Если точка неактивна - пытаемся полностью удалить
+            # Проверяем наличие связанных записей
+            if @service_point.bookings.exists?
+              render json: { 
+                message: 'Невозможно удалить сервисную точку: есть связанные бронирования. Сначала обработайте или удалите все бронирования.',
+                action: 'blocked',
+                related_records: {
+                  bookings_count: @service_point.bookings.count
+                }
+              }, status: :unprocessable_entity
+            else
+              # Безопасно удаляем точку
+              @service_point.destroy!
+              log_action('delete', 'service_point', @service_point.id, old_values, {})
+              render json: { 
+                message: 'Сервисная точка полностью удалена из системы.',
+                action: 'deleted'
+              }
+            end
+          end
+        rescue ActiveRecord::DeleteRestrictionError => e
+          render json: { 
+            message: 'Невозможно удалить сервисную точку: есть связанные записи в системе.',
+            action: 'blocked',
+            error: e.message
+          }, status: :unprocessable_entity
+        rescue => e
+          Rails.logger.error "Ошибка при удалении сервисной точки: #{e.class}: #{e.message}"
+          render json: { 
+            message: 'Произошла ошибка при удалении сервисной точки.',
+            action: 'error',
+            error: e.message
+          }, status: :internal_server_error
         end
       end
       

@@ -338,13 +338,14 @@ class Booking < ApplicationRecord
       Time.parse("#{booking_date} #{start_time.strftime('%H:%M')}")
     end
     
-    # Проверяем что время в рабочих часах
+    # Проверяем что время в рабочих часах с учетом категории услуг
     availability = DynamicAvailabilityService.check_availability_at_time(
       service_point_id,
       booking_date,
       start_datetime,
       total_duration_minutes,
-      exclude_booking_id: persisted? ? id : nil
+      exclude_booking_id: persisted? ? id : nil,
+      category_id: service_category_id
     )
     
     unless availability[:available]
