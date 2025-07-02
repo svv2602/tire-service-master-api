@@ -4,7 +4,8 @@ class BookingSerializer < ActiveModel::Serializer
              :total_price, :payment_method, :notes, :created_at, :updated_at, :car_type_id,
              :service_category_id,
              :status, :payment_status, :service_point, :client, :car_type, :car,
-             :car_brand, :car_model, :license_plate, :service_recipient, :is_guest_booking
+             :car_brand, :car_model, :license_plate, :service_recipient, :is_guest_booking,
+             :service_category
   
   def status
     # In Swagger dry run mode, or if status is nil, provide a default
@@ -183,5 +184,18 @@ class BookingSerializer < ActiveModel::Serializer
   # ✅ Новый атрибут для определения типа бронирования
   def is_guest_booking
     object.guest_booking?
+  end
+
+  # ✅ Добавляем сериализацию категории услуг
+  def service_category
+    if object.service_category
+      {
+        id: object.service_category.id,
+        name: object.service_category.name,
+        description: object.service_category.description
+      }
+    else
+      nil
+    end
   end
 end
