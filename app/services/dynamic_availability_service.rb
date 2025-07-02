@@ -627,13 +627,16 @@ class DynamicAvailabilityService
         slot_end_time = current_time + slot_duration.minutes
         
         # В слотовой архитектуре проверяем бронирования по точному времени начала
-        bookings_count = Booking.where(
-          service_point_id: service_point_id,
-          booking_date: date,
-          start_time: current_time.strftime('%H:%M:%S')
-        ).where.not(
-          status_id: BookingStatus.canceled_statuses
-        ).count
+        bookings_count = Booking.joins(:service_category)
+          .where(
+            service_point_id: service_point_id,
+            booking_date: date,
+            start_time: current_time.strftime('%H:%M:%S'),
+            service_category_id: category_id
+          )
+          .where.not(
+            status_id: BookingStatus.canceled_statuses
+          ).count
         
         # Если нет бронирований на это время, слот доступен
         if bookings_count == 0
