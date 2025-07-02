@@ -39,6 +39,20 @@ class BookingPolicy < ApplicationPolicy
     end
   end
 
+  def update_status?
+    return false unless user.present?
+    
+    if user.admin?
+      true
+    elsif user.partner?
+      record.service_point.partner_id == user.partner&.id
+    elsif user.manager?
+      user.manager&.service_points&.include?(record.service_point)
+    else
+      false
+    end
+  end
+
   def destroy?
     update?
   end

@@ -1,7 +1,7 @@
 module Api
   module V1
     class BookingsController < ApiController
-      before_action :set_booking, only: [:show, :update, :destroy, :confirm, :cancel, :complete, :no_show], unless: -> { ENV['SWAGGER_DRY_RUN'] }
+      before_action :set_booking, only: [:show, :update, :update_status, :destroy, :confirm, :cancel, :complete, :no_show], unless: -> { ENV['SWAGGER_DRY_RUN'] }
       before_action :set_client_booking, only: [:index], if: -> { params[:client_id].present? }
       before_action :set_service_point_booking, only: [:index], if: -> { params[:service_point_id].present? }
       
@@ -424,6 +424,51 @@ module Api
           else
             render json: { errors: @booking.errors }, status: :unprocessable_entity
           end
+        end
+      end
+
+      # PATCH /api/v1/bookings/:id/status
+      def update_status
+        # Для Swagger API тестов, возвращаем заглушку
+        if ENV['SWAGGER_DRY_RUN']
+          status_id = params[:status_id].to_i
+          mock_booking = build_booking_mock(
+            id: params[:id].to_i,
+            status_id: status_id
+          )
+          render json: mock_booking, status: :ok
+          return
+        end
+
+        # Проверка авторизации
+        authorize @booking
+
+        # Валидация параметров
+        status_id = params[:status_id]
+        if status_id.blank?
+          render json: { errors: { status_id: ["can't be blank"] } }, status: :unprocessable_entity
+          return
+        end
+
+        # Проверяем существование статуса
+        unless BookingStatus.exists?(status_id)
+          render json: { errors: { status_id: ["must exist"] } }, status: :unprocessable_entity
+          return
+        end
+
+        # Сохраняем предыдущий статус для логирования
+        old_status_id = @booking.status_id
+
+        # Обновляем статус
+        if @booking.update(status_id: status_id)
+          # Логирование изменения статуса
+          log_action('update_status', 'booking', @booking.id, 
+                    { status_id: old_status_id }, 
+                    { status_id: @booking.status_id })
+
+          render json: @booking
+        else
+          render json: { errors: @booking.errors }, status: :unprocessable_entity
         end
       end
       

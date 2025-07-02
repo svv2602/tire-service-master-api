@@ -250,12 +250,16 @@ Rails.application.routes.draw do
       # Бронирования
       resources :bookings, only: [:index, :show, :create, :update, :destroy] do
         member do
+          patch 'status', to: 'bookings#update_status'
           post 'confirm', to: 'bookings#confirm'
           post 'cancel', to: 'bookings#cancel'
           post 'complete', to: 'bookings#complete'
           post 'no_show', to: 'bookings#no_show'
         end
       end
+
+      # Статусы бронирований
+      resources :booking_statuses, only: [:index]
       
       # Расписание
       get 'schedule/:service_point_id/:date', to: 'schedule#day', as: 'schedule_day'
