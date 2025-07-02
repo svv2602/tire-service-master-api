@@ -18,7 +18,7 @@ class Booking < ApplicationRecord
   # Валидации
   validates :booking_date, presence: true
   validates :start_time, presence: true
-  validates :end_time, presence: true
+  # end_time не обязателен при создании - может быть NULL в слотовой архитектуре
   validates :car_type_id, presence: true
   # validates :client_id, presence: true  # ❌ Убираем обязательную валидацию client_id
   validates :service_point_id, presence: true

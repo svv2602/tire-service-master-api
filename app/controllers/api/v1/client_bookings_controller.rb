@@ -312,11 +312,10 @@ module Api
         car_type = find_or_create_car_type
         return { success: false, errors: ['Тип автомобиля не найден'] } unless car_type
         
-        # Создаем бронирование (время уже рассчитано в booking_params)
+        # Создаем бронирование (время и статус уже установлены в booking_params)
         booking_data = booking_params.merge(
           client_id: @client&.id,  # ✅ Может быть nil для гостевых бронирований
-          car_type_id: car_type.id,
-          status_id: BookingStatus.find_by(name: 'pending')&.id
+          car_type_id: car_type.id
         )
 
         # Добавляем информацию об автомобиле в notes если она есть
@@ -392,7 +391,10 @@ module Api
         params.require(:booking).permit(
           :client_id, :service_point_id, :service_category_id, :car_type_id,
           :booking_date, :start_time, :phone, :email, :name, :car_brand, :car_model, :license_plate,
-          :notes, :price
+          :notes, :price,
+          # Поля получателя услуги
+          :service_recipient_first_name, :service_recipient_last_name, 
+          :service_recipient_phone, :service_recipient_email
         )
       end
       
@@ -440,7 +442,7 @@ module Api
           id: booking.id,
           booking_date: booking.booking_date,
           start_time: booking.start_time.strftime('%H:%M'),
-          end_time: booking.end_time.strftime('%H:%M'),
+          end_time: booking.end_time&.strftime('%H:%M'), # NULL в слотовой архитектуре
           status: {
             id: booking.status_id,
             name: booking.status.name,
@@ -508,7 +510,7 @@ module Api
         # При бронировании фиксируем только временной слот (start_time)
         # end_time остается NULL, так как не знаем какой конкретный пост будет назначен
         booking_data.merge(
-          status: BookingStatus::PENDING,
+          status_id: BookingStatus.pending_id,
           # end_time намеренно не устанавливаем - он будет NULL
         )
       end

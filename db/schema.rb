@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_01_064300) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_02_092935) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -116,7 +116,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_01_064300) do
     t.bigint "car_id"
     t.date "booking_date", null: false
     t.time "start_time", null: false
-    t.time "end_time", null: false
+    t.time "end_time", comment: "Время окончания бронирования. NULL в слотовой архитектуре - заполняется при назначении поста"
     t.integer "status_id"
     t.integer "payment_status_id"
     t.bigint "cancellation_reason_id"
