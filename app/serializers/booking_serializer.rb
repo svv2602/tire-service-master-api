@@ -124,7 +124,7 @@ class BookingSerializer < ActiveModel::Serializer
           id: service_point_obj.id,
           name: service_point_obj.name,
           address: service_point_obj.address,
-          phone: service_point_obj.phone,
+          phone: service_point_obj.contact_phone,
           city: service_point_obj.city ? {
             id: service_point_obj.city.id,
             name: service_point_obj.city.name
@@ -153,7 +153,7 @@ class BookingSerializer < ActiveModel::Serializer
             id: service_point_obj.id,
             name: service_point_obj.name || "Сервисная точка ##{service_point_obj.id}",
             address: service_point_obj.address,
-            phone: service_point_obj.phone,
+            phone: service_point_obj.contact_phone,
             city: service_point_obj.city_id ? {
               id: service_point_obj.city_id,
               name: City.find_by(id: service_point_obj.city_id)&.name || "Город ##{service_point_obj.city_id}"
