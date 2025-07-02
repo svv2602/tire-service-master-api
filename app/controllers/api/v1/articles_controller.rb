@@ -42,8 +42,8 @@ module Api
         end
 
         # Пагинация
-        page = params[:page]&.to_i || 1
-        per_page = params[:per_page]&.to_i || 10
+        page = [params[:page].to_i, 1].max  # Минимум 1
+        per_page = [params[:per_page].to_i, 10].max  # Минимум 10
         per_page = [per_page, 50].min # Максимум 50 статей за раз
 
         offset = (page - 1) * per_page

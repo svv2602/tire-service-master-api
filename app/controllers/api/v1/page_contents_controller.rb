@@ -58,8 +58,8 @@ module Api
         page_contents = page_contents.ordered
 
         # Пагинация
-        page = params[:page]&.to_i || 1
-        per_page = params[:per_page]&.to_i || 20
+        page = [params[:page].to_i, 1].max  # Минимум 1
+        per_page = [params[:per_page].to_i, 20].max  # Минимум 20
         per_page = [per_page, 100].min # Максимум 100 записей за раз
 
         offset = (page - 1) * per_page

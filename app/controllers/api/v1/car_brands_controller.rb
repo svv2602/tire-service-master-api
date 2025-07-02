@@ -21,8 +21,8 @@ module Api
         @car_brands = @car_brands.order(params[:sort] || :name)
         
         # Пагинация
-        page = (params[:page] || 1).to_i
-        per_page = (params[:per_page] || 25).to_i
+        page = [params[:page].to_i, 1].max  # Минимум 1
+        per_page = [params[:per_page].to_i, 25].max  # Минимум 25
         offset = (page - 1) * per_page
         
         total_count = @car_brands.count

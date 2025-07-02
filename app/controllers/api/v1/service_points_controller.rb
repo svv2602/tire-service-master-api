@@ -926,7 +926,7 @@ module Api
       # @param collection [ActiveRecord::Relation] коллекция объектов для пагинации
       # @return [Hash] хэш с данными и информацией о пагинации
       def paginate(collection)
-        page = (params[:page] || 1).to_i
+        page = [params[:page].to_i, 1].max  # Минимум 1
         per_page = (params[:per_page] || 10).to_i
         per_page = [per_page, 100].min # ограничиваем максимальным значением
         

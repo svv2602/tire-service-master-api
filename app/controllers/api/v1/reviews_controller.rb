@@ -17,10 +17,13 @@ module Api
         @reviews = policy_scope(@reviews || Review)
         
         Rails.logger.info("ReviewsController#index: @reviews after policy_scope: #{@reviews.count}")
+        Rails.logger.info("ReviewsController#index: Filter params - status: #{params[:status]}, service_point_id: #{params[:service_point_id]}, search: #{params[:search]}")
         
         # Фильтрация по статусу
         if params[:status].present?
+          Rails.logger.info("ReviewsController#index: Applying status filter: #{params[:status]}")
           @reviews = @reviews.where(status: params[:status])
+          Rails.logger.info("ReviewsController#index: After status filter - count: #{@reviews.count}")
         end
         
         # Фильтрация по рейтингу
@@ -37,13 +40,22 @@ module Api
           @reviews = @reviews.where("rating <= ?", params[:max_rating])
         end
         
+        # Фильтрация по сервисной точке
+        if params[:service_point_id].present?
+          Rails.logger.info("ReviewsController#index: Applying service_point_id filter: #{params[:service_point_id]}")
+          @reviews = @reviews.where(service_point_id: params[:service_point_id])
+          Rails.logger.info("ReviewsController#index: After service_point_id filter - count: #{@reviews.count}")
+        end
+        
         # Поиск по тексту комментария, имени клиента и телефону
         if params[:search].present?
+          Rails.logger.info("ReviewsController#index: Applying search filter: #{params[:search]}")
           search_term = "%#{params[:search]}%"
           @reviews = @reviews.joins(client: :user).where(
             "comment ILIKE ? OR users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.phone ILIKE ?",
             search_term, search_term, search_term, search_term
           )
+          Rails.logger.info("ReviewsController#index: After search filter - count: #{@reviews.count}")
         end
         
         # Загружаем связанные данные для оптимизации

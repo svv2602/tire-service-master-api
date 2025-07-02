@@ -30,7 +30,7 @@ module Api
         @service_categories = @service_categories.order(params[:sort] || :name)
         
         # Пагинация
-        page = (params[:page] || 1).to_i
+        page = [params[:page].to_i, 1].max  # Минимум 1
         per_page = (params[:per_page] || 25).to_i
         offset = (page - 1) * per_page
         

@@ -18,8 +18,8 @@ module Api
         cities = cities.order(:name)
 
         # Пагинация
-        page = params[:page]&.to_i || 1
-        per_page = params[:per_page]&.to_i || 20
+        page = [params[:page].to_i, 1].max  # Минимум 1
+        per_page = [params[:per_page].to_i, 20].max  # Минимум 20
         per_page = [per_page, 100].min # Ограничиваем максимум 100 записей на страницу
         
         offset = (page - 1) * per_page
