@@ -11,14 +11,14 @@ module Api
       def index
         @service_posts = @service_point.service_posts.order(:post_number)
         render json: @service_posts.as_json(
-          only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :created_at, :updated_at]
+          only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :service_category_id, :created_at, :updated_at]
         )
       end
       
       # GET /api/v1/service_points/:service_point_id/service_posts/:id
       def show
         render json: @service_post.as_json(
-          only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :created_at, :updated_at]
+          only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :service_category_id, :created_at, :updated_at]
         )
       end
       
@@ -28,7 +28,7 @@ module Api
         
         if @service_post.save
           render json: @service_post.as_json(
-            only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :created_at, :updated_at]
+            only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :service_category_id, :created_at, :updated_at]
           ), status: :created
         else
           render json: { errors: @service_post.errors }, status: :unprocessable_entity
@@ -39,7 +39,7 @@ module Api
       def update
         if @service_post.update(service_post_params)
           render json: @service_post.as_json(
-            only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :created_at, :updated_at]
+            only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :service_category_id, :created_at, :updated_at]
           )
         else
           render json: { errors: @service_post.errors }, status: :unprocessable_entity
@@ -109,7 +109,7 @@ module Api
           render json: {
             message: "Создано #{created_posts.count} постов",
             posts: created_posts.as_json(
-              only: [:id, :post_number, :name, :slot_duration, :description, :is_active]
+              only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :service_category_id]
             )
           }, status: :created
         else
@@ -118,7 +118,7 @@ module Api
             created_count: created_posts.count,
             errors: errors,
             posts: created_posts.as_json(
-              only: [:id, :post_number, :name, :slot_duration, :description, :is_active]
+              only: [:id, :post_number, :name, :slot_duration, :description, :is_active, :service_category_id]
             )
           }, status: :unprocessable_entity
         end
@@ -148,7 +148,7 @@ module Api
       end
       
       def service_post_params
-        params.require(:service_post).permit(:post_number, :name, :slot_duration, :description, :is_active)
+        params.require(:service_post).permit(:post_number, :name, :slot_duration, :description, :is_active, :service_category_id)
       end
       
       def authorize_admin_or_partner
