@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_02_092935) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_02_223327) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -135,6 +135,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_02_092935) do
     t.string "car_brand", comment: "Марка автомобиля для гостевых бронирований"
     t.string "car_model", comment: "Модель автомобиля для гостевых бронирований"
     t.string "license_plate", comment: "Номер автомобиля для гостевых бронирований"
+    t.string "status", default: "pending", null: false
     t.index ["booking_date", "start_time", "end_time"], name: "idx_bookings_time_range"
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_brand", "car_model"], name: "index_bookings_on_car_brand_model"
@@ -149,6 +150,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_02_092935) do
     t.index ["service_point_id"], name: "index_bookings_on_service_point_id"
     t.index ["service_recipient_phone"], name: "index_bookings_on_guest_phone"
     t.index ["service_recipient_phone"], name: "index_bookings_on_service_recipient_phone"
+    t.index ["status"], name: "index_bookings_on_status"
     t.index ["status_id"], name: "index_bookings_on_status_id"
   end
 

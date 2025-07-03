@@ -76,7 +76,7 @@ module Api
         @bookings = apply_filters(@bookings)
         
         # Добавляем связанные данные для отображения названий вместо ID
-        @bookings = @bookings.includes(:status, :payment_status, :car_type, :service_category, { service_point: :city }, client: :user)
+        @bookings = @bookings.includes(:payment_status, :car_type, :service_category, { service_point: :city }, client: :user)
         
         # Применяем сортировку
         sort_by = params[:sort_by] || 'booking_date'
@@ -136,9 +136,9 @@ module Api
           }
           
           booking_hash["status"] = {
-            id: booking.status&.id,
-            name: booking.status&.name || "unknown",
-            color: booking.status&.color || "#999999"
+            id: nil, # ID больше не используется
+            name: booking.status || 'pending',
+            color: booking.status_color
           }
           
           booking_hash["payment_status"] = if booking.payment_status
@@ -561,8 +561,8 @@ module Api
           else
             render json: { errors: @booking.errors }, status: :unprocessable_entity
           end
-        rescue AASM::InvalidTransition => e
-          render json: { errors: "Cannot transition from #{@booking.status.name} to confirmed" }, status: :unprocessable_entity
+        rescue ArgumentError => e
+          render json: { errors: "Cannot transition from #{@booking.status} to confirmed" }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
@@ -644,8 +644,8 @@ module Api
           end
           
           render json: @booking
-        rescue AASM::InvalidTransition => e
-          render json: { errors: "Cannot cancel booking in status #{@booking.status.name}" }, status: :unprocessable_entity
+        rescue ArgumentError => e
+          render json: { errors: "Cannot cancel booking in status #{@booking.status}" }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
@@ -682,8 +682,8 @@ module Api
           else
             render json: { errors: @booking.errors }, status: :unprocessable_entity
           end
-        rescue AASM::InvalidTransition => e
-          render json: { errors: "Cannot transition from #{@booking.status.name} to completed" }, status: :unprocessable_entity
+        rescue ArgumentError => e
+          render json: { errors: "Cannot transition from #{@booking.status} to completed" }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
@@ -720,8 +720,8 @@ module Api
           else
             render json: { errors: @booking.errors }, status: :unprocessable_entity
           end
-        rescue AASM::InvalidTransition => e
-          render json: { errors: "Cannot transition from #{@booking.status.name} to no_show" }, status: :unprocessable_entity
+        rescue ArgumentError => e
+          render json: { errors: "Cannot transition from #{@booking.status} to no_show" }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
@@ -752,7 +752,6 @@ module Api
         # В обычном режиме пытаемся найти запись со всеми связанными данными
         begin
           @booking = Booking.includes(
-            :status, 
             :payment_status, 
             :car_type, 
             :service_category,
@@ -813,7 +812,7 @@ module Api
         if current_user.admin? || current_user.partner? || current_user.manager?
           permitted_params += [
             :booking_date, :start_time, :end_time, :payment_status_id, 
-            :payment_method, :total_price, :car_id, :car_type_id, :service_category_id,
+            :payment_method, :total_price, :car_id, :car_type_id, :service_category_id, :status,
             # ✅ Добавляем поля для редактирования данных получателя услуги (гостевые бронирования)
             :service_recipient_first_name, :service_recipient_last_name,
             :service_recipient_phone, :service_recipient_email,
@@ -823,7 +822,7 @@ module Api
         end
         
         # Параметры, которые может менять клиент только для неподтвержденных бронирований
-        if current_user.client? && @booking.status.name == 'pending'
+        if current_user.client? && @booking.status == 'pending'
           permitted_params += [:car_id, :car_type_id, :booking_date, :start_time, :end_time]
         end
         
@@ -909,8 +908,8 @@ module Api
             log_action('cancel', 'booking', @booking.id, old_values, @booking.as_json)
             render json: @booking
           end
-        rescue AASM::InvalidTransition => e
-          render json: { errors: "Cannot cancel booking in #{@booking.status.name} state" }, status: :unprocessable_entity
+        rescue ArgumentError => e
+          render json: { errors: "Cannot cancel booking in #{@booking.status} state" }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end

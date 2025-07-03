@@ -33,7 +33,7 @@ class BookingPolicy < ApplicationPolicy
     elsif user.manager?
       user.manager&.service_points&.include?(record.service_point)
     elsif user.client?
-      record.client_id == user.client&.id && record.status&.name == "pending"
+      record.client_id == user.client&.id && record.status == "pending"
     else
       false
     end
@@ -82,7 +82,7 @@ class BookingPolicy < ApplicationPolicy
       user.manager&.service_points&.include?(record.service_point)
     elsif user.client?
       record.client_id == user.client&.id && 
-      ["pending", "confirmed"].include?(record.status&.name)
+      ["pending", "confirmed"].include?(record.status)
     else
       false
     end

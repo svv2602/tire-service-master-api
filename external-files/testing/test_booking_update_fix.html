@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест исправления обновления бронирований</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { 
+            background-color: #6c757d; 
+            cursor: not-allowed; 
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .step {
+            margin: 15px 0;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Тест исправления обновления бронирований</h1>
+    
+    <div class="container">
+        <h2>📋 Проблема</h2>
+        <p><strong>Ошибка 422 (Unprocessable Content)</strong> при попытке обновить бронирование в админке.</p>
+        
+        <h3>🚨 Корневые причины:</h3>
+        <ul>
+            <li><code>status_id</code> отправлялся вместо <code>status</code> (строкового значения)</li>
+            <li><code>category_id</code> отправлялся вместо <code>service_category_id</code></li>
+            <li><code>client_id</code>, <code>service_point_id</code> отправлялись, но не разрешены для обновления</li>
+            <li>Неправильная загрузка статуса при редактировании (строковый → числовой)</li>
+        </ul>
+    </div>
+
+    <div class="container">
+        <h2>✅ Исправления</h2>
+        
+        <div class="step">
+            <h3>1. Backend (контроллер)</h3>
+            <p>✅ В <code>booking_update_params</code> разрешен параметр <code>:status</code> (строковый)</p>
+            <p>✅ Убраны <code>:client_id</code>, <code>:service_point_id</code> из разрешенных для обновления</p>
+        </div>
+        
+        <div class="step">
+            <h3>2. Frontend (BookingFormPage.tsx)</h3>
+            <p>✅ Добавлено преобразование числовых статусов в строковые при отправке</p>
+            <p>✅ Исправлено <code>category_id</code> → <code>service_category_id</code></p>
+            <p>✅ Убраны <code>client_id</code>, <code>service_point_id</code> при обновлении</p>
+            <p>✅ Добавлено преобразование строковых статусов в числовые при загрузке</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🧪 Тестирование</h2>
+        <div id="testResults"></div>
+        
+        <button onclick="testBookingUpdate()">Тест обновления бронирования</button>
+        <button onclick="testStatusMapping()">Тест маппинга статусов</button>
+        <button onclick="testFrontendForm()">Тест фронтенд формы</button>
+        <button onclick="runAllTests()">Запустить все тесты</button>
+    </div>
+
+    <div class="container">
+        <h2>📊 Результаты</h2>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const FRONTEND_BASE = 'http://localhost:3008';
+        
+        // Функция для выполнения запросов с обработкой ошибок
+        async function apiRequest(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    credentials: 'include', // Включаем cookies
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+                
+                const data = await response.json();
+                return { success: response.ok, status: response.status, data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+        
+        // Тест обновления бронирования через API
+        async function testBookingUpdate() {
+            addResult('🔄 Тестирование обновления бронирования...', 'info');
+            
+            const bookingId = 22;
+            const updateData = {
+                booking: {
+                    status: 'in_progress',
+                    notes: 'Тест исправления - статус изменен на "в процессе"'
+                }
+            };
+            
+            const result = await apiRequest(`${API_BASE}/bookings/${bookingId}`, {
+                method: 'PUT',
+                body: JSON.stringify(updateData)
+            });
+            
+            if (result.success) {
+                addResult(`✅ Бронирование успешно обновлено!`, 'success');
+                addResult(`📝 Новый статус: ${result.data.status.name} (${result.data.status.display_name})`, 'info');
+                addResult(`📄 Заметки: ${result.data.notes}`, 'info');
+                addResult(`<pre>${JSON.stringify(result.data.status, null, 2)}</pre>`, 'info');
+            } else {
+                addResult(`❌ Ошибка обновления: ${result.status} - ${JSON.stringify(result.data)}`, 'error');
+            }
+        }
+        
+        // Тест маппинга статусов
+        async function testStatusMapping() {
+            addResult('🔄 Тестирование маппинга статусов...', 'info');
+            
+            const statusTests = [
+                { id: 22, status: 'pending', expected: 'В ожидании' },
+                { id: 22, status: 'confirmed', expected: 'Подтверждено' },
+                { id: 22, status: 'completed', expected: 'Завершено' }
+            ];
+            
+            for (const test of statusTests) {
+                const result = await apiRequest(`${API_BASE}/bookings/${test.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        booking: { status: test.status }
+                    })
+                });
+                
+                if (result.success && result.data.status.name === test.status) {
+                    addResult(`✅ Статус "${test.status}" → "${result.data.status.display_name}"`, 'success');
+                } else {
+                    addResult(`❌ Ошибка статуса "${test.status}": ${JSON.stringify(result)}`, 'error');
+                }
+                
+                // Пауза между запросами
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        
+        // Тест фронтенд формы
+        async function testFrontendForm() {
+            addResult('🔄 Тестирование фронтенд формы...', 'info');
+            
+            try {
+                // Проверяем доступность админки
+                const adminResponse = await fetch(`${FRONTEND_BASE}/admin/bookings/22/edit`);
+                if (adminResponse.ok) {
+                    addResult('✅ Страница редактирования бронирования доступна', 'success');
+                    addResult(`🔗 <a href="${FRONTEND_BASE}/admin/bookings/22/edit" target="_blank">Открыть форму редактирования</a>`, 'info');
+                } else {
+                    addResult(`❌ Страница недоступна: ${adminResponse.status}`, 'error');
+                }
+                
+                // Проверяем список бронирований
+                const listResponse = await fetch(`${FRONTEND_BASE}/admin/bookings`);
+                if (listResponse.ok) {
+                    addResult('✅ Страница списка бронирований доступна', 'success');
+                    addResult(`🔗 <a href="${FRONTEND_BASE}/admin/bookings" target="_blank">Открыть список бронирований</a>`, 'info');
+                } else {
+                    addResult(`❌ Список недоступен: ${listResponse.status}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Ошибка тестирования фронтенда: ${error.message}`, 'error');
+            }
+        }
+        
+        // Запуск всех тестов
+        async function runAllTests() {
+            document.getElementById('results').innerHTML = '';
+            addResult('🚀 Запуск всех тестов...', 'info');
+            
+            await testBookingUpdate();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testStatusMapping();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testFrontendForm();
+            
+            addResult('🎉 Все тесты завершены!', 'success');
+        }
+        
+        // Функция для добавления результатов
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${type}`;
+            resultDiv.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            resultsDiv.appendChild(resultDiv);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+        
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            addResult('📋 Тест исправления обновления бронирований готов к запуску', 'info');
+            addResult('🔧 Проблема: Ошибка 422 при обновлении бронирований в админке', 'warning');
+            addResult('✅ Исправление: Правильный формат данных для API', 'success');
+        });
+    </script>
+</body>
+</html> 

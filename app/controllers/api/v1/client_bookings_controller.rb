@@ -111,7 +111,7 @@ module Api
         unless @booking.pending?
           return render json: { 
             error: 'Запись нельзя изменить в текущем статусе',
-            current_status: @booking.status.name 
+            current_status: @booking.status 
           }, status: :forbidden
         end
         
@@ -160,10 +160,10 @@ module Api
           )
           
           render json: format_booking_response(@booking)
-        rescue AASM::InvalidTransition
+        rescue ArgumentError
           render json: { 
             error: 'Невозможно отменить запись в текущем статусе',
-            current_status: @booking.status.name 
+            current_status: @booking.status 
           }, status: :unprocessable_entity
         end
       end
@@ -445,8 +445,8 @@ module Api
           end_time: booking.end_time&.strftime('%H:%M'), # NULL в слотовой архитектуре
           status: {
             id: booking.status_id,
-            name: booking.status.name,
-            display_name: booking.status.description
+            name: booking.status,
+            display_name: booking.status_display_name
           },
           service_point: {
             id: booking.service_point.id,

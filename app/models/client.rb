@@ -21,7 +21,7 @@ class Client < ApplicationRecord
   end
   
   def completed_bookings
-    bookings.joins(:status).where(booking_statuses: { name: 'completed' }).count
+    bookings.where(status: 'completed').count
   end
   
   def average_rating_given

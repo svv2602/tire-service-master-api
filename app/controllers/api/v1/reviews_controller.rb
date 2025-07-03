@@ -143,7 +143,7 @@ module Api
           @booking = @client.bookings.find(review_params[:booking_id])
           
           # Проверяем, что бронирование выполнено
-          unless @booking.status.name == "completed"
+          unless @booking.status == "completed"
             return render json: { error: "Can't review unfinished booking" }, status: :unprocessable_entity
           end
           

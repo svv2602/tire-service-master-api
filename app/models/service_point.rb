@@ -115,7 +115,7 @@ class ServicePoint < ApplicationRecord
   
   def recalculate_metrics!
     update(
-      total_clients_served: bookings.joins(:status).where(booking_statuses: { name: 'completed' }).count,
+      total_clients_served: bookings.where(status: 'completed').count,
       average_rating: reviews.average(:rating) || 0.0,
       cancellation_rate: calculate_cancellation_rate
     )
@@ -302,7 +302,7 @@ class ServicePoint < ApplicationRecord
     total = bookings.count
     return 0.0 if total.zero?
     
-    cancelled = bookings.joins(:status).where(booking_statuses: { name: ['canceled_by_client', 'canceled_by_partner', 'no_show'] }).count
+    cancelled = bookings.where(status: ['cancelled_by_client', 'cancelled_by_partner', 'no_show']).count
     (cancelled.to_f / total) * 100
   end
   

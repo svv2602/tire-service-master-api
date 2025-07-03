@@ -1,13 +1,14 @@
 class Booking < ApplicationRecord
-  # Подключаем стейт-машину для управления статусами
-  include AASM
+  # Подключаем модуль со статусами
+  include BookingStatuses
   
   # Связи
   belongs_to :client, optional: true  # ✅ Делаем связь опциональной для гостевых бронирований
   belongs_to :service_point
   belongs_to :car, class_name: 'ClientCar', optional: true
   belongs_to :car_type
-  belongs_to :status, class_name: 'BookingStatus', foreign_key: 'status_id', required: true
+  # Оставляем связь со старой таблицей статусов для совместимости (опционально)
+  belongs_to :booking_status, class_name: 'BookingStatus', foreign_key: 'status_id', optional: true
   belongs_to :payment_status, optional: true
   belongs_to :cancellation_reason, optional: true
   belongs_to :service_category, optional: true
@@ -22,7 +23,7 @@ class Booking < ApplicationRecord
   validates :car_type_id, presence: true
   # validates :client_id, presence: true  # ❌ Убираем обязательную валидацию client_id
   validates :service_point_id, presence: true
-  validates :status_id, presence: true
+  # Валидация статуса теперь в модуле BookingStatuses
   
   # Валидации для получателя услуги
   validates :service_recipient_first_name, presence: true, length: { maximum: 100 }
@@ -38,55 +39,47 @@ class Booking < ApplicationRecord
   
   validate :end_time_after_start_time
   validate :car_belongs_to_client, if: -> { car_id.present? }
-  validate :valid_status_id, unless: -> { skip_status_validation || ENV['SWAGGER_DRY_RUN'] }
   validate :booking_time_available, on: :create, unless: -> { skip_availability_check }
   validate :service_category_matches_service_point, if: :service_category_id?
   
   # Атрибуты для пропуска валидаций (нужны для тестов)
-  attr_accessor :skip_status_validation, :skip_availability_check, :skip_notifications
+  attr_accessor :skip_availability_check, :skip_notifications
   
   # Коллбэки для отправки уведомлений
   after_create :send_creation_notification, unless: -> { skip_notifications }
-  after_update :send_status_change_notification, if: -> { saved_change_to_status_id? && !skip_notifications }
+  after_update :send_status_change_notification, if: -> { saved_change_to_status? && !skip_notifications }
   
-  # Скоупы
+  # Инициализация статуса при создании
+  before_validation :initialize_status, on: :create, unless: -> { status.present? }
+  
+  # Скоупы (обновленные для работы со строковыми статусами)
   scope :upcoming, -> { where('booking_date >= ?', Date.current) }
   scope :past, -> { where('booking_date < ?', Date.current) }
   scope :today, -> { where(booking_date: Date.current) }
   scope :by_client, ->(client_id) { where(client_id: client_id) }
   scope :by_service_point, ->(service_point_id) { where(service_point_id: service_point_id) }
-  scope :by_status, ->(status_id) { where(status_id: status_id) }
-  scope :active, -> { where(status_id: BookingStatus.active_statuses) }
-  scope :completed, -> { where(status_id: BookingStatus.completed_statuses) }
-  scope :canceled, -> { where(status_id: BookingStatus.canceled_statuses) }
   
   # Скоупы для работы с категориями
   scope :by_category, ->(category_id) { where(service_category_id: category_id) }
   scope :with_category, -> { includes(:service_category) }
   
-  # Скоупы для динамической проверки занятости
+  # Скоупы для динамической проверки занятости (обновлены для строковых статусов)
   scope :overlapping_time, ->(date, start_time, end_time) {
     where(booking_date: date)
       .where('start_time < ? AND end_time > ?', end_time, start_time)
-      .where.not(status_id: BookingStatus.canceled_statuses)
+      .where.not(status: CANCELLED_STATUSES.map(&:to_s))
   }
   
   scope :at_time, ->(date, time) {
     where(booking_date: date)
       .where('start_time <= ? AND end_time > ?', time, time)
-      .where.not(status_id: BookingStatus.canceled_statuses)
+      .where.not(status: CANCELLED_STATUSES.map(&:to_s))
   }
   
   # ✅ Новые скоупы для работы с гостевыми бронированиями
   scope :guest_bookings, -> { where(client_id: nil) }
   scope :client_bookings, -> { where.not(client_id: nil) }
   scope :by_guest_phone, ->(phone) { where(client_id: nil, service_recipient_phone: phone) }
-  
-  # Helper method для получения имени статуса по ID
-  def self.status_name_for_id(status_id)
-    status = BookingStatus.find_by(id: status_id)
-    status&.name || 'unknown'
-  end
   
   # Метод для проверки доступности времени
   def self.available_posts_at_time(service_point_id, date, time)
@@ -126,76 +119,37 @@ class Booking < ApplicationRecord
     end
   end
   
-  # Initialize statuses for AASM
-  before_validation :initialize_status, on: :create, unless: -> { status_id.present? || ENV['SWAGGER_DRY_RUN'] }
-  
-  # Helper method for identifying the current state for AASM
-  def aasm_read_state(name = :default)
-    return nil unless status_id
-    
-    status_name = status&.name
-    return nil unless status_name
-    
-    status_name.to_sym
-  end
-  
-  # Helper method to write the state when AASM transitions happen
-  def aasm_write_state(state, name = :default)
-    status_name = state.to_s
-    new_status = BookingStatus.find_by(name: status_name)
-    
-    if new_status
-      update_columns(status_id: new_status.id)
-      reload # ensure the status association is refreshed
+  # Методы для работы со статусами (обновленные)
+  def change_status_to!(new_status)
+    if can_transition_to?(new_status)
+      update!(status: new_status.to_s)
     else
-      Rails.logger.error("BookingStatus with name '#{status_name}' not found")
-      return false
-    end
-    
-    true
-  end
-  
-  # AASM для управления статусами с использованием имен статусов
-  aasm column: :status_id, enum: false, no_direct_assignment: false, whiny_persistence: false do
-    # Define states with proper initialization
-    state :pending, initial: true, value: -> { BookingStatus.pending_id }
-    state :confirmed, value: -> { BookingStatus.confirmed_id }
-    state :in_progress, value: -> { BookingStatus.in_progress_id }
-    state :completed, value: -> { BookingStatus.completed_id }
-    state :canceled_by_client, value: -> { BookingStatus.canceled_by_client_id }
-    state :canceled_by_partner, value: -> { BookingStatus.canceled_by_partner_id }
-    state :no_show, value: -> { BookingStatus.no_show_id }
-    
-    event :confirm do
-      transitions from: :pending, to: :confirmed
-    end
-    
-    event :start_service do
-      transitions from: :confirmed, to: :in_progress
-    end
-    
-    event :complete do
-      transitions from: [:confirmed, :in_progress], to: :completed
-    end
-    
-    event :cancel_by_client do
-      transitions from: [:pending, :confirmed], to: :canceled_by_client
-    end
-    
-    event :cancel_by_partner do
-      transitions from: [:pending, :confirmed], to: :canceled_by_partner
-    end
-    
-    event :mark_no_show do
-      transitions from: [:confirmed], to: :no_show
+      raise ArgumentError, "Невозможно изменить статус с '#{status}' на '#{new_status}'"
     end
   end
   
-  # Метод для пропуска валидаций AASM при создании в тестах
-  def validation_skip_for_aasm
-    self.skip_status_validation = true
-    self.skip_availability_check = true
-    self
+  def confirm!
+    change_status_to!(:confirmed)
+  end
+  
+  def start_service!
+    change_status_to!(:in_progress)
+  end
+  
+  def complete!
+    change_status_to!(:completed)
+  end
+  
+  def cancel_by_client!
+    change_status_to!(:cancelled_by_client)
+  end
+  
+  def cancel_by_partner!
+    change_status_to!(:cancelled_by_partner)
+  end
+  
+  def mark_no_show!
+    change_status_to!(:no_show)
   end
   
   # Методы
@@ -294,11 +248,6 @@ class Booking < ApplicationRecord
   
   private
   
-  # Initialize the status to pending if not set
-  def initialize_status
-    self.status_id = BookingStatus.pending_id if status_id.nil?
-  end
-  
   def end_time_after_start_time
     return unless start_time && end_time
     
@@ -316,17 +265,6 @@ class Booking < ApplicationRecord
     end
   end
   
-  def valid_status_id
-    # Skip validation for tests or when SWAGGER_DRY_RUN is active
-    return true if skip_status_validation || ENV['SWAGGER_DRY_RUN']
-    
-    # Check if status exists
-    unless BookingStatus.exists?(status_id)
-      errors.add(:status_id, "is invalid")
-    end
-  end
-  
-  # Валидация доступности времени бронирования
   def booking_time_available
     return if skip_availability_check
     return unless service_point_id && booking_date && start_time && end_time
@@ -361,27 +299,30 @@ class Booking < ApplicationRecord
     end
   end
   
-  # Методы для отправки уведомлений
-  def send_creation_notification
-    BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_created])
-  end
-  
-  def send_status_change_notification
-    case status.name
-    when 'confirmed'
-      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_confirmed])
-    when 'canceled_by_client', 'canceled_by_partner'
-      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_cancelled])
-    when 'completed'
-      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_completed])
-    end
-  end
-  
   def service_category_matches_service_point
     return unless service_category_id.present? && service_point_id.present?
     
     unless service_point.supports_category?(service_category_id)
       errors.add(:service_category_id, "не поддерживается данной сервисной точкой")
+    end
+  end
+  
+  def initialize_status
+    self.status = 'pending' if status.nil?
+  end
+  
+  def send_creation_notification
+    BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_created])
+  end
+  
+  def send_status_change_notification
+    case status
+    when 'confirmed'
+      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_confirmed])
+    when 'cancelled_by_client', 'cancelled_by_partner'
+      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_cancelled])
+    when 'completed'
+      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_completed])
     end
   end
 end

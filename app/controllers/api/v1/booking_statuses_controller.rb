@@ -3,26 +3,53 @@ class Api::V1::BookingStatusesController < ApplicationController
   
   # GET /api/v1/booking_statuses
   def index
-    statuses = BookingStatus.active.sorted.select(:id, :name, :description, :color)
-    
-    # Маппинг статусов на русский язык
-    status_translations = {
-      'pending' => 'В ожидании',
-      'confirmed' => 'Подтверждено',
-      'in_progress' => 'В процессе',
-      'completed' => 'Завершено',
-      'canceled_by_client' => 'Отменено клиентом',
-      'canceled_by_partner' => 'Отменено партнером',
-      'no_show' => 'Не явился'
-    }
-    
-    render json: statuses.map { |status|
+    # ✅ Возвращаем статусы без привязки к старой таблице BookingStatus
+    # Используем строковые ключи как основу для новой системы статусов
+    statuses = [
       {
-        id: status.id,
-        name: status_translations[status.name] || status.name,
-        description: status.description,
-        color: status.color
+        key: 'pending',
+        name: 'В ожидании',
+        description: 'Бронирование создано, но не подтверждено',
+        color: '#FFC107'
+      },
+      {
+        key: 'confirmed',
+        name: 'Подтверждено',
+        description: 'Бронирование подтверждено',
+        color: '#4CAF50'
+      },
+      {
+        key: 'in_progress',
+        name: 'В процессе',
+        description: 'Обслуживание выполняется',
+        color: '#2196F3'
+      },
+      {
+        key: 'completed',
+        name: 'Завершено',
+        description: 'Обслуживание завершено',
+        color: '#8BC34A'
+      },
+      {
+        key: 'cancelled_by_client',
+        name: 'Отменено клиентом',
+        description: 'Бронирование отменено клиентом',
+        color: '#F44336'
+      },
+      {
+        key: 'cancelled_by_partner',
+        name: 'Отменено партнером',
+        description: 'Бронирование отменено партнером',
+        color: '#9C27B0'
+      },
+      {
+        key: 'no_show',
+        name: 'Не явился',
+        description: 'Клиент не явился на обслуживание',
+        color: '#607D8B'
       }
-    }
+    ]
+    
+    render json: statuses
   end
 end 

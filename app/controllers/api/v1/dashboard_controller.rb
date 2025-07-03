@@ -8,8 +8,8 @@ class Api::V1::DashboardController < Api::V1::ApiController
       service_points_count: ServicePoint.joins(:status).where(service_point_statuses: { name: 'active' }).count,
       clients_count: Client.joins(:user).where(users: { is_active: true }).count,
       bookings_count: Booking.count,
-      completed_bookings_count: Booking.joins(:status).where(booking_statuses: { name: 'completed' }).count,
-      canceled_bookings_count: Booking.joins(:status).where(booking_statuses: { name: ['canceled_by_client', 'canceled_by_partner'] }).count,
+      completed_bookings_count: Booking.where(status: 'completed').count,
+      canceled_bookings_count: Booking.where(status: ['cancelled_by_client', 'cancelled_by_partner']).count,
       bookings_by_month: bookings_by_month_data,
       revenue_by_month: revenue_by_month_data
     }
@@ -103,16 +103,16 @@ class Api::V1::DashboardController < Api::V1::ApiController
     stats = {
       service_points_count: partner.service_points.joins(:status).where(service_point_statuses: { name: 'active' }).count,
       bookings_count: Booking.joins(service_point: :partner).where(service_points: { partner_id: partner.id }).count,
-      completed_bookings_count: Booking.joins(:status, service_point: :partner)
-                                      .where(booking_statuses: { name: 'completed' })
+      completed_bookings_count: Booking.joins(service_point: :partner)
+                                      .where(status: 'completed')
                                       .where(service_points: { partner_id: partner.id })
                                       .count,
-      canceled_bookings_count: Booking.joins(:status, service_point: :partner)
-                                     .where(booking_statuses: { name: ['canceled_by_client', 'canceled_by_partner'] })
+      canceled_bookings_count: Booking.joins(service_point: :partner)
+                                     .where(status: ['cancelled_by_client', 'cancelled_by_partner'])
                                      .where(service_points: { partner_id: partner.id })
                                      .count,
-      revenue_total: Booking.joins(:status, service_point: :partner)
-                          .where(booking_statuses: { name: 'completed' })
+      revenue_total: Booking.joins(service_point: :partner)
+                          .where(status: 'completed')
                           .where(service_points: { partner_id: partner.id })
                           .sum(:total_price),
       bookings_by_month: partner_bookings_by_month_data(partner.id),
@@ -150,8 +150,7 @@ class Api::V1::DashboardController < Api::V1::ApiController
     start_date = 12.months.ago.beginning_of_month
     end_date = Date.current.end_of_month
     
-    revenue_by_month = Booking.joins(:status)
-                             .where(booking_statuses: { name: 'completed' })
+    revenue_by_month = Booking.where(status: 'completed')
                              .where(bookings: { created_at: start_date..end_date })
                              .group("DATE_TRUNC('month', bookings.created_at)")
                              .sum(:total_price)
@@ -186,8 +185,8 @@ class Api::V1::DashboardController < Api::V1::ApiController
     start_date = 12.months.ago.beginning_of_month
     end_date = Date.current.end_of_month
     
-    revenue_by_month = Booking.joins(:status, service_point: :partner)
-                             .where(booking_statuses: { name: 'completed' })
+    revenue_by_month = Booking.joins(service_point: :partner)
+                             .where(status: 'completed')
                              .where(service_points: { partner_id: partner_id })
                              .where(bookings: { created_at: start_date..end_date })
                              .group("DATE_TRUNC('month', bookings.created_at)")
@@ -213,20 +212,17 @@ class Api::V1::DashboardController < Api::V1::ApiController
                   end
     
     # Получаем данные о бронированиях по статусам
-    completed_bookings = Booking.joins(:status)
-                               .where(booking_statuses: { name: 'completed' })
+    completed_bookings = Booking.where(status: 'completed')
                                .where(bookings: { created_at: start_date..end_date })
                                .group(date_format)
                                .count
     
-    pending_bookings = Booking.joins(:status)
-                             .where(booking_statuses: { name: 'pending' })
+    pending_bookings = Booking.where(status: 'pending')
                              .where(bookings: { created_at: start_date..end_date })
                              .group(date_format)
                              .count
     
-    canceled_bookings = Booking.joins(:status)
-                              .where(booking_statuses: { name: ['canceled_by_client', 'canceled_by_partner'] })
+    canceled_bookings = Booking.where(status: ['cancelled_by_client', 'cancelled_by_partner'])
                               .where(bookings: { created_at: start_date..end_date })
                               .group(date_format)
                               .count
@@ -291,8 +287,7 @@ class Api::V1::DashboardController < Api::V1::ApiController
                   end
     
     # Получаем данные о доходах
-    revenue_data = Booking.joins(:status)
-                         .where(booking_statuses: { name: 'completed' })
+    revenue_data = Booking.where(status: 'completed')
                          .where(bookings: { created_at: start_date..end_date })
                          .group(date_format)
                          .sum(:total_price)

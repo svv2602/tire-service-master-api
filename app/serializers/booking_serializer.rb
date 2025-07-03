@@ -8,29 +8,28 @@ class BookingSerializer < ActiveModel::Serializer
              :service_category
   
   def status
-    # In Swagger dry run mode, or if status is nil, provide a default
-    if ENV['SWAGGER_DRY_RUN'] || object.status.nil?
-      pending_status = BookingStatus.find_or_create_by(
-        name: 'pending',
-        description: 'Pending status',
-        color: '#FFC107',
-        is_active: true,
-        sort_order: 1
-      )
-      
-      return {
-        id: pending_status.id || 1, # Ensure we always have an integer ID for Swagger
-        name: pending_status.name || 'pending',
-        color: pending_status.color || '#FFC107'
+    # Используем новое строковое поле status
+    status_name = object.status || 'pending'
+    
+    # Получаем информацию о статусе из модуля BookingStatuses
+    status_info = object.class.status_by_name(status_name)
+    
+    if status_info
+      {
+        id: nil, # ID больше не нужен, так как используем строковые статусы
+        name: status_info[:name],
+        display_name: status_info[:display_name],
+        color: status_info[:color]
+      }
+    else
+      # Fallback для неизвестных статусов
+      {
+        id: nil,
+        name: status_name,
+        display_name: status_name.humanize,
+        color: '#9E9E9E'
       }
     end
-    
-    # Normal mode with valid status
-    {
-      id: object.status.id || 1, # Ensure we always have an integer ID for Swagger
-      name: object.status.name || 'pending',
-      color: object.status.color || '#FFC107'
-    }
   end
   
   def payment_status
