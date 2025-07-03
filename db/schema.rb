@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_02_223327) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_03_162403) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -640,7 +640,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_02_223327) do
 
   create_table "users", force: :cascade do |t|
     t.string "email", comment: "Email пользователя (необязательное поле)"
-    t.string "phone"
+    t.string "phone", comment: "Номер телефона (один из email/phone обязателен)"
     t.string "password_digest", null: false
     t.string "first_name"
     t.string "last_name"
@@ -652,7 +652,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_02_223327) do
     t.boolean "phone_verified", default: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "password_reset_token", comment: "Токен для восстановления пароля"
+    t.datetime "password_reset_sent_at", comment: "Время истечения токена восстановления пароля"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["password_reset_token"], name: "index_users_on_password_reset_token", unique: true
     t.index ["phone"], name: "index_users_on_phone", unique: true
     t.index ["role_id"], name: "index_users_on_role_id"
   end

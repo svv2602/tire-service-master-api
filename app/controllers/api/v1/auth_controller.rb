@@ -11,135 +11,135 @@ module Api
       # Универсальный вход для всех ролей пользователей
       def login
         auth_params = params.require(:auth)
-        email = auth_params[:email] || auth_params[:login]
+        login = auth_params[:login] || auth_params[:email]  # ✅ Поддерживаем и старый формат
         password = auth_params[:password]
         
-        user = User.find_by(email: email)
-        
-        Rails.logger.info("Auth#login: Attempting login for email: #{email}")
+        Rails.logger.info("Auth#login: Attempting login for: #{login}")
         Rails.logger.info("Auth#login: cookies available: #{cookies.present?}")
         
-        if user&.authenticate(password)
-          access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
-          refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
-          
-          Rails.logger.info("Auth#login: Authentication successful, setting cookies")
-          
-          # Устанавливаем оба токена в HttpOnly куки
-          cookies.encrypted[:access_token] = {
-            value: access_token,
-            httponly: true,
-            secure: Rails.env.production?,
-            same_site: :lax,
-            expires: 1.hour.from_now
-          }
-          
-          # Универсальные опции для refresh_token
-          cookie_options = {
-            value: refresh_token,
-            httponly: true,
-            expires: 30.days.from_now,
-            path: '/'
-          }
-          if Rails.env.production?
-            cookie_options[:secure] = true
-            cookie_options[:same_site] = :none
-          else
-            cookie_options[:secure] = false
-            cookie_options[:same_site] = :none
-          end
-          
-          # Используем несколько имён cookie для большей совместимости
-          cookies.encrypted[:refresh_token] = cookie_options
-          cookies.encrypted[:_tire_service_refresh] = cookie_options
-          cookies.encrypted[:_session] = cookie_options
-          
-          Rails.logger.info("Auth#login: All refresh cookies set with names: refresh_token, _tire_service_refresh, _session")
-          
-          Rails.logger.info("Auth#login: Cookies set (access + refresh), preparing response")
-          
-          # Создаем пользовательский JSON с добавлением роли
-          user_json = user.as_json(only: [:id, :email, :first_name, :last_name, :is_active])
-          user_json['role'] = user.role.name if user.role
-          
-          render json: {
-            message: 'Авторизация успешна',
-            user: user_json,
-            tokens: {
-              access: access_token,
-              refresh: refresh_token
-            }
-          }
-        else
-          Rails.logger.info("Auth#login: Authentication failed")
-          render json: { error: 'Неверные учетные данные' }, status: :unauthorized
+        unless login.present? && password.present?
+          render json: { error: 'Необходимо указать логин и пароль' }, status: :unprocessable_entity
+          return
         end
+        
+        # ✅ Поиск пользователя по email или телефону
+        user = User.find_by_login(login)
+        
+        unless user
+          Rails.logger.info("Auth#login: User not found for login: #{login}")
+          render json: { error: 'Пользователь не найден' }, status: :not_found
+          return
+        end
+
+        unless user.authenticate(password)
+          Rails.logger.info("Auth#login: Authentication failed for user: #{user.id}")
+          render json: { error: 'Неверный логин или пароль' }, status: :unauthorized
+          return
+        end
+
+        unless user.is_active?
+          Rails.logger.info("Auth#login: User account is inactive: #{user.id}")
+          render json: { error: 'Аккаунт заблокирован' }, status: :forbidden
+          return
+        end
+
+        # Обновляем время последнего входа
+        user.update_last_login!
+
+        # Генерируем JWT токены
+        access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+        refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
+        
+        Rails.logger.info("Auth#login: Generated tokens for user: #{user.id}")
+        
+        # Устанавливаем refresh токен в HttpOnly куки
+        cookies.encrypted[:refresh_token] = {
+          value: refresh_token,
+          httponly: true,
+          secure: Rails.env.production?,
+          same_site: :lax,
+          expires: 30.days.from_now,
+          path: '/'
+        }
+
+        render json: {
+          user: {
+            id: user.id,
+            email: user.email,
+            phone: user.phone,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            email_verified: user.email_verified,
+            phone_verified: user.phone_verified,
+            role: user.role.name,
+            is_active: user.is_active?,
+            client_id: user.client&.id
+          },
+          access_token: access_token,
+          message: 'Вход выполнен успешно'
+        }, status: :ok
       end
       
       # POST /api/v1/auth/refresh
-      # Обновление токена доступа
+      # Обновление access токена через refresh токен
       def refresh
+        refresh_token = cookies.encrypted[:refresh_token]
+        
+        unless refresh_token
+          render json: { error: 'Refresh токен не найден' }, status: :unauthorized
+          return
+        end
+        
         begin
-          # Получаем refresh токен из куки вместо заголовка
-          refresh_token = cookies.encrypted[:refresh_token]
+          decoded_token = Auth::JsonWebToken.decode_refresh_token(refresh_token)
+          user = User.find(decoded_token[:user_id])
           
-          raise Auth::TokenInvalidError, 'Refresh token is required' if refresh_token.blank?
-          
-          access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
-          # Генерируем новый refresh_token и кладём в куку (сквозная ротация)
-          new_refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: Auth::JsonWebToken.decode(refresh_token)['user_id'])
-          # Универсальные опции для refresh_token (refresh)
-          cookie_options = {
-            value: new_refresh_token,
-            httponly: true,
-            expires: 30.days.from_now,
-            path: '/'
-          }
-          if Rails.env.production?
-            cookie_options[:secure] = true
-            cookie_options[:same_site] = :lax
-          else
-            cookie_options[:secure] = false
-            cookie_options[:same_site] = :lax
+          unless user&.is_active?
+            render json: { error: 'Пользователь неактивен' }, status: :unauthorized
+            return
           end
-          cookies.encrypted[:refresh_token] = cookie_options
-          render json: { 
-            tokens: { 
-              access: access_token
+          
+          # Генерируем новый access токен
+          new_access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
+          
+          render json: {
+            access_token: new_access_token,
+            user: {
+              id: user.id,
+              email: user.email,
+              phone: user.phone,
+              first_name: user.first_name,
+              last_name: user.last_name,
+              role: user.role.name,
+              client_id: user.client&.id
             }
-          }
-        rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
-          # Удаляем куки при ошибке
-          cookies.delete(:refresh_token)
-          render json: { error: e.message }, status: :unauthorized
+          }, status: :ok
+        rescue JWT::DecodeError, ActiveRecord::RecordNotFound => e
+          Rails.logger.error "Auth#refresh error: #{e.message}"
+          render json: { error: 'Недействительный refresh токен' }, status: :unauthorized
         end
       end
       
       # POST /api/v1/auth/logout
-      # Универсальный выход из системы
+      # Выход из системы
       def logout
-        # Добавляем логирование для отладки
-        Rails.logger.info("Auth#logout: Attempting logout")
-        Rails.logger.info("Auth#logout: cookies available: #{cookies.present?}")
-        
-        # Удаляем оба auth куки при выходе
-        cookies.delete(:access_token)
+        # Удаляем refresh токен из cookies
         cookies.delete(:refresh_token)
         
-        Rails.logger.info("Auth#logout: Auth cookies deleted, sending success response")
+        Rails.logger.info("Auth#logout: User logged out successfully")
         render json: { message: 'Выход выполнен успешно' }, status: :ok
       end
-
+      
       # GET /api/v1/auth/me
-      # Получение информации о текущем пользователе (любой роли)
+      # Получение информации о текущем пользователе
       def me
         response_data = {
           user: {
             id: current_user.id,
             email: current_user.email,
+            phone: current_user.phone,
             first_name: current_user.first_name,
             last_name: current_user.last_name,
-            phone: current_user.phone,
             email_verified: current_user.email_verified,
             phone_verified: current_user.phone_verified,
             role: current_user.role.name,
@@ -180,9 +180,9 @@ module Api
             user: {
               id: current_user.id,
               email: current_user.email,
+              phone: current_user.phone,
               first_name: current_user.first_name,
               last_name: current_user.last_name,
-              phone: current_user.phone,
               email_verified: current_user.email_verified,
               phone_verified: current_user.phone_verified,
               role: current_user.role.name,
@@ -217,109 +217,31 @@ module Api
           return
         end
 
+        car_params = params.require(:car).permit(:brand_id, :model_id, :car_type_id, :year, :license_plate, :is_primary)
         car = current_user.client.cars.build(car_params)
 
-        # Проверяем, нужно ли установить автомобиль как основной при создании
-        if car_params[:is_primary] == true || car_params[:is_primary] == 'true'
-          # Сначала сохраняем автомобиль без флага is_primary
-          car.is_primary = false
-          if car.save
-            # Затем безопасно устанавливаем как основной
-            car.mark_as_primary!
-            render json: car.reload, serializer: ClientCarSerializer, status: :created
-          else
-            render json: { errors: car.errors }, status: :unprocessable_entity
-          end
+        if car.save
+          render json: car, serializer: ClientCarSerializer, status: :created
         else
-          # Обычное создание без установки как основной
-          if car.save
-            render json: car, serializer: ClientCarSerializer, status: :created
-          else
-            render json: { errors: car.errors }, status: :unprocessable_entity
-          end
+          render json: { errors: car.errors }, status: :unprocessable_entity
         end
       end
 
-      # PATCH /api/v1/auth/me/cars/:car_id
-      # Обновление автомобиля текущего клиента
-      def update_car
-        unless current_user.client?
-          render json: { error: 'Доступно только для клиентов' }, status: :forbidden
-          return
-        end
-
-        car = current_user.client.cars.find(params[:car_id])
-
-        # Проверяем, нужно ли установить автомобиль как основной
-        if car_params[:is_primary] == true || car_params[:is_primary] == 'true'
-          # Используем безопасный метод для установки основного автомобиля
-          car.assign_attributes(car_params.except(:is_primary))
-          if car.valid?
-            car.mark_as_primary! unless car.is_primary?
-            render json: car.reload, serializer: ClientCarSerializer
-          else
-            render json: { errors: car.errors }, status: :unprocessable_entity
-          end
-        else
-          # Обычное обновление без изменения статуса основного автомобиля
-          if car.update(car_params)
-            render json: car, serializer: ClientCarSerializer
-          else
-            render json: { errors: car.errors }, status: :unprocessable_entity
-          end
-        end
-      rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Автомобиль не найден' }, status: :not_found
-      end
-
-      # DELETE /api/v1/auth/me/cars/:car_id
-      # Удаление автомобиля текущего клиента
-      def delete_car
-        unless current_user.client?
-          render json: { error: 'Доступно только для клиентов' }, status: :forbidden
-          return
-        end
-
-        car = current_user.client.cars.find(params[:car_id])
-
-        if car.bookings.exists?
-          # Если есть бронирования с этой машиной, просто помечаем как неактивную
-          if car.update(is_active: false)
-            render json: { message: 'Автомобиль был помечен как неактивный' }
-          else
-            render json: { errors: car.errors }, status: :unprocessable_entity
-          end
-        else
-          # Если бронирований нет, можем полностью удалить
-          if car.destroy
-            render json: { message: 'Автомобиль был успешно удален' }
-          else
-            render json: { errors: car.errors }, status: :unprocessable_entity
-          end
-        end
-      rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Автомобиль не найден' }, status: :not_found
-      end
-      
       private
-      
-      def auth_params
-        params.permit(:email, :password)
-      end
-
-      def car_params
-        params.require(:car).permit(:brand_id, :model_id, :year, :license_plate, :car_type_id, :is_primary)
-      end
 
       def get_role_permissions(role_name)
-        permissions = {
-          'admin' => ['full_access', 'user_management', 'system_config'],
-          'manager' => ['service_point_management', 'booking_management'],
-          'partner' => ['own_service_points', 'booking_view'],
-          'operator' => ['booking_management', 'client_support'],
-          'client' => ['booking_create', 'profile_management']
-        }
-        permissions[role_name] || []
+        case role_name
+        when 'admin'
+          ['manage_users', 'manage_partners', 'manage_service_points', 'view_analytics', 'manage_system']
+        when 'manager'
+          ['manage_bookings', 'view_analytics', 'manage_service_points']
+        when 'partner'
+          ['manage_own_service_points', 'view_own_analytics', 'manage_bookings']
+        when 'operator'
+          ['manage_bookings', 'view_schedule']
+        else
+          []
+        end
       end
     end
   end

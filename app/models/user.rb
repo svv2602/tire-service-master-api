@@ -19,11 +19,14 @@ class User < ApplicationRecord
   
   # Валидации
   validates :email, uniqueness: { case_sensitive: false, allow_blank: true }, format: { with: URI::MailTo::EMAIL_REGEXP, allow_blank: true }
-  validates :phone, uniqueness: { case_sensitive: false }, presence: true
+  validates :phone, uniqueness: { case_sensitive: false, allow_blank: true }, format: { with: /\A\+?[0-9]{10,15}\z/, allow_blank: true }
   validates :role_id, presence: true
   validates :first_name, presence: true, length: { minimum: 2, maximum: 50 }
   validates :last_name, length: { minimum: 2, maximum: 50, allow_blank: true }
   validates :password, length: { minimum: 6 }, if: -> { password.present? }
+  
+  # ✅ НОВАЯ ВАЛИДАЦИЯ: email ИЛИ телефон обязателен
+  validate :email_or_phone_present
   
   # Кастомная валидация для телефона
   validate :phone_format_valid
@@ -49,6 +52,18 @@ class User < ApplicationRecord
     query_downcase = query.downcase
     where("LOWER(email) LIKE ? OR LOWER(first_name) LIKE ? OR LOWER(last_name) LIKE ?", 
           "%#{query_downcase}%", "%#{query_downcase}%", "%#{query_downcase}%")
+  end
+  
+  # ✅ НОВЫЙ МЕТОД: поиск по логину (email или телефон)
+  def self.find_by_login(login)
+    return nil if login.blank?
+    
+    if login.include?('@')
+      find_by(email: login.downcase)
+    else
+      normalized_phone = login.gsub(/[^\d+]/, '')
+      find_by(phone: normalized_phone)
+    end
   end
   
   # Методы ролей
@@ -131,6 +146,13 @@ class User < ApplicationRecord
     
     unless phone.match?(/\A\+?[0-9]{10,15}\z/)
       errors.add(:phone, 'is invalid')
+    end
+  end
+  
+  # ✅ НОВАЯ ВАЛИДАЦИЯ: email ИЛИ телефон обязателен
+  def email_or_phone_present
+    if email.blank? && phone.blank?
+      errors.add(:base, 'Необходимо указать email или номер телефона')
     end
   end
   

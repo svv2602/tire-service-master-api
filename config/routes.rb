@@ -24,18 +24,21 @@ Rails.application.routes.draw do
       # Health check endpoint
       get 'health', to: 'health#index'
       
-      # Аутентификация
+      # ✅ Универсальная аутентификация (email ИЛИ телефон)
       post 'auth/login', to: 'auth#login'
       post 'auth/logout', to: 'auth#logout'
       get 'auth/me', to: 'auth#me'
       post 'auth/refresh', to: 'auth#refresh'
       put 'auth/profile', to: 'auth#update_profile'
       
+      # ✅ Восстановление пароля
+      post 'password/forgot', to: 'passwords#forgot'
+      post 'password/reset', to: 'passwords#reset'
+      get 'password/verify_token/:token', to: 'passwords#verify_token'
+      
       # Автомобили текущего клиента
       get 'auth/me/cars', to: 'auth#my_cars'
       post 'auth/me/cars', to: 'auth#create_car'
-      patch 'auth/me/cars/:car_id', to: 'auth#update_car'
-      delete 'auth/me/cars/:car_id', to: 'auth#delete_car'
       
       # Клиентский API доступности (упрощенный)
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
