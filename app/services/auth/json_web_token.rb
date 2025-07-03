@@ -76,6 +76,36 @@ module Auth
         encode_access_token(user_id: decoded_refresh_token[:user_id])
       end
       
+      def decode_access_token(token)
+        Rails.logger.info("Decoding access token")
+        decoded = decode(token)
+        
+        unless decoded[:token_type] == 'access'
+          Rails.logger.error("Invalid token type for access token: #{decoded[:token_type]}")
+          raise TokenInvalidError, 'Invalid access token'
+        end
+        
+        decoded
+      end
+      
+      def decode_refresh_token(token)
+        Rails.logger.info("Decoding refresh token")
+        decoded = decode(token)
+        
+        unless decoded[:token_type] == 'refresh'
+          Rails.logger.error("Invalid token type for refresh token: #{decoded[:token_type]}")
+          raise TokenInvalidError, 'Invalid refresh token'
+        end
+        
+        # Проверяем, не был ли токен отозван
+        if token_revoked?(decoded[:jti])
+          Rails.logger.error("Refresh token has been revoked: #{decoded[:jti]}")
+          raise TokenRevokedError, 'Refresh token has been revoked'
+        end
+        
+        decoded
+      end
+
       def revoke_refresh_token(jti)
         Rails.logger.info("Revoking refresh token: #{jti}")
         Rails.cache.write("revoked_token:#{jti}", true, expires_in: REFRESH_TOKEN_EXPIRY)

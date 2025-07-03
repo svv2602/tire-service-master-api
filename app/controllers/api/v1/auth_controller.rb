@@ -53,7 +53,7 @@ module Api
         Rails.logger.info("Auth#login: Generated tokens for user: #{user.id}")
         
         # Устанавливаем refresh токен в HttpOnly куки
-        cookies.encrypted[:refresh_token] = {
+        cookies[:refresh_token] = {
           value: refresh_token,
           httponly: true,
           secure: Rails.env.production?,
@@ -83,7 +83,7 @@ module Api
       # POST /api/v1/auth/refresh
       # Обновление access токена через refresh токен
       def refresh
-        refresh_token = cookies.encrypted[:refresh_token]
+        refresh_token = cookies[:refresh_token]
         
         unless refresh_token
           render json: { error: 'Refresh токен не найден' }, status: :unauthorized
