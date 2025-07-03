@@ -108,7 +108,7 @@ module Api
       # Обновление записи клиента (ограниченное)
       def update
         # Клиенты могут изменять только определенные поля до подтверждения
-        unless @booking.pending?
+        unless @booking.status == 'pending'
           return render json: { 
             error: 'Запись нельзя изменить в текущем статусе',
             current_status: @booking.status 
@@ -178,12 +178,14 @@ module Api
         return render_validation_error('new_date обязательна') unless new_date.present?
         return render_validation_error('new_time обязательно') unless new_time.present?
         
-        # Проверяем доступность нового времени
+        # Проверяем доступность нового времени (БЕЗ проверки длительности)
         availability = DynamicAvailabilityService.check_availability_at_time(
           @booking.service_point_id,
           Date.parse(new_date),
           Time.parse("#{new_date} #{new_time}"),
-          @booking.total_duration_minutes
+          nil, # Не передаем длительность - работаем только с начальным временем
+          exclude_booking_id: @booking.id,
+          category_id: @booking.service_category_id
         )
         
         unless availability[:available]
@@ -193,14 +195,15 @@ module Api
           }, status: :unprocessable_entity
         end
         
-        # Переносим запись
+        # Переносим запись (устанавливаем end_time = start_time для совместимости с валидацией)
         old_date = @booking.booking_date
         old_time = @booking.start_time
+        new_start_time = Time.parse("#{new_date} #{new_time}")
         
         if @booking.update(
           booking_date: Date.parse(new_date),
-          start_time: Time.parse("#{new_date} #{new_time}"),
-          end_time: Time.parse("#{new_date} #{new_time}") + @booking.total_duration_minutes.minutes
+          start_time: new_start_time,
+          end_time: new_start_time  # Устанавливаем равным start_time для прохождения валидации
         )
           
           # Логируем изменение
@@ -285,8 +288,9 @@ module Api
           @booking.service_point_id,
           date,
           Time.parse("#{date} #{time}"),
-          @booking.total_duration_minutes,
-          exclude_booking_id: @booking.id
+          nil, # Не передаем длительность - работаем только с начальным временем
+          exclude_booking_id: @booking.id,
+          category_id: @booking.service_category_id
         )
       end
       
@@ -401,7 +405,7 @@ module Api
       # Проверяет возможность отмены записи
       def check_cancellation_allowed
         # Проверяем статус
-        unless @booking.pending? || @booking.confirmed?
+        unless @booking.status == 'pending' || @booking.status == 'confirmed'
           return { allowed: false, reason: 'Запись нельзя отменить в текущем статусе' }
         end
         

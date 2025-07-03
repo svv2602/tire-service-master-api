@@ -251,8 +251,9 @@ class Booking < ApplicationRecord
   def end_time_after_start_time
     return unless start_time && end_time
     
-    if end_time <= start_time
-      errors.add(:end_time, "must be after start time")
+    # В слотовой архитектуре допускаем end_time = start_time
+    if end_time < start_time
+      errors.add(:end_time, "must be after or equal to start time")
     end
   end
   
