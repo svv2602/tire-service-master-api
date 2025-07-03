@@ -53,6 +53,7 @@ Rails.application.routes.draw do
         member do
           delete :cancel, to: 'client_bookings#cancel'
           post :reschedule, to: 'client_bookings#reschedule'
+          post :assign_to_client, to: 'client_bookings#assign_to_client'
         end
         collection do
           post :check_availability_for_booking, to: 'client_bookings#check_availability_for_booking'

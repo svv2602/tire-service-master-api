@@ -218,6 +218,54 @@ module Api
         end
       end
       
+      # POST /api/v1/client_bookings/:id/assign_to_client
+      # Привязка гостевого бронирования к клиенту
+      def assign_to_client
+        # Проверяем, что бронирование действительно гостевое
+        unless @booking.guest_booking?
+          render json: { 
+            error: 'Бронирование уже привязано к клиенту',
+            details: ['Только гостевые бронирования могут быть привязаны к клиенту']
+          }, status: :unprocessable_entity
+          return
+        end
+        
+        # Получаем ID клиента из параметров
+        client_id = params[:client_id]
+        unless client_id.present?
+          render json: { 
+            error: 'Не указан ID клиента',
+            details: ['Параметр client_id обязателен']
+          }, status: :unprocessable_entity
+          return
+        end
+        
+        # Находим клиента
+        client = Client.find_by(id: client_id)
+        unless client
+          render json: { 
+            error: 'Клиент не найден',
+            details: ['Указанный клиент не существует']
+          }, status: :not_found
+          return
+        end
+        
+        # Привязываем бронирование к клиенту
+        if @booking.update(client_id: client.id)
+          Rails.logger.info "Booking #{@booking.id} assigned to client #{client.id}"
+          
+          render json: {
+            message: 'Бронирование успешно привязано к клиенту',
+            booking: format_booking_response(@booking)
+          }
+        else
+          render json: { 
+            error: 'Не удалось привязать бронирование к клиенту',
+            details: @booking.errors.full_messages 
+          }, status: :unprocessable_entity
+        end
+      end
+      
       private
       
       def set_booking
