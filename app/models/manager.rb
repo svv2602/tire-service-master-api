@@ -1,13 +1,13 @@
 class Manager < ApplicationRecord
   # Связи
   belongs_to :user
-  belongs_to :partner
+  belongs_to :partner, optional: true  # Менеджеры сайта не привязаны к партнеру
   has_many :manager_service_points, dependent: :destroy
   has_many :service_points, through: :manager_service_points
   
   # Валидации
   validates :user_id, presence: true, uniqueness: true
-  validates :partner_id, presence: true
+  # partner_id опционален - менеджеры сайта не привязаны к партнеру
   validates :position, presence: true
   validates :access_level, numericality: { only_integer: true, greater_than: 0 }
   

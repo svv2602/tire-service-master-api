@@ -163,19 +163,22 @@ begin
       end
     end
     
-    # Создаем оператора для тестового оператора
-    if user.role&.name == 'operator'
-      operator = Operator.find_by(user_id: user.id)
-      unless operator
-        Operator.create!(
+    # Создаем менеджера для тестового менеджера (сотрудник сайта)
+    if user.role&.name == 'manager'
+      manager = Manager.find_by(user_id: user.id)
+      unless manager
+        Manager.create!(
           user_id: user.id,
-          position: 'Тестовый оператор',
-          access_level: 3,
+          position: 'Тестовый менеджер сайта',
+          access_level: 2,
           is_active: true
         )
-        puts "    ✓ Created operator profile for #{user.email}"
+        puts "    ✓ Created manager profile for #{user.email} (site employee)"
       end
     end
+    
+    # Операторы (сотрудники партнера) создаются отдельно через OperatorsController
+    # так как им нужен partner_id
   end
 
   puts "Successfully created/updated #{test_users.length} test users!"

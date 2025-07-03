@@ -143,16 +143,29 @@ class User < ApplicationRecord
       Client.create!(user: self) unless client
     when 'admin'
       # Создаем запись администратора
-      Administrator.create!(user: self) unless administrator
+      Administrator.create!(user: self, position: 'Администратор', access_level: 10) unless administrator
     when 'partner'
-      # Создаем запись партнера
-      Partner.create!(user: self) unless partner
+      # Создаем запись партнера с обязательными полями
+      region = Region.first
+      city = region&.cities&.first
+      Partner.create!(
+        user: self,
+        company_name: 'Компания не указана',
+        contact_person: full_name,
+        legal_address: 'Адрес не указан',
+        region_id: region&.id,
+        city_id: city&.id,
+        is_active: true
+      ) unless partner
     when 'manager'
-      # Создаем запись менеджера
-      Manager.create!(user: self) unless manager
-    when 'operator'
-      # Создаем запись оператора
-      Operator.create!(user: self) unless operator
+      # Создаем запись менеджера сайта (без partner_id)
+      Manager.create!(
+        user: self,
+        position: 'Менеджер сайта',
+        access_level: 2,
+        is_active: true
+      ) unless manager
+    # Операторы создаются только через OperatorsController с привязкой к партнеру
     end
   rescue ActiveRecord::RecordInvalid => e
     Rails.logger.warn "Не удалось создать связанную запись для пользователя #{id}: #{e.message}"
