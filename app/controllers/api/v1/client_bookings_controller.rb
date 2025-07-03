@@ -478,6 +478,11 @@ module Api
           end,
           total_price: booking.total_price,
           notes: booking.notes,
+          service_category: booking.service_category ? {
+            id: booking.service_category.id,
+            name: booking.service_category.name,
+            description: booking.service_category.description
+          } : nil,
           created_at: booking.created_at,
           updated_at: booking.updated_at
         }
