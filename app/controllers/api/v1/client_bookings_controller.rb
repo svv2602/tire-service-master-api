@@ -6,7 +6,7 @@ module Api
       skip_before_action :authenticate_request, only: [:create, :show, :update, :cancel, :reschedule, :check_availability_for_booking]
       before_action :optional_authenticate_request, only: [:create]
       
-      before_action :set_booking, only: [:show, :update, :cancel, :reschedule]
+      before_action :set_booking, only: [:show, :update, :cancel, :reschedule, :assign_to_client]
       before_action :validate_client_data, only: [:create], unless: -> { ENV['SWAGGER_DRY_RUN'] }
       
       # POST /api/v1/client_bookings
@@ -420,20 +420,13 @@ module Api
             return car_type
           else
             Rails.logger.error "CarType not found with id: #{car_info[:car_type_id]}"
-            render json: { 
-              error: 'Тип автомобиля не найден',
-              details: ['Указанный тип автомобиля не существует']
-            }, status: :unprocessable_entity
             return nil
           end
         end
 
         # Если тип не указан, это ошибка
-        render json: { 
-          error: 'Тип автомобиля обязателен',
-          details: ['Необходимо указать тип автомобиля']
-        }, status: :unprocessable_entity
-        nil
+        Rails.logger.error "CarType not provided in params"
+        return nil
       end
       
 

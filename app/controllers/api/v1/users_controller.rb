@@ -2,7 +2,8 @@ module Api
   module V1
     class UsersController < ApiController
       before_action :set_user, only: [:show, :update, :destroy]
-      before_action :authorize_admin, except: [:show, :update, :me]
+      before_action :authorize_admin, except: [:show, :update, :me, :check_exists]
+      skip_before_action :authenticate_request, only: [:check_exists]
       
       # GET /api/v1/users/me
       def me
