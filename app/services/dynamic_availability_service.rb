@@ -359,16 +359,27 @@ class DynamicAvailabilityService
         category_id: category_id
       }
     end
-    
+
     # Получаем доступные слоты только для указанной категории
     available_slots = available_slots_for_category(service_point_id, date, category_id)
     
     # Получаем все возможные слоты для категории (доступные + занятые)
     all_possible_slots = get_all_possible_slots_for_category(service_point_id, date, category_id)
     
+    # Правильный подсчет: считаем фактические бронирования
+    actual_bookings_count = Booking.joins(:service_category)
+      .where(
+        service_point_id: service_point_id,
+        booking_date: date,
+        service_category_id: category_id
+      )
+      .where.not(
+        status_id: BookingStatus.canceled_statuses
+      ).count
+    
     total_slots = all_possible_slots.count
     available_slots_count = available_slots.count
-    occupied_slots_count = total_slots - available_slots_count
+    occupied_slots_count = actual_bookings_count  # Используем фактическое количество бронирований
     
     occupancy_percentage = total_slots > 0 ? (occupied_slots_count.to_f / total_slots * 100).round(1) : 0
     
@@ -609,8 +620,8 @@ class DynamicAvailabilityService
     
     return [] if working_posts.empty?
     
-    # Генерируем слоты для каждого работающего поста
-    available_slots = []
+    # Генерируем все возможные временные слоты и группируем по времени
+    time_slots = {}
     
     working_posts.each do |post|
       # Определяем время работы для этого поста
@@ -624,41 +635,75 @@ class DynamicAvailabilityService
       current_time = start_time
       
       while current_time + slot_duration.minutes <= end_time
-        slot_end_time = current_time + slot_duration.minutes
+        time_key = current_time.strftime('%H:%M')
         
-        # В слотовой архитектуре проверяем бронирования по точному времени начала
-        bookings_count = Booking.joins(:service_category)
-          .where(
-            service_point_id: service_point_id,
-            booking_date: date,
-            start_time: current_time.strftime('%H:%M:%S'),
-            service_category_id: category_id
-          )
-          .where.not(
-            status_id: BookingStatus.canceled_statuses
-          ).count
-        
-        # Если нет бронирований на это время, слот доступен
-        if bookings_count == 0
-          available_slots << {
-            service_post_id: post.id,
-            post_number: post.post_number,
-            post_name: post.name || "Пост #{post.post_number}",
-            category_id: category_id,
-            category_name: post.category_name,
-            start_time: current_time.strftime('%H:%M'),
-            end_time: slot_end_time.strftime('%H:%M'),
-            duration_minutes: slot_duration,
-            datetime: current_time
+        # Инициализируем слот если его еще нет
+        unless time_slots[time_key]
+          time_slots[time_key] = {
+            time: time_key,
+            datetime: current_time,
+            total_posts: 0,
+            posts: []
           }
         end
         
-        current_time = slot_end_time
+        # Добавляем пост к этому времени
+        time_slots[time_key][:total_posts] += 1
+        time_slots[time_key][:posts] << {
+          service_post_id: post.id,
+          post_number: post.post_number,
+          post_name: post.name || "Пост #{post.post_number}",
+          duration_minutes: slot_duration
+        }
+        
+        current_time += slot_duration.minutes
       end
     end
     
-    # Сортируем по времени, затем по номеру поста
-    available_slots.sort_by { |slot| [slot[:datetime], slot[:post_number]] }
+    # Теперь для каждого временного слота проверяем доступность
+    available_slots = []
+    
+    time_slots.each do |time_key, slot_data|
+      # Подсчитываем количество бронирований на это время
+      bookings_count = Booking.joins(:service_category)
+        .where(
+          service_point_id: service_point_id,
+          booking_date: date,
+          start_time: "#{time_key}:00",
+          service_category_id: category_id
+        )
+        .where.not(
+          status_id: BookingStatus.canceled_statuses
+        ).count
+      
+      # Вычисляем количество доступных постов
+      available_posts_count = slot_data[:total_posts] - bookings_count
+      
+      # Если есть хотя бы один доступный пост, добавляем слот
+      if available_posts_count > 0
+        # Берем данные первого поста для duration_minutes (они одинаковые для одного времени)
+        first_post = slot_data[:posts].first
+        slot_end_time = slot_data[:datetime] + first_post[:duration_minutes].minutes
+        
+        available_slots << {
+          service_post_id: first_post[:service_post_id],
+          post_number: first_post[:post_number],
+          post_name: first_post[:post_name],
+          category_id: category_id,
+          category_name: working_posts.first.category_name,
+          start_time: time_key,
+          end_time: slot_end_time.strftime('%H:%M'),
+          duration_minutes: first_post[:duration_minutes],
+          datetime: slot_data[:datetime],
+          available_posts: available_posts_count,
+          total_posts: slot_data[:total_posts],
+          bookings_count: bookings_count
+        }
+      end
+    end
+    
+    # Сортируем по времени
+    available_slots.sort_by { |slot| slot[:datetime] }
   end
 
   private

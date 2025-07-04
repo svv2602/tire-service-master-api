@@ -333,18 +333,23 @@ class Api::V1::AvailabilityController < ApplicationController
         error: 'Не все обязательные параметры переданы' 
       }, status: :bad_request
     end
-    
+
     begin
       slots = DynamicAvailabilityService.available_slots_for_category(
         service_point_id, date, category_id
       )
+      
+      # Получаем общее количество постов для категории
+      service_point = ServicePoint.find(service_point_id)
+      total_posts_count = service_point.posts_count_for_category(category_id.to_i)
       
       render json: {
         service_point_id: service_point_id,
         date: date,
         category_id: category_id,
         slots: slots,
-        total_slots: slots.count
+        total_slots: slots.count,
+        total_posts_count: total_posts_count
       }
     rescue => e
       render json: { 
