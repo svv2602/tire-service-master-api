@@ -17,7 +17,9 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
             '192.168.3.145:3008',
             # Docker internal network
             /http:\/\/web:\d+/,
-            /http:\/\/api:\d+/
+            /http:\/\/api:\d+/,
+            # Allow null origin for local file testing (development only)
+            -> (source, env) { Rails.env.development? && source.nil? }
 
     resource "*",
       headers: :any,
