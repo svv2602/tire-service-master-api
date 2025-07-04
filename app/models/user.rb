@@ -54,15 +54,40 @@ class User < ApplicationRecord
           "%#{query_downcase}%", "%#{query_downcase}%", "%#{query_downcase}%")
   end
   
-  # ✅ НОВЫЙ МЕТОД: поиск по логину (email или телефон)
+  # ✅ УЛУЧШЕННЫЙ МЕТОД: гибкий поиск по логину (email или телефон)
   def self.find_by_login(login)
     return nil if login.blank?
     
     if login.include?('@')
       find_by(email: login.downcase)
     else
-      normalized_phone = login.gsub(/[^\d+]/, '')
-      find_by(phone: normalized_phone)
+      # Пробуем найти по разным форматам номера телефона
+      normalized_login = login.gsub(/[^\d+]/, '')
+      
+      # Формат 1: как есть (например, "+380501234567")
+      user = find_by(phone: normalized_login)
+      return user if user
+      
+      # Формат 2: добавляем +38 к номеру без кода страны (например, "0501234567" -> "+380501234567")
+      if normalized_login.match(/^\d{10}$/) && normalized_login.start_with?('0')
+        user = find_by(phone: "+38#{normalized_login}")
+        return user if user
+      end
+      
+      # Формат 3: убираем код страны (например, "+380501234567" -> "0501234567")
+      if normalized_login.match(/^\+?38\d{10}$/)
+        clean_number = normalized_login.gsub(/^\+?38/, '0')
+        user = find_by(phone: "+38#{clean_number}")
+        return user if user
+      end
+      
+      # Формат 4: для случаев когда номер сохранен без +
+      if normalized_login.match(/^38\d{10}$/)
+        user = find_by(phone: "+#{normalized_login}")
+        return user if user
+      end
+      
+      nil
     end
   end
   
