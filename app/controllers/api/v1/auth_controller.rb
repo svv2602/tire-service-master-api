@@ -220,6 +220,12 @@ module Api
         car_params = params.require(:car).permit(:brand_id, :model_id, :car_type_id, :year, :license_plate, :is_primary)
         car = current_user.client.cars.build(car_params)
 
+        # Если передан email и у пользователя нет email, добавляем его
+        if params[:car][:email].present? && (current_user.email.blank? || current_user.email.include?("guest_"))
+          current_user.update(email: params[:car][:email])
+          Rails.logger.info("Updated user #{current_user.id} email to #{params[:car][:email]}")
+        end
+
         if car.save
           render json: car, serializer: ClientCarSerializer, status: :created
         else
