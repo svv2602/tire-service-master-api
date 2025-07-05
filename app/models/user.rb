@@ -154,7 +154,12 @@ class User < ApplicationRecord
   private
   
   def normalize_email
-    self.email = email.downcase if email.present?
+    if email.present?
+      self.email = email.downcase
+    elsif email == ''
+      # Конвертируем пустые строки в nil для корректной работы uniqueness валидации
+      self.email = nil
+    end
   end
   
   def normalize_phone
@@ -163,6 +168,9 @@ class User < ApplicationRecord
       normalized = phone.gsub(/[^\d+]/, '')
       # Если после нормализации остались только буквы или пустая строка, устанавливаем nil
       self.phone = normalized.empty? ? nil : normalized
+    elsif phone == ''
+      # Конвертируем пустые строки в nil для корректной работы uniqueness валидации
+      self.phone = nil
     end
   end
   
