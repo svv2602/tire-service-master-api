@@ -49,8 +49,8 @@ Rails.application.configure do
     domain: ENV.fetch('SMTP_DOMAIN', 'localhost'),
     user_name: ENV.fetch('SMTP_USERNAME', nil),
     password: ENV.fetch('SMTP_PASSWORD', nil),
-    authentication: 'plain',
-    enable_starttls_auto: true
+    authentication: 'plain', # или nil, если не нужна аутентификация
+    enable_starttls_auto: false
   }
 
   # Print deprecation notices to the Rails logger.

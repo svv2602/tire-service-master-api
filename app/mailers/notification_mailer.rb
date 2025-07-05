@@ -30,6 +30,10 @@ class NotificationMailer < ApplicationMailer
     )
   end
 
+  def test_email(to)
+    mail(to: to, subject: "Тестовое письмо", body: "Проверка отправки email")
+  end
+
   # Пакетная отправка напоминаний о бронированиях
   def booking_reminders_batch(bookings_ids)
     @bookings = Booking.where(id: bookings_ids).includes(:client, :service_point)
