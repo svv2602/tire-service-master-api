@@ -9,7 +9,7 @@ service_points = ServicePoint.all
 if service_points.empty?
   puts "❌ Нет сервисных точек для добавления фотографий"
   puts "   Запустите сначала seed файл service_points_improved.rb"
-  exit
+  return
 end
 
 # Локальные файлы изображений из папки public/image
@@ -28,7 +28,7 @@ if available_files.empty?
   puts "⚠️  Локальные файлы изображений не найдены"
   puts "   Пропускаем создание фотографий"
   puts "   Файлы искались в: #{local_image_files.join(', ')}"
-  exit
+  return
 end
 
 puts "📁 Найдено изображений: #{available_files.count}"
@@ -58,13 +58,18 @@ service_points.each do |service_point|
     
     if existing_photo
       # Обновляем существующую (без файла, только метаданные)
-      existing_photo.update!(
-        description: "#{photo_type.capitalize} фото #{service_point.name}",
-        sort_order: index + 1,
-        is_main: index == 0
-      )
-      updated_count += 1
-      puts "    ✏️  Обновлено фото: #{photo_type}"
+      begin
+        # Обновляем без валидации файла (файл уже есть)
+        existing_photo.description = "#{photo_type.capitalize} фото #{service_point.name}"
+        existing_photo.sort_order = index + 1
+        existing_photo.is_main = index == 0
+        existing_photo.save!(validate: false)  # Пропускаем валидацию
+        updated_count += 1
+        puts "    ✏️  Обновлено фото: #{photo_type}"
+      rescue ActiveRecord::RecordInvalid => e
+        puts "    ❌ Ошибка обновления фото #{photo_type}: #{e.message}"
+        puts "    Детали ошибок: #{existing_photo.errors.full_messages.join(', ')}"
+      end
     else
       # Создаем новую запись с прикреплением файла
       begin

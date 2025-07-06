@@ -26,12 +26,41 @@ module Auth
       end
     end
 
-    def self.refresh_access_token(refresh_token)
-      decoded = decode(refresh_token)
+    # Создание access токена (короткий срок жизни)
+    def self.encode_access_token(payload)
+      payload = payload.dup
+      payload[:token_type] = 'access'
+      payload[:exp] = 1.hour.from_now.to_i
+      JWT.encode(payload, Rails.application.credentials.secret_key_base, 'HS256')
+    end
+
+    # Создание refresh токена (длительный срок жизни)
+    def self.encode_refresh_token(payload)
+      payload = payload.dup
+      payload[:token_type] = 'refresh'
+      payload[:exp] = 30.days.from_now.to_i
+      JWT.encode(payload, Rails.application.credentials.secret_key_base, 'HS256')
+    end
+
+    # Декодирование access токена
+    def self.decode_access_token(token)
+      decoded = decode(token)
+      raise TokenInvalidError unless decoded[:token_type] == 'access'
+      decoded
+    end
+
+    # Декодирование refresh токена
+    def self.decode_refresh_token(token)
+      decoded = decode(token)
       raise TokenInvalidError unless decoded[:token_type] == 'refresh'
+      decoded
+    end
+
+    def self.refresh_access_token(refresh_token)
+      decoded = decode_refresh_token(refresh_token)
       
       # Создаем новый access токен
-      encode(user_id: decoded[:user_id], token_type: 'access')
+      encode_access_token(user_id: decoded[:user_id])
     end
   end
 end 

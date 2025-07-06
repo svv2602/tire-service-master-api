@@ -16,7 +16,7 @@ if partners.empty? || cities.empty? || categories.empty? || services.empty?
   puts "❌ Недостаточно данных для создания сервисных точек"
   puts "   Партнеры: #{partners.count}, Города: #{cities.count}, Категории: #{categories.count}, Услуги: #{services.count}"
   puts "   Запустите сначала соответствующие seeds"
-  exit
+  return
 end
 
 # Получаем ID категорий динамически

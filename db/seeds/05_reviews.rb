@@ -9,12 +9,12 @@ clients = Client.all
 
 if service_points.empty?
   puts "❌ Нет сервисных точек для добавления отзывов"
-  exit
+  return
 end
 
 if clients.empty?
   puts "❌ Нет клиентов для создания отзывов"
-  exit
+  return
 end
 
 # Шаблоны отзывов

@@ -64,8 +64,9 @@ class User < ApplicationRecord
     return nil if login.blank?
     
     if login.include?('@')
-      find_by(email: login.downcase)
-    
+      # Поиск по email
+      return find_by(email: login.downcase)
+    else
       # Пробуем найти по разным форматам номера телефона
       normalized_login = login.gsub(/[^\d+]/, '')
       
@@ -233,7 +234,7 @@ class User < ApplicationRecord
         user: self,
         position: 'Менеджер сайта',
         access_level: 2,
-        is_active: true
+        partner_id: nil
       ) unless manager
     # Операторы создаются только через OperatorsController с привязкой к партнеру
     end

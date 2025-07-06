@@ -5,7 +5,7 @@ puts "=== Создание многоязычных статей ==="
 admin_user = User.find_by(email: 'admin@test.com')
 unless admin_user
   puts "❌ Админ не найден! Сначала запустите create_admin_user.rb"
-  exit
+  return
 end
 
 puts "✅ Автор статей: #{admin_user.email}"
@@ -16,7 +16,7 @@ puts "📊 Существующих статей: #{existing_count}"
 if existing_count > 0
   puts "ℹ️  Статьи уже существуют. Пропускаем создание для избежания дублирования."
   puts "   Если нужно пересоздать статьи, используйте: Article.destroy_all перед запуском"
-  exit
+  return
 end
 
 # =============================================================================

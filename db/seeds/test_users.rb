@@ -167,11 +167,12 @@ begin
     if user.role&.name == 'manager'
       manager = Manager.find_by(user_id: user.id)
       unless manager
+        # Для менеджеров сайта partner_id = nil (они не привязаны к партнеру)
         Manager.create!(
           user_id: user.id,
           position: 'Тестовый менеджер сайта',
           access_level: 2,
-          is_active: true
+          partner_id: nil
         )
         puts "    ✓ Created manager profile for #{user.email} (site employee)"
       end
