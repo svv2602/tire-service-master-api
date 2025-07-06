@@ -9,6 +9,9 @@ module Api
       def forgot
         login = params[:login]
         
+        Rails.logger.info("Password reset request for login: #{login}")
+        Rails.logger.info("SMTP settings: address=#{ENV['SMTP_ADDRESS']}, port=#{ENV['SMTP_PORT']}, username=#{ENV['SMTP_USERNAME']}")
+        
         unless login.present?
           render json: { error: 'Необходимо указать email или номер телефона' }, status: :unprocessable_entity
           return
@@ -32,37 +35,41 @@ module Api
         reset_token = SecureRandom.urlsafe_base64(32)
         reset_expires_at = 2.hours.from_now
         
+        Rails.logger.info("Generated reset token for user #{user.id}: #{reset_token[0..10]}...")
+        
         # Сохраняем токен и время истечения
         if user.update(password_reset_token: reset_token, password_reset_sent_at: reset_expires_at)
-                   # Определяем способ отправки на основе того, что указал пользователь
-         if user.email.present? && login.include?('@')
-           # Отправляем email
-           begin
-             PasswordResetMailer.reset_instructions(user, reset_token).deliver_now
-             Rails.logger.info("Password reset email sent to: #{user.email}")
-             render json: { message: 'Инструкции по восстановлению отправлены на email' }
-           rescue => e
-             Rails.logger.error "Failed to send password reset email: #{e.message}"
-             render json: { error: 'Не удалось отправить email' }, status: :internal_server_error
-           end
-         elsif user.phone.present?
-           # Отправляем SMS
-           begin
-             result = SmsService.send_password_reset(user.phone, reset_token)
-             if result[:success]
-               Rails.logger.info("Password reset SMS sent to: #{user.phone}")
-               render json: { message: 'Код восстановления отправлен на телефон' }
-             else
-               Rails.logger.error "Failed to send SMS: #{result[:error]}"
-               render json: { error: result[:error] }, status: :internal_server_error
-             end
-           rescue => e
-             Rails.logger.error "Failed to send password reset SMS: #{e.message}"
-             render json: { error: 'Не удалось отправить SMS' }, status: :internal_server_error
-           end
-         else
-           render json: { error: 'У пользователя нет email или телефона для отправки инструкций' }, status: :unprocessable_entity
-         end
+          # Определяем способ отправки на основе того, что указал пользователь
+          if user.email.present? && login.include?('@')
+            # Отправляем email
+            begin
+              Rails.logger.info("Attempting to send password reset email to: #{user.email}")
+              PasswordResetMailer.reset_instructions(user, reset_token).deliver_now
+              Rails.logger.info("Password reset email sent successfully to: #{user.email}")
+              render json: { message: 'Инструкции по восстановлению отправлены на email' }
+            rescue => e
+              Rails.logger.error "Failed to send password reset email: #{e.class.name}: #{e.message}"
+              Rails.logger.error "Backtrace: #{e.backtrace.first(5).join("\n")}"
+              render json: { error: 'Не удалось отправить email' }, status: :internal_server_error
+            end
+          elsif user.phone.present?
+            # Отправляем SMS
+            begin
+              result = SmsService.send_password_reset(user.phone, reset_token)
+              if result[:success]
+                Rails.logger.info("Password reset SMS sent to: #{user.phone}")
+                render json: { message: 'Код восстановления отправлен на телефон' }
+              else
+                Rails.logger.error "Failed to send SMS: #{result[:error]}"
+                render json: { error: result[:error] }, status: :internal_server_error
+              end
+            rescue => e
+              Rails.logger.error "Failed to send password reset SMS: #{e.message}"
+              render json: { error: 'Не удалось отправить SMS' }, status: :internal_server_error
+            end
+          else
+            render json: { error: 'У пользователя нет email или телефона для отправки инструкций' }, status: :unprocessable_entity
+          end
         else
           Rails.logger.error "Failed to save password reset token for user: #{user.id}"
           render json: { error: 'Не удалось создать токен восстановления' }, status: :internal_server_error

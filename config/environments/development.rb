@@ -39,17 +39,17 @@ Rails.application.configure do
 
   # Настройка Action Mailer для отправки писем
   config.action_mailer.perform_caching = false
-  config.action_mailer.default_url_options = { host: ENV.fetch('HOST', 'localhost'), port: ENV.fetch('PORT', 3000) }
+  config.action_mailer.default_url_options = { host: ENV.fetch('HOST', 'localhost'), port: ENV.fetch('PORT', 8000) }
   
   # Настройка SMTP для отправки писем
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
-    address: ENV.fetch('SMTP_ADDRESS', 'smtp.gmail.com'),
-    port: ENV.fetch('SMTP_PORT', 587),
-    domain: ENV.fetch('SMTP_DOMAIN', 'localhost'),
-    user_name: ENV.fetch('SMTP_USERNAME', nil),
-    password: ENV.fetch('SMTP_PASSWORD', nil),
-    authentication: 'plain', # или nil, если не нужна аутентификация
+    address: ENV['SMTP_ADDRESS'],
+    port: ENV['SMTP_PORT']&.to_i || 25,
+    domain: ENV['SMTP_DOMAIN'],
+    user_name: ENV['SMTP_USERNAME'],
+    password: ENV['SMTP_PASSWORD'],
+    authentication: 'plain',
     enable_starttls_auto: false
   }
 
