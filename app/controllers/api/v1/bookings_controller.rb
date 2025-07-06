@@ -38,7 +38,7 @@ module Api
             # Это позволит клиенту видеть только свои бронирования
             @bookings = policy_scope(Booking).where(client_id: @client.id)
           rescue Pundit::NotAuthorizedError => e
-            render json: { error: "Not authorized" }, status: :forbidden
+            render json: { error: I18n.t('bookings.errors.unauthorized') }, status: :forbidden
             return
           end
         elsif params[:service_point_id].present?
@@ -191,7 +191,7 @@ module Api
         if ENV['SWAGGER_DRY_RUN']
           # Если бронирование не существует, возвращаем заглушку
           if !@booking && params[:id].to_i == 999
-            render json: { error: 'Resource not found' }, status: :not_found
+            render json: { error: I18n.t('bookings.errors.not_found') }, status: :not_found
             return
           elsif !@booking
             # В остальных случаях возвращаем заглушку
@@ -204,7 +204,7 @@ module Api
         
         # Check if @booking is nil, which means it was not found
         unless @booking
-          render json: { error: 'Resource not found' }, status: :not_found
+          render json: { error: I18n.t('bookings.errors.not_found') }, status: :not_found
           return
         end
         
@@ -380,7 +380,7 @@ module Api
         if ENV['SWAGGER_DRY_RUN']
           # For invalid ID tests, return 404
           if params[:id] == 'invalid'
-            render json: { error: "Resource not found" }, status: :not_found
+            render json: { error: I18n.t('bookings.errors.not_found') }, status: :not_found
             return
           end
           
@@ -478,7 +478,7 @@ module Api
         if ENV['SWAGGER_DRY_RUN']
           # For invalid ID tests, return 404
           if params[:id] == 'invalid'
-            render json: { error: "Resource not found" }, status: :not_found
+            render json: { error: I18n.t('bookings.errors.not_found') }, status: :not_found
             return
           end
           
@@ -524,7 +524,7 @@ module Api
         
         # Полное удаление бронирования из базы данных
         if @booking.destroy
-          render json: { message: 'Бронирование успешно удалено' }, status: :ok
+          render json: { message: I18n.t('bookings.messages.deleted') }, status: :ok
         else
           render json: { errors: @booking.errors.full_messages }, status: :unprocessable_entity
         end
@@ -562,7 +562,9 @@ module Api
             render json: { errors: @booking.errors }, status: :unprocessable_entity
           end
         rescue ArgumentError => e
-          render json: { errors: "Cannot transition from #{@booking.status} to confirmed" }, status: :unprocessable_entity
+          render json: { errors: I18n.t('bookings.errors.invalid_status_transition', 
+                         from: @booking.status, 
+                         to: 'confirmed') }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
@@ -645,7 +647,9 @@ module Api
           
           render json: @booking
         rescue ArgumentError => e
-          render json: { errors: "Cannot cancel booking in status #{@booking.status}" }, status: :unprocessable_entity
+          render json: { errors: I18n.t('bookings.errors.invalid_status_transition', 
+                         from: @booking.status, 
+                         to: 'cancelled') }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
@@ -683,7 +687,9 @@ module Api
             render json: { errors: @booking.errors }, status: :unprocessable_entity
           end
         rescue ArgumentError => e
-          render json: { errors: "Cannot transition from #{@booking.status} to completed" }, status: :unprocessable_entity
+          render json: { errors: I18n.t('bookings.errors.invalid_status_transition', 
+                         from: @booking.status, 
+                         to: 'completed') }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
@@ -721,7 +727,9 @@ module Api
             render json: { errors: @booking.errors }, status: :unprocessable_entity
           end
         rescue ArgumentError => e
-          render json: { errors: "Cannot transition from #{@booking.status} to no_show" }, status: :unprocessable_entity
+          render json: { errors: I18n.t('bookings.errors.invalid_status_transition', 
+                         from: @booking.status, 
+                         to: 'no_show') }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
@@ -762,7 +770,7 @@ module Api
           Rails.logger.info "✅ Booking ##{@booking.id} loaded successfully with service_point: #{@booking.service_point&.name}"
         rescue ActiveRecord::RecordNotFound
           Rails.logger.error "❌ Booking ##{params[:id]} not found"
-          render json: { error: 'Resource not found' }, status: :not_found
+          render json: { error: I18n.t('bookings.errors.not_found') }, status: :not_found
         end
       end
       
@@ -909,7 +917,9 @@ module Api
             render json: @booking
           end
         rescue ArgumentError => e
-          render json: { errors: "Cannot cancel booking in #{@booking.status} state" }, status: :unprocessable_entity
+          render json: { errors: I18n.t('bookings.errors.invalid_status_transition', 
+                         from: @booking.status, 
+                         to: 'cancelled') }, status: :unprocessable_entity
         rescue => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end

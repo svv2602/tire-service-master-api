@@ -1,0 +1,13 @@
+client:
+  email: test@example.com
+  phone: '+380501234567'
+  password_digest: <%= BCrypt::Password.create('password123') %>
+  first_name: Test
+  last_name: User
+  role_id: 1
+  is_active: true
+  email_verified: true
+  phone_verified: true
+  preferred_locale: uk
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %> 

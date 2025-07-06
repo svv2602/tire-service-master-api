@@ -71,13 +71,19 @@ module Api
             puts "  ✅ Client created successfully: ID=#{@client.id}"
           end
           
-          render json: @client, status: :created
+          render json: {
+            data: @client,
+            message: I18n.t('clients.messages.created')
+          }, status: :created
         rescue ActiveRecord::RecordInvalid => e
           puts "  ❌ Validation error: #{e.record.errors.full_messages}"
-          render json: { errors: e.record.errors }, status: :unprocessable_entity
+          render json: { 
+            error: I18n.t('clients.errors.create_failed'),
+            details: e.record.errors 
+          }, status: :unprocessable_entity
         rescue => e
           puts "  ❌ General error: #{e.message}"
-          render json: { error: e.message }, status: :unprocessable_entity
+          render json: { error: I18n.t('errors.internal') }, status: :unprocessable_entity
         end
       end
       
@@ -103,7 +109,7 @@ module Api
               token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
               
               render json: {
-                message: 'Регистрация прошла успешно',
+                message: I18n.t('auth.messages.registration_success'),
                 auth_token: token,
                 user: user.as_json(only: [:id, :email, :first_name, :last_name, :phone]),
                 client: client.as_json(only: [:id]),
@@ -114,20 +120,20 @@ module Api
               }, status: :created
             else
               render json: { 
-                message: 'Failed to create account',
-                errors: user.errors.full_messages 
+                error: I18n.t('auth.errors.registration_failed'),
+                details: user.errors.full_messages 
               }, status: :unprocessable_entity
             end
           end
         rescue ActiveRecord::RecordInvalid => e
           render json: { 
-            message: 'Failed to create account',
-            errors: e.record.errors.full_messages 
+            error: I18n.t('auth.errors.registration_failed'),
+            details: e.record.errors.full_messages 
           }, status: :unprocessable_entity
         rescue StandardError => e
           render json: { 
-            error: 'Internal server error',
-            message: e.message 
+            error: I18n.t('errors.internal'),
+            details: e.message 
           }, status: :internal_server_error
         end
       end
@@ -192,19 +198,26 @@ module Api
         
         # Генерируем токен для пользователя
         token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
-        render json: { token: token, user: UserSerializer.new(user) }, status: :ok
+        render json: { 
+          token: token, 
+          user: UserSerializer.new(user),
+          message: I18n.t('auth.messages.social_auth_success')
+        }, status: :ok
         
       rescue ActiveRecord::RecordInvalid => e
-        render json: { errors: e.record.errors }, status: :unprocessable_entity
+        render json: { 
+          error: I18n.t('auth.errors.social_auth_failed'),
+          details: e.record.errors 
+        }, status: :unprocessable_entity
       rescue => e
-        render json: { error: e.message }, status: :unprocessable_entity
+        render json: { error: I18n.t('errors.internal') }, status: :unprocessable_entity
       end
       
       # POST /api/v1/clients/create_test
       def create_test
         # Проверяем, что мы в режиме разработки или тестирования
         unless Rails.env.development? || Rails.env.test?
-          render json: { error: "This endpoint is only available in development or test environment" }, status: :forbidden
+          render json: { error: I18n.t('errors.test_mode_only') }, status: :forbidden
           return
         end
         
@@ -250,7 +263,7 @@ module Api
         token = Auth::JsonWebToken.encode_access_token(user_id: @user.id)
         render json: { 
           auth_token: token,
-          message: 'Test client created successfully',
+          message: I18n.t('clients.messages.test_created'),
           client: {
             id: @client.id,
             user_id: @user.id,
@@ -262,9 +275,15 @@ module Api
         }, status: :created
         
       rescue ActiveRecord::RecordInvalid => e
-        render json: { message: 'Validation failed', errors: e.record.errors }, status: :unprocessable_entity
+        render json: { 
+          error: I18n.t('clients.errors.test_create_failed'),
+          details: e.record.errors 
+        }, status: :unprocessable_entity
       rescue => e
-        render json: { message: "Error: #{e.message}" }, status: :unprocessable_entity
+        render json: { 
+          error: I18n.t('errors.internal'),
+          details: e.message 
+        }, status: :unprocessable_entity
       end
       
       # PUT /api/v1/clients/:id
@@ -295,14 +314,20 @@ module Api
         
         puts "  ✅ Update successful"
         log_action('update', 'client', @client.id, old_values, @client.as_json)
-        render json: @client, status: :ok
+        render json: {
+          data: @client,
+          message: I18n.t('clients.messages.updated')
+        }, status: :ok
         
       rescue ActiveRecord::RecordInvalid => e
         puts "  ❌ Validation error: #{e.record.errors.full_messages}"
-        render json: { errors: e.record.errors }, status: :unprocessable_entity
+        render json: { 
+          error: I18n.t('clients.errors.update_failed'),
+          details: e.record.errors 
+        }, status: :unprocessable_entity
       rescue => e
         puts "  ❌ General error: #{e.message}"
-        render json: { error: e.message }, status: :internal_server_error
+        render json: { error: I18n.t('errors.internal') }, status: :internal_server_error
       end
       
       # DELETE /api/v1/clients/:id
@@ -320,14 +345,17 @@ module Api
         if @client.user.update(is_active: false)
           puts "  ✅ Client deactivated successfully"
           log_action('deactivate', 'client', @client.id, old_values, @client.as_json)
-          render json: { message: 'Client deactivated successfully' }
+          render json: { message: I18n.t('clients.messages.deactivated') }
         else
           puts "  ❌ Failed to deactivate client: #{@client.user.errors.full_messages}"
-          render json: { errors: @client.user.errors }, status: :unprocessable_entity
+          render json: { 
+            error: I18n.t('clients.errors.deactivate_failed'),
+            details: @client.user.errors 
+          }, status: :unprocessable_entity
         end
       rescue => e
         puts "  ❌ General error in delete: #{e.message}"
-        render json: { error: e.message }, status: :internal_server_error
+        render json: { error: I18n.t('errors.internal') }, status: :internal_server_error
       end
       
       private

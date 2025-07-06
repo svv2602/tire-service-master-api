@@ -10,7 +10,7 @@ class Api::V1::ClientAuthController < ApplicationController
       # Находим роль клиента
       client_role = UserRole.find_by(name: 'client')
       unless client_role
-        render json: { error: 'Роль клиента не настроена в системе' }, status: :internal_server_error
+        render json: { error: I18n.t('errors.internal') }, status: :internal_server_error
         return
       end
 
@@ -36,7 +36,7 @@ class Api::V1::ClientAuthController < ApplicationController
         
         # Возвращаем ответ в формате, соответствующем тестам
         render json: {
-          message: 'Регистрация прошла успешно',
+          message: I18n.t('auth.messages.registration_success'),
           user: user.as_json(only: [:id, :email, :first_name, :last_name, :phone]),
           client: client.as_json(only: [:id, :preferred_notification_method]),
           tokens: {
@@ -46,13 +46,13 @@ class Api::V1::ClientAuthController < ApplicationController
         }, status: :created
       else
         render json: { 
-          error: 'Ошибка регистрации', 
+          error: I18n.t('auth.errors.registration_failed'), 
           details: user.errors.full_messages 
         }, status: :unprocessable_entity
       end
     rescue StandardError => e
       Rails.logger.error "Ошибка регистрации клиента: #{e.message}"
-      render json: { error: 'Внутренняя ошибка сервера' }, status: :internal_server_error
+      render json: { error: I18n.t('errors.internal') }, status: :internal_server_error
     end
   end
 
@@ -64,25 +64,25 @@ class Api::V1::ClientAuthController < ApplicationController
       user = User.find_by(email: login_params[:email])
       
       unless user
-        render json: { error: 'Пользователь не найден' }, status: :not_found
+        render json: { error: I18n.t('auth.errors.user_not_found') }, status: :not_found
         return
       end
 
       # Проверяем что это клиент
       unless user.client?
-        render json: { error: 'Пользователь не является клиентом' }, status: :forbidden
+        render json: { error: I18n.t('auth.errors.clients_only') }, status: :forbidden
         return
       end
 
       # Проверяем пароль
       unless user.authenticate(login_params[:password])
-        render json: { error: 'Неверный пароль' }, status: :unauthorized
+        render json: { error: I18n.t('auth.errors.invalid_credentials') }, status: :unauthorized
         return
       end
 
       # Проверяем что аккаунт активен
       unless user.is_active?
-        render json: { error: 'Аккаунт заблокирован' }, status: :forbidden
+        render json: { error: I18n.t('auth.errors.account_blocked') }, status: :forbidden
         return
       end
 
@@ -117,11 +117,11 @@ class Api::V1::ClientAuthController < ApplicationController
           access: access_token
           # Refresh токен теперь в куки
         },
-        message: 'Вход выполнен успешно'
+        message: I18n.t('auth.messages.login_success')
       }, status: :ok
     rescue StandardError => e
       Rails.logger.error "Ошибка входа клиента: #{e.message}"
-      render json: { error: 'Внутренняя ошибка сервера' }, status: :internal_server_error
+      render json: { error: I18n.t('errors.internal') }, status: :internal_server_error
     end
   end
 
@@ -130,14 +130,14 @@ class Api::V1::ClientAuthController < ApplicationController
   def logout
     # Удаляем куки при выходе
     cookies.delete(:refresh_token)
-    render json: { message: 'Выход выполнен успешно' }, status: :ok
+    render json: { message: I18n.t('auth.messages.logout_success') }, status: :ok
   end
 
   # GET /api/v1/clients/me
   # Получение информации о текущем клиенте
   def me
     unless current_user&.client?
-      render json: { error: 'Доступ запрещен' }, status: :forbidden
+      render json: { error: I18n.t('auth.errors.clients_only') }, status: :forbidden
       return
     end
 

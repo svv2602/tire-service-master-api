@@ -18,7 +18,7 @@ module Api
         Rails.logger.info("Auth#login: cookies available: #{cookies.present?}")
         
         unless login.present? && password.present?
-          render json: { error: 'Необходимо указать логин и пароль' }, status: :unprocessable_entity
+          render json: { error: I18n.t('auth.errors.credentials_required') }, status: :unprocessable_entity
           return
         end
         
@@ -27,19 +27,19 @@ module Api
         
         unless user
           Rails.logger.info("Auth#login: User not found for login: #{login}")
-          render json: { error: 'Пользователь не найден' }, status: :not_found
+          render json: { error: I18n.t('auth.errors.user_not_found') }, status: :not_found
           return
         end
 
         unless user.authenticate(password)
           Rails.logger.info("Auth#login: Authentication failed for user: #{user.id}")
-          render json: { error: 'Неверный логин или пароль' }, status: :unauthorized
+          render json: { error: I18n.t('auth.errors.invalid_credentials') }, status: :unauthorized
           return
         end
 
         unless user.is_active?
           Rails.logger.info("Auth#login: User account is inactive: #{user.id}")
-          render json: { error: 'Аккаунт заблокирован' }, status: :forbidden
+          render json: { error: I18n.t('auth.errors.account_blocked') }, status: :forbidden
           return
         end
 
@@ -76,7 +76,7 @@ module Api
             client_id: user.client&.id
           },
           access_token: access_token,
-          message: 'Вход выполнен успешно'
+          message: I18n.t('auth.messages.login_success')
         }, status: :ok
       end
       
@@ -86,7 +86,7 @@ module Api
         refresh_token = cookies[:refresh_token]
         
         unless refresh_token
-          render json: { error: 'Refresh токен не найден' }, status: :unauthorized
+          render json: { error: I18n.t('auth.errors.refresh_token_not_found') }, status: :unauthorized
           return
         end
         
@@ -95,7 +95,7 @@ module Api
           user = User.find(decoded_token[:user_id])
           
           unless user&.is_active?
-            render json: { error: 'Пользователь неактивен' }, status: :unauthorized
+            render json: { error: I18n.t('auth.errors.user_inactive') }, status: :unauthorized
             return
           end
           
@@ -116,7 +116,7 @@ module Api
           }, status: :ok
         rescue JWT::DecodeError, ActiveRecord::RecordNotFound => e
           Rails.logger.error "Auth#refresh error: #{e.message}"
-          render json: { error: 'Недействительный refresh токен' }, status: :unauthorized
+          render json: { error: I18n.t('auth.errors.invalid_refresh_token') }, status: :unauthorized
         end
       end
       
@@ -127,7 +127,7 @@ module Api
         cookies.delete(:refresh_token)
         
         Rails.logger.info("Auth#logout: User logged out successfully")
-        render json: { message: 'Выход выполнен успешно' }, status: :ok
+        render json: { message: I18n.t('auth.messages.logout_success') }, status: :ok
       end
       
       # GET /api/v1/auth/me
@@ -188,7 +188,8 @@ module Api
               role: current_user.role.name,
               is_active: current_user.is_active?,
               client_id: current_user.client&.id
-            }
+            },
+            message: I18n.t('auth.messages.profile_updated')
           }
           
           render json: response_data, status: :ok
@@ -201,7 +202,7 @@ module Api
       # Получение автомобилей текущего клиента
       def my_cars
         unless current_user.client?
-          render json: { error: 'Доступно только для клиентов' }, status: :forbidden
+          render json: { error: I18n.t('auth.errors.clients_only') }, status: :forbidden
           return
         end
 
@@ -213,7 +214,7 @@ module Api
       # Создание автомобиля для текущего клиента
       def create_car
         unless current_user.client?
-          render json: { error: 'Доступно только для клиентов' }, status: :forbidden
+          render json: { error: I18n.t('auth.errors.clients_only') }, status: :forbidden
           return
         end
 
@@ -227,7 +228,10 @@ module Api
         end
 
         if car.save
-          render json: car, serializer: ClientCarSerializer, status: :created
+          render json: { 
+            car: car, 
+            message: I18n.t('auth.messages.car_created')
+          }, serializer: ClientCarSerializer, status: :created
         else
           render json: { errors: car.errors }, status: :unprocessable_entity
         end

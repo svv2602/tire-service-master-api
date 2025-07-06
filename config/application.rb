@@ -48,6 +48,14 @@ module TireServiceMasterApi
     config.middleware.use ActionDispatch::Session::CookieStore, key: '_tire_service_session'
     
     # Добавляем автозагрузку папки lib
-    config.eager_load_paths << Rails.root.join('lib')
+    config.autoload_paths << Rails.root.join('lib')
+    
+    # Добавляем автозагрузку папки middleware
+    config.autoload_paths << Rails.root.join('app/middleware')
+    
+    # Настройка I18n
+    config.i18n.available_locales = %w[uk ru]
+    config.i18n.default_locale = :uk
+    config.i18n.fallbacks = true
   end
 end

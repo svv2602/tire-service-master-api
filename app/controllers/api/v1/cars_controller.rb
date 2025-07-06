@@ -25,9 +25,15 @@ module Api
         @car = @client.cars.new(car_params)
         
         if @car.save
-          render json: @car, status: :created
+          render json: {
+            data: @car,
+            message: I18n.t('cars.messages.created')
+          }, status: :created
         else
-          render json: { errors: @car.errors }, status: :unprocessable_entity
+          render json: { 
+            error: I18n.t('cars.errors.create_failed'),
+            details: @car.errors 
+          }, status: :unprocessable_entity
         end
       end
       
@@ -36,9 +42,15 @@ module Api
         authorize @client, :update?
         
         if @car.update(car_params)
-          render json: @car
+          render json: {
+            data: @car,
+            message: I18n.t('cars.messages.updated')
+          }
         else
-          render json: { errors: @car.errors }, status: :unprocessable_entity
+          render json: { 
+            error: I18n.t('cars.errors.update_failed'),
+            details: @car.errors 
+          }, status: :unprocessable_entity
         end
       end
       
@@ -49,16 +61,22 @@ module Api
         if @car.bookings.exists?
           # Если есть бронирования с этой машиной, просто помечаем как неактивную
           if @car.update(is_active: false)
-            render json: { message: "Car was marked as inactive" }
+            render json: { message: I18n.t('cars.messages.deactivated') }
           else
-            render json: { errors: @car.errors }, status: :unprocessable_entity
+            render json: { 
+              error: I18n.t('cars.errors.deactivate_failed'),
+              details: @car.errors 
+            }, status: :unprocessable_entity
           end
         else
           # Если бронирований нет, можем полностью удалить
           if @car.destroy
-            render json: { message: "Car was successfully deleted" }
+            render json: { message: I18n.t('cars.messages.deleted') }
           else
-            render json: { errors: @car.errors }, status: :unprocessable_entity
+            render json: { 
+              error: I18n.t('cars.errors.delete_failed'),
+              details: @car.errors 
+            }, status: :unprocessable_entity
           end
         end
       end

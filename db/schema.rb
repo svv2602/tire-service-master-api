@@ -654,6 +654,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_162403) do
     t.datetime "updated_at", null: false
     t.string "password_reset_token", comment: "Токен для восстановления пароля"
     t.datetime "password_reset_sent_at", comment: "Время истечения токена восстановления пароля"
+    t.string "preferred_locale", limit: 2, default: "uk"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["password_reset_token"], name: "index_users_on_password_reset_token", unique: true
     t.index ["phone"], name: "index_users_on_phone", unique: true

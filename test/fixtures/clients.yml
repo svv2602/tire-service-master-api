@@ -1,0 +1,6 @@
+client:
+  user: client
+  preferred_notification_method: push
+  marketing_consent: false
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %> 

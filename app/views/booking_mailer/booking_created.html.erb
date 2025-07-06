@@ -14,7 +14,7 @@
       padding: 20px;
     }
     .header {
-      background-color: #4a86e8;
+      background-color: #1976d2;
       color: white;
       padding: 15px;
       text-align: center;
@@ -32,6 +32,14 @@
       border-radius: 5px;
       border: 1px solid #eee;
     }
+    .detail-row {
+      display: flex;
+      margin: 10px 0;
+    }
+    .detail-label {
+      width: 120px;
+      font-weight: bold;
+    }
     .footer {
       text-align: center;
       font-size: 12px;
@@ -40,46 +48,80 @@
     }
     .button {
       display: inline-block;
-      background-color: #4a86e8;
+      background-color: #1976d2;
       color: white;
       padding: 10px 20px;
       text-decoration: none;
       border-radius: 5px;
       margin-top: 15px;
     }
+    .notice {
+      background-color: #fff3e0;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 15px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>Ваша запись создана</h1>
+      <h1><%= t('mailers.booking.created.title') %></h1>
     </div>
     
     <div class="content">
-      <p>Здравствуйте, <%= @booking.client.name %>!</p>
+      <p><%= t('mailers.common.greeting', name: @booking.client.full_name) %></p>
       
-      <p>Ваша запись на шиномонтаж успешно создана. Вот детали вашей записи:</p>
+      <p><%= t('mailers.booking.created.success_message') %></p>
       
       <div class="booking-details">
-        <p><strong>Дата:</strong> <%= @date %></p>
-        <p><strong>Время:</strong> <%= @time %></p>
-        <p><strong>Сервис:</strong> <%= @service_point.name %></p>
-        <p><strong>Адрес:</strong> <%= @service_point.address %></p>
-        <% if @booking.car %>
-          <p><strong>Автомобиль:</strong> <%= @booking.car.brand %> <%= @booking.car.model %>, <%= @booking.car.license_plate %></p>
-        <% end %>
+        <div class="detail-row">
+          <div class="detail-label"><%= t('mailers.booking.details.date') %>:</div>
+          <div><%= l(@booking.start_time.to_date, format: :long) %></div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label"><%= t('mailers.booking.details.time') %>:</div>
+          <div><%= l(@booking.start_time, format: :time) %></div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label"><%= t('mailers.booking.details.service') %>:</div>
+          <div><%= @booking.service.name %></div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label"><%= t('mailers.booking.details.address') %>:</div>
+          <div><%= @booking.service_point.full_address %></div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label"><%= t('mailers.booking.details.car') %>:</div>
+          <div>
+            <%= t('mailers.booking.details.car_format',
+                  brand: @booking.car.car_brand.name,
+                  model: @booking.car.car_model.name,
+                  license_plate: @booking.car.license_plate) %>
+          </div>
+        </div>
       </div>
       
-      <p>Пожалуйста, приезжайте за 10-15 минут до назначенного времени.</p>
+      <div class="notice">
+        <p><%= t('mailers.booking.notices.arrive_early') %></p>
+        <p><%= t('mailers.booking.notices.cancellation') %></p>
+      </div>
       
-      <p>Если вам нужно отменить или перенести запись, пожалуйста, сделайте это не позднее чем за 2 часа до назначенного времени.</p>
-      
-      <a href="<%= ENV['FRONTEND_URL'] %>/client/bookings/<%= @booking.id %>" class="button">Посмотреть запись</a>
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="<%= @booking_url %>" class="button">
+          <%= t('mailers.booking.actions.view_booking') %>
+        </a>
+      </div>
     </div>
     
     <div class="footer">
-      <p>© <%= Date.current.year %> Tire Service. Все права защищены.</p>
-      <p>Это автоматическое уведомление, пожалуйста, не отвечайте на это письмо.</p>
+      <p><%= t('mailers.common.footer.copyright', year: Date.current.year) %></p>
+      <p><%= t('mailers.common.footer.auto_message') %></p>
     </div>
   </div>
 </body>

@@ -57,32 +57,35 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>Восстановление пароля</h1>
+      <h1><%= t('mailers.password_reset.title') %></h1>
     </div>
     
     <div class="content">
-      <p>Здравствуйте!</p>
+      <p><%= t('mailers.common.greeting', name: '') %></p>
       
-      <p>Вы запросили восстановление пароля для вашего аккаунта в системе Tire Service.</p>
+      <p><%= t('mailers.password_reset.instructions') %></p>
       
       <div class="reset-details">
-        <p>Для сброса пароля нажмите на кнопку ниже:</p>
+        <p><%= t('mailers.password_reset.reset_button') %>:</p>
         
         <div style="text-align: center;">
-          <a href="<%= @reset_url %>" class="button">Сбросить пароль</a>
+          <a href="<%= @reset_url %>" class="button"><%= t('mailers.password_reset.reset_button') %></a>
         </div>
         
-        <p class="warning">Ссылка действительна в течение 2 часов.</p>
+        <p class="warning"><%= t('mailers.password_reset.expiry_notice') %></p>
       </div>
       
-      <p>Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо.</p>
+      <p><%= t('mailers.password_reset.ignore_notice') %></p>
       
-      <p>С уважением,<br>Команда Tire Service</p>
+      <p>
+        <%= t('mailers.password_reset.regards') %><br>
+        <%= t('mailers.password_reset.team') %>
+      </p>
     </div>
     
     <div class="footer">
-      <p>© <%= Date.current.year %> Tire Service. Все права защищены.</p>
-      <p>Это автоматическое уведомление, пожалуйста, не отвечайте на это письмо.</p>
+      <p><%= t('mailers.common.footer.copyright', year: Date.current.year) %></p>
+      <p><%= t('mailers.common.footer.auto_message') %></p>
     </div>
   </div>
 </body>

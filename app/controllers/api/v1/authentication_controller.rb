@@ -21,22 +21,27 @@ module Api
               first_name: user.first_name,
               last_name: user.last_name,
               role: user.role.name
-            }
+            },
+            message: I18n.t('auth.messages.login_success')
           }
         else
-          render json: { message: 'Invalid credentials' }, status: :unauthorized
+          render json: { error: I18n.t('auth.errors.invalid_credentials') }, status: :unauthorized
         end
       end
 
       def refresh
         begin
           refresh_token = request.headers['Refresh-Token']
-          raise Auth::TokenInvalidError, 'Refresh token is required' if refresh_token.blank?
+          raise Auth::TokenInvalidError, I18n.t('auth.errors.token_required') if refresh_token.blank?
           
           access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
           render json: { access_token: access_token }
-        rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
-          render json: { error: e.message }, status: :unauthorized
+        rescue Auth::TokenExpiredError
+          render json: { error: I18n.t('auth.errors.token_expired') }, status: :unauthorized
+        rescue Auth::TokenInvalidError
+          render json: { error: I18n.t('auth.errors.token_invalid') }, status: :unauthorized
+        rescue Auth::TokenRevokedError
+          render json: { error: I18n.t('auth.errors.token_revoked') }, status: :unauthorized
         end
       end
     end

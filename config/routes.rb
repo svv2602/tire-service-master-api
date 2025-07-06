@@ -24,6 +24,10 @@ Rails.application.routes.draw do
       # Health check endpoint
       get 'health', to: 'health#index'
       
+      # Управление локалью
+      get 'locale', to: 'locale#show'
+      put 'locale', to: 'locale#update'
+      
       # ✅ Универсальная аутентификация (email ИЛИ телефон)
       post 'auth/login', to: 'auth#login'
       post 'auth/logout', to: 'auth#logout'

@@ -4,6 +4,10 @@ class User < ApplicationRecord
   # Атрибуты
   attr_accessor :skip_role_specific_record
   
+  # Константы
+  SUPPORTED_LOCALES = %w[uk ru].freeze
+  DEFAULT_LOCALE = 'uk'.freeze
+  
   # Связи
   belongs_to :role, class_name: 'UserRole', foreign_key: 'role_id', required: true
   has_one :administrator, dependent: :destroy
@@ -24,6 +28,7 @@ class User < ApplicationRecord
   validates :first_name, presence: true, length: { minimum: 2, maximum: 50 }
   validates :last_name, length: { minimum: 2, maximum: 50, allow_blank: true }
   validates :password, length: { minimum: 6 }, if: -> { password.present? }
+  validates :preferred_locale, inclusion: { in: SUPPORTED_LOCALES }
   
   # ✅ НОВАЯ ВАЛИДАЦИЯ: email ИЛИ телефон обязателен
   validate :email_or_phone_present
@@ -32,7 +37,7 @@ class User < ApplicationRecord
   validate :phone_format_valid
   
   # Коллбэки
-  before_validation :normalize_email, :normalize_phone
+  before_validation :normalize_email, :normalize_phone, :set_default_locale
   after_create :create_role_specific_record, unless: :skip_role_specific_record
   
   # Скоупы
@@ -60,7 +65,7 @@ class User < ApplicationRecord
     
     if login.include?('@')
       find_by(email: login.downcase)
-    else
+    
       # Пробуем найти по разным форматам номера телефона
       normalized_login = login.gsub(/[^\d+]/, '')
       
@@ -151,6 +156,12 @@ class User < ApplicationRecord
     true
   end
   
+  # Методы для работы с локалью
+  def set_locale(locale)
+    return false unless SUPPORTED_LOCALES.include?(locale.to_s)
+    update(preferred_locale: locale)
+  end
+  
   private
   
   def normalize_email
@@ -187,6 +198,10 @@ class User < ApplicationRecord
     if email.blank? && phone.blank?
       errors.add(:base, 'Необходимо указать email или номер телефона')
     end
+  end
+  
+  def set_default_locale
+    self.preferred_locale ||= DEFAULT_LOCALE
   end
   
   def create_role_specific_record

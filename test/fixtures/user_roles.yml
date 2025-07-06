@@ -1,0 +1,7 @@
+client_role:
+  id: 1
+  name: client
+  description: Client role
+  is_active: true
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %> 

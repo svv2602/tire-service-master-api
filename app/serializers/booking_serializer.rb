@@ -8,25 +8,21 @@ class BookingSerializer < ActiveModel::Serializer
              :service_category
   
   def status
-    # Используем новое строковое поле status
     status_name = object.status || 'pending'
-    
-    # Получаем информацию о статусе из модуля BookingStatuses
     status_info = object.class.status_by_name(status_name)
     
     if status_info
       {
-        id: nil, # ID больше не нужен, так как используем строковые статусы
+        id: nil,
         name: status_info[:name],
-        display_name: status_info[:display_name],
+        display_name: I18n.t("bookings.statuses.#{status_info[:name]}"),
         color: status_info[:color]
       }
     else
-      # Fallback для неизвестных статусов
       {
         id: nil,
         name: status_name,
-        display_name: status_name.humanize,
+        display_name: I18n.t('bookings.statuses.unknown', default: status_name.humanize),
         color: '#9E9E9E'
       }
     end
@@ -37,6 +33,7 @@ class BookingSerializer < ActiveModel::Serializer
       {
         id: object.payment_status.id,
         name: object.payment_status.name,
+        display_name: I18n.t("bookings.payment_statuses.#{object.payment_status.name}"),
         color: object.payment_status.color
       }
     else
@@ -60,7 +57,7 @@ class BookingSerializer < ActiveModel::Serializer
     if object.cancellation_reason
       {
         id: object.cancellation_reason.id,
-        name: object.cancellation_reason.name
+        name: I18n.t("bookings.cancellation_reasons.#{object.cancellation_reason.name}")
       }
     else
       nil
@@ -93,24 +90,21 @@ class BookingSerializer < ActiveModel::Serializer
     elsif object.client_id.present?
       {
         id: object.client_id,
-        name: "Клиент ##{object.client_id}",
+        name: I18n.t('bookings.client.unknown', id: object.client_id),
         first_name: nil,
         last_name: nil,
         phone: nil,
         email: nil
       }
     else
-      # ✅ Для гостевых бронирований возвращаем nil
       nil
     end
   end
 
   def service_point
-    # ✅ Улучшенная загрузка service_point с детальным логированием
     begin
       service_point_obj = object.service_point
       
-      # Пытаемся загрузить через direct query если association не загружена
       if service_point_obj.nil? && object.service_point_id.present?
         Rails.logger.info "🔍 Attempting to load service_point ##{object.service_point_id} via direct query"
         service_point_obj = ServicePoint.includes(:city, :partner).find_by(id: object.service_point_id)
@@ -134,7 +128,7 @@ class BookingSerializer < ActiveModel::Serializer
         Rails.logger.warn "⚠️ Service point ##{object.service_point_id} not found, using fallback"
         {
           id: object.service_point_id,
-          name: "Сервисная точка ##{object.service_point_id}",
+          name: I18n.t('bookings.service_point.unknown', id: object.service_point_id),
           address: nil,
           phone: nil,
           city: nil,
@@ -144,25 +138,24 @@ class BookingSerializer < ActiveModel::Serializer
     rescue => e
       Rails.logger.error "❌ Error loading service_point ##{object.service_point_id}: #{e.message}"
       
-      # Последняя попытка - загрузить напрямую без includes
       begin
         service_point_obj = ServicePoint.find_by(id: object.service_point_id)
         if service_point_obj
           {
             id: service_point_obj.id,
-            name: service_point_obj.name || "Сервисная точка ##{service_point_obj.id}",
+            name: service_point_obj.name || I18n.t('bookings.service_point.unknown', id: service_point_obj.id),
             address: service_point_obj.address,
             phone: service_point_obj.contact_phone,
             city: service_point_obj.city_id ? {
               id: service_point_obj.city_id,
-              name: City.find_by(id: service_point_obj.city_id)&.name || "Город ##{service_point_obj.city_id}"
+              name: City.find_by(id: service_point_obj.city_id)&.name || I18n.t('bookings.city.unknown', id: service_point_obj.city_id)
             } : nil,
             partner_name: service_point_obj.partner_id ? Partner.find_by(id: service_point_obj.partner_id)&.name : nil
           }
         else
           {
             id: object.service_point_id,
-            name: "Сервисная точка ##{object.service_point_id}",
+            name: I18n.t('bookings.service_point.unknown', id: object.service_point_id),
             address: nil,
             phone: nil,
             city: nil,
@@ -173,7 +166,7 @@ class BookingSerializer < ActiveModel::Serializer
         Rails.logger.error "❌ Final fallback failed: #{final_error.message}"
         {
           id: object.service_point_id,
-          name: "Сервисная точка ##{object.service_point_id}",
+          name: I18n.t('bookings.service_point.unknown', id: object.service_point_id),
           address: nil,
           phone: nil,
           city: nil,
@@ -219,12 +212,10 @@ class BookingSerializer < ActiveModel::Serializer
     }
   end
   
-  # ✅ Новый атрибут для определения типа бронирования
   def is_guest_booking
     object.guest_booking?
   end
 
-  # ✅ Добавляем сериализацию категории услуг
   def service_category
     if object.service_category
       {

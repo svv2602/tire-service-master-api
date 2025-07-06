@@ -17,25 +17,33 @@ class Booking < ApplicationRecord
   has_one :review, dependent: :destroy
   
   # Валидации
-  validates :booking_date, presence: true
-  validates :start_time, presence: true
+  validates :booking_date, presence: { message: -> { I18n.t('errors.required') } }
+  validates :start_time, presence: { message: -> { I18n.t('errors.required') } }
   # end_time не обязателен при создании - может быть NULL в слотовой архитектуре
-  validates :car_type_id, presence: true
+  validates :car_type_id, presence: { message: -> { I18n.t('errors.required') } }
   # validates :client_id, presence: true  # ❌ Убираем обязательную валидацию client_id
-  validates :service_point_id, presence: true
+  validates :service_point_id, presence: { message: -> { I18n.t('errors.required') } }
   # Валидация статуса теперь в модуле BookingStatuses
   
   # Валидации для получателя услуги
-  validates :service_recipient_first_name, presence: true, length: { maximum: 100 }
-  validates :service_recipient_last_name, presence: true, length: { maximum: 100 }
-  validates :service_recipient_phone, presence: true, format: { 
-    with: /\A\+?[\d\s\-\(\)]+\z/, 
-    message: 'должен содержать только цифры, пробелы, дефисы и скобки' 
-  }
-  validates :service_recipient_email, format: { 
-    with: URI::MailTo::EMAIL_REGEXP, 
-    message: 'имеет неверный формат' 
-  }, allow_blank: true
+  validates :service_recipient_first_name, 
+    presence: { message: -> { I18n.t('errors.required') } }, 
+    length: { maximum: 100 }
+  validates :service_recipient_last_name, 
+    presence: { message: -> { I18n.t('errors.required') } }, 
+    length: { maximum: 100 }
+  validates :service_recipient_phone, 
+    presence: { message: -> { I18n.t('errors.required') } }, 
+    format: { 
+      with: /\A\+?[\d\s\-\(\)]+\z/, 
+      message: -> { I18n.t('errors.phone_format') }
+    }
+  validates :service_recipient_email, 
+    format: { 
+      with: URI::MailTo::EMAIL_REGEXP, 
+      message: -> { I18n.t('errors.email_format') }
+    }, 
+    allow_blank: true
   
   validate :end_time_after_start_time
   validate :car_belongs_to_client, if: -> { car_id.present? }
@@ -253,7 +261,7 @@ class Booking < ApplicationRecord
     
     # В слотовой архитектуре допускаем end_time = start_time
     if end_time < start_time
-      errors.add(:end_time, "must be after or equal to start time")
+      errors.add(:end_time, I18n.t('errors.after_start_time'))
     end
   end
   
@@ -262,7 +270,7 @@ class Booking < ApplicationRecord
     return unless client_id.present?  # ✅ Пропускаем валидацию для гостевых бронирований
     
     unless car&.client_id == client_id
-      errors.add(:car_id, "must belong to the client")
+      errors.add(:car_id, I18n.t('bookings.errors.invalid_car'))
     end
   end
   
@@ -288,14 +296,14 @@ class Booking < ApplicationRecord
     )
     
     unless availability[:available]
-      errors.add(:base, "Время недоступно: #{availability[:reason]}")
+      errors.add(:base, I18n.t('bookings.errors.invalid_time'))
     end
     
     # Проверяем пересечения с другими бронированиями
     if overlaps_with_other_bookings?
       available_posts = self.class.available_posts_at_time(service_point_id, booking_date, start_time)
       if available_posts <= 0
-        errors.add(:base, "Все посты заняты на выбранное время")
+        errors.add(:base, I18n.t('bookings.errors.overlapping'))
       end
     end
   end
@@ -304,7 +312,7 @@ class Booking < ApplicationRecord
     return unless service_category_id.present? && service_point_id.present?
     
     unless service_point.supports_category?(service_category_id)
-      errors.add(:service_category_id, "не поддерживается данной сервисной точкой")
+      errors.add(:service_category_id, I18n.t('bookings.errors.invalid_service_point'))
     end
   end
   

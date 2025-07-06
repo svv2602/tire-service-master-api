@@ -13,7 +13,7 @@ module Api
         Rails.logger.info("SMTP settings: address=#{ENV['SMTP_ADDRESS']}, port=#{ENV['SMTP_PORT']}, username=#{ENV['SMTP_USERNAME']}")
         
         unless login.present?
-          render json: { error: 'Необходимо указать email или номер телефона' }, status: :unprocessable_entity
+          render json: { error: I18n.t('auth.errors.credentials_required') }, status: :unprocessable_entity
           return
         end
         
@@ -22,12 +22,12 @@ module Api
         
         unless user
           # Для безопасности не раскрываем, что пользователь не найден
-          render json: { message: 'Если пользователь существует, инструкции будут отправлены' }, status: :ok
+          render json: { message: I18n.t('auth.messages.password_reset_sent') }, status: :ok
           return
         end
         
         unless user.is_active?
-          render json: { error: 'Аккаунт заблокирован' }, status: :forbidden
+          render json: { error: I18n.t('auth.errors.account_blocked') }, status: :forbidden
           return
         end
         
@@ -46,11 +46,11 @@ module Api
               Rails.logger.info("Attempting to send password reset email to: #{user.email}")
               PasswordResetMailer.reset_instructions(user, reset_token).deliver_now
               Rails.logger.info("Password reset email sent successfully to: #{user.email}")
-              render json: { message: 'Инструкции по восстановлению отправлены на email' }
+              render json: { message: I18n.t('auth.messages.password_reset_sent_email') }
             rescue => e
               Rails.logger.error "Failed to send password reset email: #{e.class.name}: #{e.message}"
               Rails.logger.error "Backtrace: #{e.backtrace.first(5).join("\n")}"
-              render json: { error: 'Не удалось отправить email' }, status: :internal_server_error
+              render json: { error: I18n.t('auth.errors.password_reset_email_failed') }, status: :internal_server_error
             end
           elsif user.phone.present?
             # Отправляем SMS
@@ -58,21 +58,21 @@ module Api
               result = SmsService.send_password_reset(user.phone, reset_token)
               if result[:success]
                 Rails.logger.info("Password reset SMS sent to: #{user.phone}")
-                render json: { message: 'Код восстановления отправлен на телефон' }
+                render json: { message: I18n.t('auth.messages.password_reset_sent_sms') }
               else
                 Rails.logger.error "Failed to send SMS: #{result[:error]}"
                 render json: { error: result[:error] }, status: :internal_server_error
               end
             rescue => e
               Rails.logger.error "Failed to send password reset SMS: #{e.message}"
-              render json: { error: 'Не удалось отправить SMS' }, status: :internal_server_error
+              render json: { error: I18n.t('auth.errors.password_reset_sms_failed') }, status: :internal_server_error
             end
           else
-            render json: { error: 'У пользователя нет email или телефона для отправки инструкций' }, status: :unprocessable_entity
+            render json: { error: I18n.t('auth.errors.contact_info_missing') }, status: :unprocessable_entity
           end
         else
           Rails.logger.error "Failed to save password reset token for user: #{user.id}"
-          render json: { error: 'Не удалось создать токен восстановления' }, status: :internal_server_error
+          render json: { error: I18n.t('auth.errors.token_create_failed') }, status: :internal_server_error
         end
       end
       
@@ -84,7 +84,7 @@ module Api
         password_confirmation = params[:password_confirmation]
         
         unless token.present? && password.present? && password_confirmation.present?
-          render json: { error: 'Необходимо указать токен, пароль и подтверждение пароля' }, status: :unprocessable_entity
+          render json: { error: I18n.t('auth.errors.reset_fields_required') }, status: :unprocessable_entity
           return
         end
         
@@ -92,19 +92,19 @@ module Api
         user = User.find_by(password_reset_token: token)
         
         unless user
-          render json: { error: 'Недействительный токен восстановления' }, status: :unprocessable_entity
+          render json: { error: I18n.t('auth.errors.token_invalid') }, status: :unprocessable_entity
           return
         end
         
         # Проверяем, что токен не истёк
         unless user.password_reset_sent_at && user.password_reset_sent_at > Time.current
-          render json: { error: 'Токен восстановления истёк' }, status: :unprocessable_entity
+          render json: { error: I18n.t('auth.errors.token_expired') }, status: :unprocessable_entity
           return
         end
         
         # Проверяем совпадение паролей
         unless password == password_confirmation
-          render json: { error: 'Пароли не совпадают' }, status: :unprocessable_entity
+          render json: { error: I18n.t('auth.errors.passwords_not_match') }, status: :unprocessable_entity
           return
         end
         
@@ -116,10 +116,10 @@ module Api
           password_reset_sent_at: nil
         )
           Rails.logger.info("Password successfully reset for user: #{user.id}")
-          render json: { message: 'Пароль успешно изменён' }
+          render json: { message: I18n.t('auth.messages.password_reset_success') }
         else
           render json: { 
-            error: 'Не удалось изменить пароль',
+            error: I18n.t('auth.errors.password_reset_failed'),
             details: user.errors.full_messages 
           }, status: :unprocessable_entity
         end
@@ -131,7 +131,7 @@ module Api
         token = params[:token]
         
         unless token.present?
-          render json: { error: 'Токен не указан' }, status: :unprocessable_entity
+          render json: { error: I18n.t('auth.errors.token_required') }, status: :unprocessable_entity
           return
         end
         
@@ -149,7 +149,7 @@ module Api
         else
           render json: { 
             valid: false,
-            error: 'Токен недействителен или истёк'
+            error: I18n.t('auth.errors.token_invalid_or_expired')
           }
         end
       end

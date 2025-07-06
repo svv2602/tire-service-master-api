@@ -46,9 +46,15 @@ module Api
         
         if @user.save
           log_action('create', 'user', @user.id, nil, @user.as_json)
-          render json: { data: @user }, status: :created
+          render json: { 
+            data: @user,
+            message: I18n.t('users.messages.created')
+          }, status: :created
         else
-          render json: { errors: @user.errors }, status: :unprocessable_entity
+          render json: { 
+            error: I18n.t('users.errors.create_failed'),
+            details: @user.errors 
+          }, status: :unprocessable_entity
         end
       end
       
@@ -60,9 +66,15 @@ module Api
         
         if @user.update(user_update_params)
           log_action('update', 'user', @user.id, old_values, @user.as_json)
-          render json: { data: @user }
+          render json: { 
+            data: @user,
+            message: I18n.t('users.messages.updated')
+          }
         else
-          render json: { errors: @user.errors }, status: :unprocessable_entity
+          render json: { 
+            error: I18n.t('users.errors.update_failed'),
+            details: @user.errors 
+          }, status: :unprocessable_entity
         end
       end
       
@@ -74,9 +86,12 @@ module Api
         
         if @user.update(is_active: false)
           log_action('deactivate', 'user', @user.id, old_values, @user.as_json)
-          render json: { message: 'User deactivated successfully' }
+          render json: { message: I18n.t('users.messages.deactivated') }
         else
-          render json: { errors: @user.errors }, status: :unprocessable_entity
+          render json: { 
+            error: I18n.t('users.errors.deactivate_failed'),
+            details: @user.errors 
+          }, status: :unprocessable_entity
         end
       end
       
@@ -86,7 +101,7 @@ module Api
         email = params[:email]
         
         if phone.blank? && email.blank?
-          render json: { error: 'Необходимо указать телефон или email' }, status: :bad_request
+          render json: { error: I18n.t('users.errors.contact_info_required') }, status: :bad_request
           return
         end
         
