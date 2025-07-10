@@ -445,9 +445,36 @@ module Api
       
       # Проверяет возможность отмены записи
       def check_cancellation_allowed
-        # Проверяем статус
+        # Проверяем что запись уже не отменена
+        if @booking.cancelled_status?
+          case @booking.status
+          when 'cancelled_by_client'
+            return { allowed: false, reason: I18n.t('bookings.cancellation_errors.already_cancelled_by_client') }
+          when 'cancelled_by_partner'
+            return { allowed: false, reason: I18n.t('bookings.cancellation_errors.already_cancelled_by_partner') }
+          else
+            return { allowed: false, reason: I18n.t('bookings.cancellation_errors.already_cancelled') }
+          end
+        end
+        
+        # Проверяем что запись не завершена
+        if @booking.status == 'completed'
+          return { allowed: false, reason: I18n.t('bookings.cancellation_errors.cannot_cancel_completed') }
+        end
+        
+        # Проверяем что запись не отмечена как "неявка"
+        if @booking.status == 'no_show'
+          return { allowed: false, reason: I18n.t('bookings.cancellation_errors.cannot_cancel_no_show') }
+        end
+        
+        # Проверяем что услуга не в процессе выполнения
+        if @booking.status == 'in_progress'
+          return { allowed: false, reason: I18n.t('bookings.cancellation_errors.cannot_cancel_in_progress') }
+        end
+        
+        # Проверяем статус (должен быть pending или confirmed)
         unless @booking.status == 'pending' || @booking.status == 'confirmed'
-          return { allowed: false, reason: 'Запись нельзя отменить в текущем статусе' }
+          return { allowed: false, reason: I18n.t('bookings.cancellation_errors.invalid_status', status: @booking.status_display_name) }
         end
         
         # Проверяем временные ограничения (за 2 часа до записи)
@@ -455,7 +482,7 @@ module Api
         min_cancellation_time = booking_datetime - 2.hours
         
         if Time.current > min_cancellation_time
-          return { allowed: false, reason: 'Отмена записи возможна не позднее чем за 2 часа до начала' }
+          return { allowed: false, reason: I18n.t('bookings.cancellation_errors.time_limit_exceeded') }
         end
         
         { allowed: true }

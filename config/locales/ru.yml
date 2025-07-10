@@ -65,6 +65,15 @@ ru:
       invalid_payment_status: "Некорректный статус оплаты"
       invalid_cancellation_reason: "Необходимо указать причину отмены"
       invalid_car: "Автомобиль должен принадлежать клиенту"
+    cancellation_errors:
+      already_cancelled_by_client: "Запись уже отменена вами"
+      already_cancelled_by_partner: "Запись уже отменена сервисным центром"
+      already_cancelled: "Запись уже отменена"
+      cannot_cancel_completed: "Нельзя отменить завершенную запись"
+      cannot_cancel_no_show: "Нельзя отменить запись с отметкой \"неявка\""
+      cannot_cancel_in_progress: "Нельзя отменить запись во время выполнения услуги"
+      invalid_status: "Запись нельзя отменить в статусе '%{status}'"
+      time_limit_exceeded: "Отмена записи возможна не позднее чем за 2 часа до начала"
     statuses:
       pending: "Ожидает подтверждения"
       confirmed: "Подтверждено"

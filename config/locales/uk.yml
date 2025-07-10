@@ -65,6 +65,15 @@ uk:
       invalid_payment_status: "Некоректний статус оплати"
       invalid_cancellation_reason: "Необхідно вказати причину скасування"
       invalid_car: "Автомобіль має належати клієнту"
+    cancellation_errors:
+      already_cancelled_by_client: "Запис вже скасовано вами"
+      already_cancelled_by_partner: "Запис вже скасовано сервісним центром"
+      already_cancelled: "Запис вже скасовано"
+      cannot_cancel_completed: "Не можна скасувати завершений запис"
+      cannot_cancel_no_show: "Не можна скасувати запис з позначкою \"неявка\""
+      cannot_cancel_in_progress: "Не можна скасувати запис під час виконання послуги"
+      invalid_status: "Запис не можна скасувати в статусі '%{status}'"
+      time_limit_exceeded: "Скасування запису можливе не пізніше ніж за 2 години до початку"
     statuses:
       pending: "Очікує підтвердження"
       confirmed: "Підтверджено"

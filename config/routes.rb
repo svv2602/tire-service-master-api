@@ -62,7 +62,7 @@ Rails.application.routes.draw do
       # Клиентский API записей (включая гостевые записи)
       resources :client_bookings, only: [:create, :show, :update, :destroy] do
         member do
-          delete :cancel, to: 'client_bookings#cancel'
+          post :cancel, to: 'client_bookings#cancel'
           post :reschedule, to: 'client_bookings#reschedule'
           post :assign_to_client, to: 'client_bookings#assign_to_client'
         end
