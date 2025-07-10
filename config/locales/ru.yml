@@ -198,6 +198,42 @@ ru:
         see_you: "Будем рады видеть вас снова!"
       details:
         date: "Дата"
+  
+  favorite_points:
+    quick_booking:
+      title: "Быстрое бронирование"
+      subtitle: "Выберите услугу и любимую сервисную точку"
+      no_favorites: "У вас пока нет любимых сервисных точек"
+      add_favorites_suggestion: "Добавьте сервисные точки в избранное для быстрого бронирования"
+      select_category: "Выберите категорию услуг"
+      select_service_point: "Выберите сервисную точку"
+      continue_to_datetime: "Перейти к выбору даты и времени"
+      use_regular_search: "Обычный поиск сервисных точек"
+      
+    categories:
+      tire_change: "Замена шин"
+      tire_repair: "Ремонт шин"
+      wheel_alignment: "Сход-развал"
+      tire_balancing: "Балансировка колес"
+      tire_storage: "Хранение шин"
+      
+    messages:
+      added_successfully: "Сервисная точка добавлена в избранное"
+      removed_successfully: "Сервисная точка удалена из избранного"
+      already_in_favorites: "Эта точка уже в вашем избранном"
+      error_adding: "Ошибка при добавлении в избранное"
+      error_removing: "Ошибка при удалении из избранного"
+      
+    buttons:
+      add_to_favorites: "Добавить в избранное"
+      remove_from_favorites: "Удалить из избранного"
+      quick_book: "Быстрое бронирование"
+      
+    info:
+      rating: "Рейтинг"
+      address: "Адрес"
+      phone: "Телефон"
+      added_at: "Добавлено"
         time: "Время"
         service: "Сервис"
         address: "Адрес"

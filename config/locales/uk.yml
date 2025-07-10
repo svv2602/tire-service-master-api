@@ -209,3 +209,39 @@ uk:
         cancellation_urgent: "Якщо вам потрібно скасувати або перенести запис, будь ласка, зробіть це якомога швидше."
       actions:
         view_booking: "Переглянути запис"
+  
+  favorite_points:
+    quick_booking:
+      title: "Швидке бронювання"
+      subtitle: "Оберіть послугу та улюблену точку обслуговування"
+      no_favorites: "У вас поки немає улюблених точок обслуговування"
+      add_favorites_suggestion: "Додайте точки обслуговування до улюблених для швидкого бронювання"
+      select_category: "Оберіть категорію послуг"
+      select_service_point: "Оберіть точку обслуговування"
+      continue_to_datetime: "Перейти до вибору дати та часу"
+      use_regular_search: "Звичайний пошук точок обслуговування"
+      
+    categories:
+      tire_change: "Заміна шин"
+      tire_repair: "Ремонт шин"
+      wheel_alignment: "Сход-розвал"
+      tire_balancing: "Балансування коліс"
+      tire_storage: "Зберігання шин"
+      
+    messages:
+      added_successfully: "Точку обслуговування додано до улюблених"
+      removed_successfully: "Точку обслуговування видалено з улюблених"
+      already_in_favorites: "Ця точка вже у ваших улюблених"
+      error_adding: "Помилка при додаванні до улюблених"
+      error_removing: "Помилка при видаленні з улюблених"
+      
+    buttons:
+      add_to_favorites: "Додати до улюблених"
+      remove_from_favorites: "Видалити з улюблених"
+      quick_book: "Швидке бронювання"
+      
+    info:
+      rating: "Рейтинг"
+      address: "Адреса"
+      phone: "Телефон"
+      added_at: "Додано"

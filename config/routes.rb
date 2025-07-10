@@ -211,7 +211,12 @@ Rails.application.routes.draw do
       resources :clients, only: [:index, :show, :create, :update, :destroy] do
         resources :cars, only: [:index, :show, :create, :update, :destroy]
         resources :bookings, only: [:index, :show, :create, :update, :destroy]
-        resources :favorite_points, only: [:index, :create, :destroy]
+        resources :favorite_points, only: [:index, :show, :create, :destroy], controller: 'client_favorite_points' do
+          collection do
+            get 'by_category', to: 'client_favorite_points#by_category'
+            get 'check_availability', to: 'client_favorite_points#check_availability'
+          end
+        end
         resources :reviews, only: [:index, :show, :create, :update, :destroy]
         
         # Создание тестового клиента
