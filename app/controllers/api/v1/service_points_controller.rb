@@ -1,8 +1,8 @@
 module Api
   module V1
     class ServicePointsController < ApiController
-      skip_before_action :authenticate_request, only: [:show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details, :by_category, :posts_by_category]
-      before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses, :client_search, :by_category]
+      skip_before_action :authenticate_request, only: [:show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details, :by_category, :posts_by_category, :regions_with_service_points, :cities_with_service_points]
+      before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses, :client_search, :by_category, :regions_with_service_points, :cities_with_service_points]
       
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points
@@ -224,6 +224,8 @@ module Api
       def client_search
         city_name = params[:city]
         query = params[:query] # поиск по названию/адресу точки
+        category_id = params[:category_id] # фильтр по категории услуг
+        service_id = params[:service_id] # фильтр по конкретной услуге
         
         # Базовая выборка - только доступные для бронирования точки
         @service_points = ServicePoint.available_for_booking
@@ -239,6 +241,20 @@ module Api
           end
         end
         
+        # Фильтрация по категории услуг (через service_posts) - используем подзапрос
+        if category_id.present?
+          service_point_ids = ServicePost.where(service_category_id: category_id, is_active: true)
+                                        .pluck(:service_point_id).uniq
+          @service_points = @service_points.where(id: service_point_ids)
+        end
+        
+        # Фильтрация по конкретной услуге (через service_point_services) - используем подзапрос  
+        if service_id.present?
+          service_point_ids = ServicePointService.where(service_id: service_id, is_available: true)
+                                                 .pluck(:service_point_id).uniq
+          @service_points = @service_points.where(id: service_point_ids)
+        end
+        
         # Поиск по названию или адресу точки
         if query.present?
           @service_points = @service_points.where(
@@ -250,6 +266,16 @@ module Api
         # Сортировка по рейтингу (лучшие сначала)
         @service_points = @service_points.includes(:city, :partner, :reviews, :photos)
                                        .order(average_rating: :desc, name: :asc)
+        
+        # Пагинация
+        page = [params[:page].to_i, 1].max  # Минимум 1
+        per_page = (params[:per_page] || 12).to_i
+        per_page = [per_page, 50].min # ограничиваем максимальным значением 50
+        
+        # Подсчет общего количества без проблем с JSON полями
+        total_count = @service_points.count
+        offset = (page - 1) * per_page
+        @service_points = @service_points.offset(offset).limit(per_page)
         
         # Возвращаем данные с дополнительной информацией для клиентов
         render json: {
@@ -288,8 +314,14 @@ module Api
               end
             }
           end,
-          total: @service_points.count,
-          city_found: city_name.blank? || @service_points.any?
+          total: total_count,
+          city_found: city_name.blank? || @service_points.any?,
+          pagination: {
+            current_page: page,
+            total_pages: (total_count.to_f / per_page).ceil,
+            total_count: total_count,
+            per_page: per_page
+          }
         }
       end
       
@@ -568,6 +600,100 @@ module Api
         rescue => e
           render json: { error: "Ошибка обновления контактов: #{e.message}" }, status: :internal_server_error
         end
+      end
+      
+      # GET /api/v1/service_points/regions?category_id=:id&service_id=:id
+      # Получение регионов, где есть сервисные точки с указанными фильтрами
+      def regions_with_service_points
+        category_id = params[:category_id]
+        service_id = params[:service_id]
+        
+        # Базовая выборка - только доступные для бронирования точки
+        service_points_query = ServicePoint.available_for_booking
+        
+        # Применяем фильтры по категории и услуге (используем ту же логику что в client_search)
+        if category_id.present?
+          service_point_ids = ServicePost.where(service_category_id: category_id, is_active: true)
+                                        .pluck(:service_point_id).uniq
+          service_points_query = service_points_query.where(id: service_point_ids)
+        end
+        
+        if service_id.present?
+          service_point_ids = ServicePointService.where(service_id: service_id, is_available: true)
+                                                .pluck(:service_point_id).uniq
+          service_points_query = service_points_query.where(id: service_point_ids)
+        end
+        
+        # Получаем уникальные регионы через города
+        region_ids = service_points_query.joins(city: :region)
+                                        .distinct
+                                        .pluck('regions.id')
+        
+        @regions = Region.where(id: region_ids).order(:name)
+        
+        render json: {
+          data: @regions.map { |region| 
+            {
+              id: region.id,
+              name: region.name,
+              created_at: region.created_at,
+              updated_at: region.updated_at
+            }
+          },
+          total: @regions.count
+        }
+      end
+      
+      # GET /api/v1/service_points/cities?category_id=:id&service_id=:id&region_id=:id
+      # Получение городов, где есть сервисные точки с указанными фильтрами
+      def cities_with_service_points
+        category_id = params[:category_id]
+        service_id = params[:service_id]
+        region_id = params[:region_id]
+        
+        # Базовая выборка - только доступные для бронирования точки
+        service_points_query = ServicePoint.available_for_booking
+        
+        # Применяем фильтры по категории и услуге (используем ту же логику что в client_search)
+        if category_id.present?
+          service_point_ids = ServicePost.where(service_category_id: category_id, is_active: true)
+                                        .pluck(:service_point_id).uniq
+          service_points_query = service_points_query.where(id: service_point_ids)
+        end
+        
+        if service_id.present?
+          service_point_ids = ServicePointService.where(service_id: service_id, is_available: true)
+                                                .pluck(:service_point_id).uniq
+          service_points_query = service_points_query.where(id: service_point_ids)
+        end
+        
+        # Получаем уникальные города
+        city_ids = service_points_query.distinct.pluck(:city_id)
+        cities_query = City.where(id: city_ids)
+        
+        # Фильтруем по региону, если указан
+        if region_id.present?
+          cities_query = cities_query.where(region_id: region_id)
+        end
+        
+        @cities = cities_query.includes(:region).order(:name)
+        
+        render json: {
+          data: @cities.map { |city| 
+            {
+              id: city.id,
+              name: city.name,
+              region_id: city.region_id,
+              region: city.region ? {
+                id: city.region.id,
+                name: city.region.name
+              } : nil,
+              created_at: city.created_at,
+              updated_at: city.updated_at
+            }
+          },
+          total: @cities.count
+        }
       end
       
       private

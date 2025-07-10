@@ -15,6 +15,11 @@ module Api
           Service.includes(:category)
         end
         
+        # Фильтрация по category_id (если передан параметр)
+        if params[:category_id].present?
+          @services = @services.where(category_id: params[:category_id])
+        end
+        
         # Фильтрация активных услуг
         @services = @services.where(is_active: true) if params[:active].present? && params[:active] == 'true'
         

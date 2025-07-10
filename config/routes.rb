@@ -60,6 +60,10 @@ Rails.application.routes.draw do
       # Клиентский API поиска сервисных точек  
       get 'service_points/search', to: 'service_points#client_search'
       
+      # Динамические списки регионов и городов с учетом фильтров
+      get 'service_points/regions', to: 'service_points#regions_with_service_points'
+      get 'service_points/cities', to: 'service_points#cities_with_service_points'
+      
       # Клиентский API записей (включая гостевые записи)
       resources :client_bookings, only: [:create, :show, :update, :destroy] do
         member do
