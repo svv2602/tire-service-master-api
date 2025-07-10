@@ -476,9 +476,9 @@ module Api
         else
           # Используем данные из параметров если доступны или базовую информацию
           {
-            license_plate: params.dig(:car, :license_plate) || 'Не указан',
-            brand: params.dig(:car, :car_brand) || 'Не указана',
-            model: params.dig(:car, :car_model) || 'Не указана',
+            license_plate: params.dig(:car, :license_plate) || I18n.t('bookings.car_info.license_plate_not_specified'),
+            brand: params.dig(:car, :car_brand) || I18n.t('bookings.car_info.brand_not_specified'),
+            model: params.dig(:car, :car_model) || I18n.t('bookings.car_info.model_not_specified'),
             type: booking.car_type.name
           }
         end

@@ -39,6 +39,10 @@ ru:
     unknown: "Неизвестная ошибка"
     test_mode_only: "Этот эндпоинт доступен только в режиме разработки или тестирования"
   bookings:
+    car_info:
+      license_plate_not_specified: "Не указан"
+      brand_not_specified: "Не указана"
+      model_not_specified: "Не указана"
     messages:
       created: "Бронирование успешно создано"
       updated: "Бронирование успешно обновлено"

@@ -39,6 +39,10 @@ uk:
     unknown: "Невідома помилка"
     test_mode_only: "Цей ендпоінт доступний тільки в режимі розробки або тестування"
   bookings:
+    car_info:
+      license_plate_not_specified: "Не вказано"
+      brand_not_specified: "Не вказана"
+      model_not_specified: "Не вказана"
     messages:
       created: "Бронювання успішно створено"
       updated: "Бронювання успішно оновлено"
