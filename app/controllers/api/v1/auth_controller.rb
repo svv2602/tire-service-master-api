@@ -229,9 +229,9 @@ module Api
 
         if car.save
           render json: { 
-            car: car, 
+            car: ClientCarSerializer.new(car).as_json, 
             message: I18n.t('auth.messages.car_created')
-          }, serializer: ClientCarSerializer, status: :created
+          }, status: :created
         else
           render json: { errors: car.errors }, status: :unprocessable_entity
         end
