@@ -24,6 +24,10 @@ Rails.application.routes.draw do
       # Health check endpoint
       get 'health', to: 'health#index'
       
+      # Настройки системы
+      get 'settings', to: 'settings#show'
+      patch 'settings', to: 'settings#update'
+      
       # Управление локалью
       get 'locale', to: 'locale#show'
       put 'locale', to: 'locale#update'
