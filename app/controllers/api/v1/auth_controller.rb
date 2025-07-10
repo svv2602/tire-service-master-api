@@ -199,24 +199,20 @@ module Api
       end
 
       # GET /api/v1/auth/me/cars
-      # Получение автомобилей текущего клиента
+      # Получение автомобилей текущего пользователя (создаем клиентский профиль если нужно)
       def my_cars
-        unless current_user.client?
-          render json: { error: I18n.t('auth.errors.clients_only') }, status: :forbidden
-          return
-        end
-
+        # Автоматически создаем клиентский профиль для всех ролей
+        ensure_client_profile
+        
         cars = current_user.client.cars.includes(:brand, :model, :car_type)
         render json: cars, each_serializer: ClientCarSerializer
       end
 
       # POST /api/v1/auth/me/cars
-      # Создание автомобиля для текущего клиента
+      # Создание автомобиля для текущего пользователя (создаем клиентский профиль если нужно)
       def create_car
-        unless current_user.client?
-          render json: { error: I18n.t('auth.errors.clients_only') }, status: :forbidden
-          return
-        end
+        # Автоматически создаем клиентский профиль для всех ролей
+        ensure_client_profile
 
         car_params = params.require(:car).permit(:brand_id, :model_id, :car_type_id, :year, :license_plate, :is_primary)
         car = current_user.client.cars.build(car_params)
@@ -238,12 +234,10 @@ module Api
       end
 
       # DELETE /api/v1/auth/me/cars/:id
-      # Удаление автомобиля текущего клиента
+      # Удаление автомобиля текущего пользователя
       def delete_car
-        unless current_user.client?
-          render json: { error: I18n.t('auth.errors.clients_only') }, status: :forbidden
-          return
-        end
+        # Автоматически создаем клиентский профиль для всех ролей (если каким-то образом его нет)
+        ensure_client_profile
 
         car = current_user.client.cars.find(params[:id])
 
@@ -257,6 +251,29 @@ module Api
       end
 
       private
+
+      # Автоматически создает клиентский профиль для всех ролей пользователей
+      # Это позволяет администраторам, партнерам и другим ролям сохранять свои автомобили
+      def ensure_client_profile
+        return if current_user.client.present?
+        
+        Rails.logger.info("Создаем клиентский профиль для пользователя #{current_user.id} (роль: #{current_user.role.name})")
+        
+        # Создаем клиентский профиль с настройками по умолчанию
+        Client.create!(
+          user: current_user,
+          preferred_notification_method: 'email',
+          marketing_consent: false
+        )
+        
+        # Обновляем ассоциацию в текущем объекте
+        current_user.reload
+        
+        Rails.logger.info("Клиентский профиль создан для пользователя #{current_user.id}")
+      rescue => e
+        Rails.logger.error "Ошибка создания клиентского профиля: #{e.message}"
+        raise
+      end
 
       def get_role_permissions(role_name)
         case role_name
