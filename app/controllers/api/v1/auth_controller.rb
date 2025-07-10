@@ -237,6 +237,25 @@ module Api
         end
       end
 
+      # DELETE /api/v1/auth/me/cars/:id
+      # Удаление автомобиля текущего клиента
+      def delete_car
+        unless current_user.client?
+          render json: { error: I18n.t('auth.errors.clients_only') }, status: :forbidden
+          return
+        end
+
+        car = current_user.client.cars.find(params[:id])
+
+        if car.destroy
+          render json: { message: I18n.t('auth.messages.car_deleted') }, status: :ok
+        else
+          render json: { errors: car.errors }, status: :unprocessable_entity
+        end
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: I18n.t('auth.errors.car_not_found') }, status: :not_found
+      end
+
       private
 
       def get_role_permissions(role_name)

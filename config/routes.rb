@@ -47,6 +47,7 @@ Rails.application.routes.draw do
       # Автомобили текущего клиента
       get 'auth/me/cars', to: 'auth#my_cars'
       post 'auth/me/cars', to: 'auth#create_car'
+      delete 'auth/me/cars/:id', to: 'auth#delete_car'
       
       # Клиентский API доступности (упрощенный)
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
