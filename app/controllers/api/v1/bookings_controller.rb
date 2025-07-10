@@ -1073,12 +1073,36 @@ module Api
       
       # Применение фильтров к запросу
       def apply_filters(bookings)
-        # Поиск по данным клиента (имя, фамилия, email или номер телефона)
+        # Поиск по данным клиента (имя, фамилия, email, номер телефона) и номеру автомобиля БЕЗ УЧЕТА РЕГИСТРА
         if params[:query].present?
-          bookings = bookings.joins(client: :user).where(
-            "users.first_name LIKE ? OR users.last_name LIKE ? OR users.email LIKE ? OR users.phone LIKE ?",
-            "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%", "%#{params[:query]}%"
-          )
+          search_query = "%#{params[:query]}%"
+          
+          # Разбиваем поисковый запрос на отдельные слова для поиска по имени и фамилии
+          words = params[:query].strip.split(/\s+/)
+          
+          if words.length >= 2
+            # Если введено несколько слов, ищем их как имя и фамилию (в любом порядке)
+            first_word = "%#{words[0]}%"
+            second_word = "%#{words[1]}%"
+            
+            bookings = bookings.joins(client: :user).where(
+              "users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ? OR users.phone ILIKE ? OR bookings.license_plate ILIKE ? OR " +
+              "CONCAT(users.first_name, ' ', users.last_name) ILIKE ? OR " +
+              "CONCAT(users.last_name, ' ', users.first_name) ILIKE ? OR " +
+              "(users.first_name ILIKE ? AND users.last_name ILIKE ?) OR " +
+              "(users.first_name ILIKE ? AND users.last_name ILIKE ?)",
+              search_query, search_query, search_query, search_query, search_query,
+              search_query, search_query,
+              first_word, second_word,
+              second_word, first_word
+            )
+          else
+            # Если введено одно слово, ищем как обычно
+            bookings = bookings.joins(client: :user).where(
+              "users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ? OR users.phone ILIKE ? OR bookings.license_plate ILIKE ?",
+              search_query, search_query, search_query, search_query, search_query
+            )
+          end
         end
         
         # Фильтрация по дате

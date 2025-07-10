@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест поиска бронирований без учета регистра</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .test-pass { border-color: #4CAF50; background-color: #f0f8f0; }
+        .test-fail { border-color: #f44336; background-color: #fdf0f0; }
+        .test-pending { border-color: #ff9800; background-color: #fff8f0; }
+        .search-input { width: 300px; padding: 8px; margin: 10px 0; }
+        .results { margin: 10px 0; padding: 10px; background-color: #f5f5f5; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        .api-response { font-size: 12px; color: #666; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Тест поиска бронирований без учета регистра</h1>
+    
+    <div class="test-case test-pending" id="test-setup">
+        <h3>Настройка тестов</h3>
+        <p>Сначала авторизуемся как администратор</p>
+        <button onclick="authenticate()">Авторизоваться</button>
+        <div id="auth-result"></div>
+    </div>
+
+    <div class="test-case test-pending" id="test-single-word">
+        <h3>Тест 1: Поиск по одному слову (без учета регистра)</h3>
+        <p>Ищем "админ" (должно найти "Админ" в имени или фамилии)</p>
+        <input type="text" class="search-input" value="админ" id="search1">
+        <button onclick="testSearch('search1', 'test-single-word')">Выполнить поиск</button>
+        <div class="results" id="results1"></div>
+    </div>
+
+    <div class="test-case test-pending" id="test-multiple-words">
+        <h3>Тест 2: Поиск по имени и фамилии</h3>
+        <p>Ищем "Тестовый Админ" (должно найти клиента с именем "Тестовый" и фамилией "Админ")</p>
+        <input type="text" class="search-input" value="Тестовый Админ" id="search2">
+        <button onclick="testSearch('search2', 'test-multiple-words')">Выполнить поиск</button>
+        <div class="results" id="results2"></div>
+    </div>
+
+    <div class="test-case test-pending" id="test-reversed-order">
+        <h3>Тест 3: Поиск по фамилии и имени (обратный порядок)</h3>
+        <p>Ищем "Админ Тестовый" (должно найти того же клиента)</p>
+        <input type="text" class="search-input" value="Админ Тестовый" id="search3">
+        <button onclick="testSearch('search3', 'test-reversed-order')">Выполнить поиск</button>
+        <div class="results" id="results3"></div>
+    </div>
+
+    <div class="test-case test-pending" id="test-phone-search">
+        <h3>Тест 4: Поиск по номеру телефона</h3>
+        <p>Ищем часть номера телефона без учета регистра</p>
+        <input type="text" class="search-input" value="1234567" id="search4">
+        <button onclick="testSearch('search4', 'test-phone-search')">Выполнить поиск</button>
+        <div class="results" id="results4"></div>
+    </div>
+
+    <div class="test-case test-pending" id="test-license-plate">
+        <h3>Тест 5: Поиск по номеру автомобиля</h3>
+        <p>Ищем номер автомобиля без учета регистра</p>
+        <input type="text" class="search-input" value="аа1234вв" id="search5">
+        <button onclick="testSearch('search5', 'test-license-plate')">Выполнить поиск</button>
+        <div class="results" id="results5"></div>
+    </div>
+
+    <script>
+        let authToken = '';
+
+        async function authenticate() {
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@test.com',
+                        password: 'admin123'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.token) {
+                    authToken = data.token;
+                    document.getElementById('auth-result').innerHTML = 
+                        '<p style="color: green;">✅ Авторизация успешна</p>';
+                    document.getElementById('test-setup').className = 'test-case test-pass';
+                } else {
+                    throw new Error(data.message || 'Ошибка авторизации');
+                }
+            } catch (error) {
+                document.getElementById('auth-result').innerHTML = 
+                    `<p style="color: red;">❌ Ошибка авторизации: ${error.message}</p>`;
+                document.getElementById('test-setup').className = 'test-case test-fail';
+            }
+        }
+
+        async function testSearch(inputId, testId) {
+            const searchInput = document.getElementById(inputId);
+            const resultsDiv = document.getElementById(inputId.replace('search', 'results'));
+            const testDiv = document.getElementById(testId);
+
+            if (!authToken) {
+                resultsDiv.innerHTML = '<p style="color: red;">❌ Сначала выполните авторизацию</p>';
+                return;
+            }
+
+            try {
+                const query = searchInput.value;
+                const url = `http://localhost:8000/api/v1/bookings?query=${encodeURIComponent(query)}`;
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const bookings = data.data || data;
+                    const foundCount = Array.isArray(bookings) ? bookings.length : 0;
+                    
+                    let resultHtml = `
+                        <p><strong>Результат поиска для "${query}":</strong></p>
+                        <p>Найдено бронирований: ${foundCount}</p>
+                    `;
+
+                    if (foundCount > 0) {
+                        resultHtml += '<ul>';
+                        bookings.slice(0, 3).forEach(booking => {
+                            const clientName = booking.client ? 
+                                `${booking.client.user.first_name} ${booking.client.user.last_name}` : 
+                                'Гостевое бронирование';
+                            const phone = booking.client ? booking.client.user.phone : booking.service_recipient?.phone || 'Не указан';
+                            const licensePlate = booking.license_plate || 'Не указан';
+                            
+                            resultHtml += `
+                                <li>
+                                    ID: ${booking.id}, 
+                                    Клиент: ${clientName}, 
+                                    Телефон: ${phone}, 
+                                    Номер авто: ${licensePlate}
+                                </li>
+                            `;
+                        });
+                        resultHtml += '</ul>';
+                        
+                        testDiv.className = 'test-case test-pass';
+                        resultHtml += '<p style="color: green;">✅ Тест пройден - найдены записи</p>';
+                    } else {
+                        testDiv.className = 'test-case test-fail';
+                        resultHtml += '<p style="color: orange;">⚠️ Записи не найдены (возможно, нет тестовых данных)</p>';
+                    }
+
+                    resultHtml += `<details class="api-response">
+                        <summary>Детали API ответа</summary>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </details>`;
+
+                    resultsDiv.innerHTML = resultHtml;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${data.message || 'Ошибка API'}`);
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<p style="color: red;">❌ Ошибка: ${error.message}</p>`;
+                testDiv.className = 'test-case test-fail';
+            }
+        }
+
+        // Автоматическая авторизация при загрузке страницы
+        window.onload = function() {
+            authenticate();
+        };
+    </script>
+</body>
+</html> 
