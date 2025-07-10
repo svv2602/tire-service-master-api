@@ -370,9 +370,15 @@ module Api
           car_type_id: car_type.id
         )
 
-        # Добавляем информацию об автомобиле в notes если она есть
+        # ✅ Добавляем информацию об автомобиле в соответствующие поля БД
         car_info = car_params
         if car_info[:license_plate].present? || car_info[:car_brand].present? || car_info[:car_model].present?
+          # Заполняем поля БД для данных автомобиля
+          booking_data[:license_plate] = car_info[:license_plate] if car_info[:license_plate].present?
+          booking_data[:car_brand] = car_info[:car_brand] if car_info[:car_brand].present?
+          booking_data[:car_model] = car_info[:car_model] if car_info[:car_model].present?
+          
+          # Также добавляем в комментарии для совместимости
           car_notes = []
           car_notes << "Номер: #{car_info[:license_plate]}" if car_info[:license_plate].present?
           car_notes << "Марка: #{car_info[:car_brand]}" if car_info[:car_brand].present?
@@ -490,7 +496,7 @@ module Api
       
       # Форматирует ответ с данными бронирования
       def format_booking_response(booking)
-        # Определяем данные автомобиля
+        # ✅ Определяем данные автомобиля из полей БД
         car_info = if booking.car_id.present?
           # Если есть связанный автомобиль
           car = booking.car
@@ -501,11 +507,11 @@ module Api
             type: booking.car_type.name
           }
         else
-          # Используем данные из параметров если доступны или базовую информацию
+          # ✅ Используем данные из полей БД бронирования
           {
-            license_plate: params.dig(:car, :license_plate) || I18n.t('bookings.car_info.license_plate_not_specified'),
-            brand: params.dig(:car, :car_brand) || I18n.t('bookings.car_info.brand_not_specified'),
-            model: params.dig(:car, :car_model) || I18n.t('bookings.car_info.model_not_specified'),
+            license_plate: booking.license_plate || I18n.t('bookings.car_info.license_plate_not_specified'),
+            brand: booking.car_brand || I18n.t('bookings.car_info.brand_not_specified'),
+            model: booking.car_model || I18n.t('bookings.car_info.model_not_specified'),
             type: booking.car_type.name
           }
         end

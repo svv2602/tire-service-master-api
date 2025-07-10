@@ -45,6 +45,11 @@ class Booking < ApplicationRecord
     }, 
     allow_blank: true
   
+  # ✅ Валидации для полей автомобиля (опциональные)
+  validates :car_brand, length: { maximum: 100 }, allow_blank: true
+  validates :car_model, length: { maximum: 100 }, allow_blank: true
+  validates :license_plate, length: { maximum: 20 }, allow_blank: true
+  
   validate :end_time_after_start_time
   validate :car_belongs_to_client, if: -> { car_id.present? }
   validate :booking_time_available, on: :create, unless: -> { skip_availability_check }
