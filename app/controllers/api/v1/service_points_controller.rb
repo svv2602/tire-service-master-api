@@ -230,7 +230,7 @@ module Api
         # Базовая выборка - только доступные для бронирования точки
         @service_points = ServicePoint.available_for_booking
         
-        # Фильтрация по городу (поиск по названию)
+        # Фильтрация по городу (поиск по названию) - опциональная
         if city_name.present?
           city = City.joins(:region).where("LOWER(cities.name) LIKE LOWER(?)", "%#{city_name}%").first
           if city
@@ -240,6 +240,7 @@ module Api
             @service_points = ServicePoint.none
           end
         end
+        # Если город не указан, показываем все доступные сервисные точки
         
         # Фильтрация по категории услуг (через service_posts) - используем подзапрос
         if category_id.present?
