@@ -568,22 +568,47 @@ module Api
       
       # Параметры клиента
       def client_params
-        params.require(:client).permit(
-          :first_name,
-          :last_name,
-          :phone,
-          :email
-        )
+        # Для гостевых бронирований данные клиента находятся в полях service_recipient
+        if params[:client].present?
+          params.require(:client).permit(
+            :first_name,
+            :last_name,
+            :phone,
+            :email
+          )
+        else
+          # Для новой структуры данных клиента в секции booking как service_recipient
+          booking_data = params[:booking]
+          return {} unless booking_data
+          
+          {
+            first_name: booking_data[:service_recipient_first_name],
+            last_name: booking_data[:service_recipient_last_name],
+            phone: booking_data[:service_recipient_phone],
+            email: booking_data[:service_recipient_email]
+          }
+        end
       end
       
       # Параметры автомобиля  
       def car_params
-        params.require(:car).permit(
-          :license_plate,
-          :car_brand,
-          :car_model,
-          :car_type_id
-        )
+        # Для гостевых бронирований данные автомобиля находятся в секции booking
+        if params[:car].present?
+          params.require(:car).permit(
+            :license_plate,
+            :car_brand,
+            :car_model,
+            :car_type_id
+          )
+        else
+          # Для новой структуры данных автомобиля в секции booking
+          params.require(:booking).permit(
+            :license_plate,
+            :car_brand,
+            :car_model,
+            :car_type_id
+          )
+        end
       end
       
       # Параметры для создания бронирования
