@@ -219,16 +219,22 @@ module Api
         render json: paginate(@service_points)
       end
       
-      # GET /api/v1/service_points/search?city=:city_name
-      # Клиентский поиск сервисных точек по названию города
+      # GET /api/v1/service_points/search?city=:city_name&region_id=:region_id
+      # Клиентский поиск сервисных точек по названию города и региону
       def client_search
         city_name = params[:city]
+        region_id = params[:region_id] # фильтр по региону
         query = params[:query] # поиск по названию/адресу точки
         category_id = params[:category_id] # фильтр по категории услуг
         service_id = params[:service_id] # фильтр по конкретной услуге
         
         # Базовая выборка - только доступные для бронирования точки
         @service_points = ServicePoint.available_for_booking
+        
+        # Фильтрация по региону (приоритетная) - если указан, фильтруем по региону
+        if region_id.present?
+          @service_points = @service_points.joins(:city).where(cities: { region_id: region_id })
+        end
         
         # Фильтрация по городу (поиск по названию) - опциональная
         if city_name.present?
@@ -240,7 +246,7 @@ module Api
             @service_points = ServicePoint.none
           end
         end
-        # Если город не указан, показываем все доступные сервисные точки
+        # Если ни город, ни регион не указаны, показываем все доступные сервисные точки
         
         # Фильтрация по категории услуг (через service_posts) - используем подзапрос
         if category_id.present?
