@@ -250,6 +250,201 @@ module Api
         render json: { error: I18n.t('auth.errors.car_not_found') }, status: :not_found
       end
 
+      # ✅ НОВЫЕ ЭНДПОИНТЫ ДЛЯ ИЗБРАННЫХ СЕРВИСНЫХ ТОЧЕК
+
+      # GET /api/v1/auth/me/favorite_points
+      # Получение избранных сервисных точек текущего пользователя
+      def my_favorite_points
+        # Автоматически создаем клиентский профиль для всех ролей
+        ensure_client_profile
+        
+        favorite_points = current_user.client.favorite_service_points
+                                           .available_for_booking
+                                           .includes(:city, :partner, :photos)
+        
+        # Преобразуем в формат, аналогичный ClientFavoritePointsController#index
+        favorites_data = favorite_points.map do |service_point|
+          {
+            id: current_user.client.favorite_points.find_by(service_point: service_point)&.id,
+            service_point: {
+              id: service_point.id,
+              name: service_point.name,
+              address: service_point.address,
+              description: service_point.description,
+              city: {
+                id: service_point.city.id,
+                name: service_point.city.name,
+                region: service_point.city.region&.name
+              },
+              partner: {
+                id: service_point.partner.id,
+                name: service_point.partner.company_name
+              },
+              contact_phone: service_point.contact_phone,
+              average_rating: service_point.average_rating&.round(1) || 0.0,
+              reviews_count: service_point.reviews.count,
+              posts_count: service_point.posts_count,
+              work_status: service_point.work_status,
+              photos: service_point.photos.sorted.limit(3).map do |photo|
+                {
+                  id: photo.id,
+                  url: photo.file.attached? ? Rails.application.routes.url_helpers.url_for(photo.file) : nil,
+                  description: photo.description,
+                  is_main: photo.is_main
+                }
+              end
+            }
+          }
+        end
+        
+        render json: favorites_data
+      end
+
+      # GET /api/v1/auth/me/favorite_points/by_category
+      # Получение избранных точек текущего пользователя, сгруппированных по категориям
+      def my_favorite_points_by_category
+        # Автоматически создаем клиентский профиль для всех ролей
+        ensure_client_profile
+        
+        favorite_points = current_user.client.favorite_service_points
+                                           .available_for_booking
+                                           .includes(:city, :partner, :photos, service_posts: :service_category)
+        
+        if favorite_points.empty?
+          return render json: {
+            has_favorites: false,
+            categories_with_favorites: []
+          }
+        end
+        
+        # Группируем по категориям
+        categories_with_favorites = {}
+        
+        favorite_points.each do |service_point|
+          service_point.service_posts.active.includes(:service_category).each do |post|
+            category = post.service_category
+            
+            categories_with_favorites[category.id] ||= {
+              category_id: category.id,
+              category_name: category.name,
+              service_points: []
+            }
+            
+            # Добавляем точку только если её еще нет в этой категории
+            unless categories_with_favorites[category.id][:service_points].any? { |sp| sp[:id] == service_point.id }
+              main_photo = service_point.photos.main.first || service_point.photos.first
+              
+              categories_with_favorites[category.id][:service_points] << {
+                id: service_point.id,
+                name: service_point.name,
+                address: service_point.address,
+                city_name: service_point.city.name,
+                partner_name: service_point.partner.company_name,
+                photo_url: main_photo&.file&.attached? ? Rails.application.routes.url_helpers.url_for(main_photo.file) : nil,
+                average_rating: service_point.average_rating&.round(1) || 0.0
+              }
+            end
+          end
+        end
+        
+        render json: {
+          has_favorites: true,
+          categories_with_favorites: categories_with_favorites.values
+        }
+      end
+
+      # POST /api/v1/auth/me/favorite_points
+      # Добавление сервисной точки в избранное для текущего пользователя
+      def add_to_my_favorites
+        # Автоматически создаем клиентский профиль для всех ролей
+        ensure_client_profile
+        
+        service_point = ServicePoint.find(params[:service_point_id])
+        
+        # Проверяем, что точка доступна для бронирования
+        unless service_point.can_accept_bookings?
+          return render json: { 
+            error: 'Данная сервисная точка недоступна для добавления в избранное',
+            reason: service_point.display_status
+          }, status: :unprocessable_entity
+        end
+        
+        # Проверяем, не добавлена ли уже точка в избранное
+        if current_user.client.favorite_service_points.exists?(service_point.id)
+          return render json: { 
+            error: 'Данная сервисная точка уже добавлена в избранное'
+          }, status: :unprocessable_entity
+        end
+        
+        favorite_point = current_user.client.favorite_points.build(service_point: service_point)
+        
+        if favorite_point.save
+          # Логируем действие
+          Rails.logger.info "Пользователь #{current_user.id} (роль: #{current_user.role.name}) добавил сервисную точку #{service_point.id} в избранное"
+          
+          render json: {
+            id: favorite_point.id,
+            service_point: {
+              id: service_point.id,
+              name: service_point.name,
+              address: service_point.address,
+              city: service_point.city.name
+            },
+            added_at: favorite_point.created_at,
+            message: 'Сервисная точка успешно добавлена в избранное'
+          }, status: :created
+        else
+          render json: { 
+            errors: favorite_point.errors,
+            message: 'Не удалось добавить сервисную точку в избранное'
+          }, status: :unprocessable_entity
+        end
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Сервисная точка не найдена' }, status: :not_found
+      end
+
+      # DELETE /api/v1/auth/me/favorite_points/:id
+      # Удаление сервисной точки из избранного для текущего пользователя
+      def remove_from_my_favorites
+        # Автоматически создаем клиентский профиль для всех ролей
+        ensure_client_profile
+        
+        favorite_point = current_user.client.favorite_points.find(params[:id])
+        service_point_name = favorite_point.service_point.name
+        
+        if favorite_point.destroy
+          Rails.logger.info "Пользователь #{current_user.id} (роль: #{current_user.role.name}) удалил сервисную точку #{favorite_point.service_point_id} из избранного"
+          
+          render json: { 
+            message: "#{service_point_name} удалена из избранного"
+          }
+        else
+          render json: { 
+            errors: favorite_point.errors,
+            message: 'Не удалось удалить сервисную точку из избранного'
+          }, status: :unprocessable_entity
+        end
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Избранная сервисная точка не найдена' }, status: :not_found
+      end
+
+      # GET /api/v1/auth/me/favorite_points/check/:service_point_id
+      # Проверка, является ли сервисная точка избранной для текущего пользователя
+      def check_is_favorite
+        # Автоматически создаем клиентский профиль для всех ролей
+        ensure_client_profile
+        
+        service_point_id = params[:service_point_id]
+        favorite_point = current_user.client.favorite_points.find_by(service_point_id: service_point_id)
+        
+        render json: {
+          is_favorite: favorite_point.present?,
+          favorite_id: favorite_point&.id
+        }
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Сервисная точка не найдена' }, status: :not_found
+      end
+
       private
 
       # Автоматически создает клиентский профиль для всех ролей пользователей

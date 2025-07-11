@@ -49,6 +49,13 @@ Rails.application.routes.draw do
       post 'auth/me/cars', to: 'auth#create_car'
       delete 'auth/me/cars/:id', to: 'auth#delete_car'
       
+      # ✅ НОВЫЕ МАРШРУТЫ: Избранные сервисные точки текущего пользователя
+      get 'auth/me/favorite_points', to: 'auth#my_favorite_points'
+      get 'auth/me/favorite_points/by_category', to: 'auth#my_favorite_points_by_category'
+      post 'auth/me/favorite_points', to: 'auth#add_to_my_favorites'
+      delete 'auth/me/favorite_points/:id', to: 'auth#remove_from_my_favorites'
+      get 'auth/me/favorite_points/check/:service_point_id', to: 'auth#check_is_favorite'
+      
       # Клиентский API доступности (упрощенный)
       get 'availability/:service_point_id/:date', to: 'availability#client_available_times'
       post 'bookings/check_availability', to: 'availability#client_check_availability'
