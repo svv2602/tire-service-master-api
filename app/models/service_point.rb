@@ -11,6 +11,7 @@ class ServicePoint < ApplicationRecord
   has_many :schedule_templates, dependent: :destroy
   has_many :schedule_exceptions, dependent: :destroy
   has_many :schedule_slots, dependent: :destroy
+  has_many :seasonal_schedules, dependent: :destroy
   has_many :bookings, dependent: :restrict_with_error
   has_many :reviews, dependent: :destroy
   has_many :price_lists, dependent: :destroy

@@ -180,6 +180,12 @@ Rails.application.routes.draw do
         resources :schedule_templates, only: [:index, :show, :create, :update, :destroy]
         resources :schedule_exceptions, only: [:index, :show, :create, :update, :destroy]
         resources :schedule_slots, only: [:index, :show, :create, :update, :destroy]
+        resources :seasonal_schedules, only: [:index, :show, :create, :update, :destroy] do
+          collection do
+            get 'active_for_date', to: 'seasonal_schedules#active_for_date'
+            get 'active_for_period', to: 'seasonal_schedules#active_for_period'
+          end
+        end
         resources :amenities, only: [:index, :create, :destroy]
         resources :reviews, only: [:index, :show]
         resources :bookings, only: [:index, :show]

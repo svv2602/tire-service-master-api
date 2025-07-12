@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тестирование API сезонных расписаний</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .form-group {
+            margin: 10px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .schedule-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗓️ Тестирование API сезонных расписаний</h1>
+        <p>Тестирование CRUD операций для сезонных расписаний сервисных точек</p>
+        
+        <div class="test-section info">
+            <h3>Настройки подключения</h3>
+            <div class="form-group">
+                <label>ID сервисной точки:</label>
+                <input type="number" id="servicePointId" value="1" min="1">
+            </div>
+            <div class="form-group">
+                <label>Base URL:</label>
+                <input type="text" id="baseUrl" value="http://localhost:8000/api/v1">
+            </div>
+            <button onclick="testConnection()">🔗 Проверить подключение</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 Список сезонных расписаний</h3>
+            <button onclick="getSeasonalSchedules()">Получить список</button>
+            <div id="schedulesList"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>➕ Создание сезонного расписания</h3>
+            <div class="form-group">
+                <label>Название:</label>
+                <input type="text" id="scheduleName" value="Летнее расписание" placeholder="Например: Летнее расписание">
+            </div>
+            <div class="form-group">
+                <label>Описание:</label>
+                <textarea id="scheduleDescription" placeholder="Описание расписания">Расширенное рабочее время в летний период</textarea>
+            </div>
+            <div class="form-group">
+                <label>Дата начала:</label>
+                <input type="date" id="startDate" value="2024-06-01">
+            </div>
+            <div class="form-group">
+                <label>Дата окончания:</label>
+                <input type="date" id="endDate" value="2024-08-31">
+            </div>
+            <div class="form-group">
+                <label>Приоритет:</label>
+                <input type="number" id="priority" value="10" min="0" max="100">
+            </div>
+            <button onclick="createSeasonalSchedule()">Создать расписание</button>
+            <div id="createResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Поиск активного расписания на дату</h3>
+            <div class="form-group">
+                <label>Дата для проверки:</label>
+                <input type="date" id="checkDate" value="2024-07-15">
+            </div>
+            <button onclick="getActiveScheduleForDate()">Найти активное расписание</button>
+            <div id="activeScheduleResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Результаты тестирования</h3>
+            <div id="testResults"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = () => document.getElementById('baseUrl').value;
+        const SERVICE_POINT_ID = () => document.getElementById('servicePointId').value;
+
+        // Логирование результатов
+        function logResult(title, data, isError = false) {
+            const resultsDiv = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            const resultClass = isError ? 'error' : 'success';
+            
+            resultsDiv.innerHTML += `
+                <div class="test-section ${resultClass}">
+                    <h4>${timestamp} - ${title}</h4>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        // Проверка подключения
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE()}/service_points`);
+                const data = await response.json();
+                logResult('Проверка подключения', {
+                    status: response.status,
+                    message: 'Подключение успешно',
+                    servicePointsCount: data.data?.length || 0
+                });
+            } catch (error) {
+                logResult('Ошибка подключения', { error: error.message }, true);
+            }
+        }
+
+        // Получение списка сезонных расписаний
+        async function getSeasonalSchedules() {
+            try {
+                const response = await fetch(
+                    `${API_BASE()}/service_points/${SERVICE_POINT_ID()}/seasonal_schedules`,
+                    {
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    }
+                );
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    logResult('Получение списка расписаний', data);
+                    displaySchedulesList(data.data || []);
+                } else {
+                    logResult('Ошибка получения списка', data, true);
+                }
+            } catch (error) {
+                logResult('Ошибка запроса списка', { error: error.message }, true);
+            }
+        }
+
+        // Отображение списка расписаний
+        function displaySchedulesList(schedules) {
+            const listDiv = document.getElementById('schedulesList');
+            if (schedules.length === 0) {
+                listDiv.innerHTML = '<p>Сезонные расписания не найдены</p>';
+                return;
+            }
+
+            listDiv.innerHTML = schedules.map(schedule => `
+                <div class="schedule-item">
+                    <h4>${schedule.name}</h4>
+                    <p><strong>Период:</strong> ${schedule.period_description}</p>
+                    <p><strong>Статус:</strong> ${schedule.status}</p>
+                    <p><strong>Приоритет:</strong> ${schedule.priority}</p>
+                    <p><strong>Рабочих дней:</strong> ${schedule.working_days_count}</p>
+                    ${schedule.description ? `<p><strong>Описание:</strong> ${schedule.description}</p>` : ''}
+                    <button onclick="deleteSchedule(${schedule.id})">Удалить</button>
+                </div>
+            `).join('');
+        }
+
+        // Создание сезонного расписания
+        async function createSeasonalSchedule() {
+            const scheduleData = {
+                name: document.getElementById('scheduleName').value,
+                description: document.getElementById('scheduleDescription').value,
+                start_date: document.getElementById('startDate').value,
+                end_date: document.getElementById('endDate').value,
+                priority: parseInt(document.getElementById('priority').value),
+                is_active: true,
+                working_hours: {
+                    monday: { is_working_day: true, start: "08:00", end: "20:00" },
+                    tuesday: { is_working_day: true, start: "08:00", end: "20:00" },
+                    wednesday: { is_working_day: true, start: "08:00", end: "20:00" },
+                    thursday: { is_working_day: true, start: "08:00", end: "20:00" },
+                    friday: { is_working_day: true, start: "08:00", end: "20:00" },
+                    saturday: { is_working_day: true, start: "09:00", end: "18:00" },
+                    sunday: { is_working_day: false, start: "09:00", end: "18:00" }
+                }
+            };
+
+            try {
+                const response = await fetch(
+                    `${API_BASE()}/service_points/${SERVICE_POINT_ID()}/seasonal_schedules`,
+                    {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ seasonal_schedule: scheduleData })
+                    }
+                );
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    logResult('Создание расписания', data);
+                    document.getElementById('createResult').innerHTML = 
+                        '<div class="success">✅ Расписание успешно создано!</div>';
+                    // Обновляем список
+                    getSeasonalSchedules();
+                } else {
+                    logResult('Ошибка создания', data, true);
+                    document.getElementById('createResult').innerHTML = 
+                        `<div class="error">❌ Ошибка: ${data.errors?.join(', ') || 'Неизвестная ошибка'}</div>`;
+                }
+            } catch (error) {
+                logResult('Ошибка запроса создания', { error: error.message }, true);
+                document.getElementById('createResult').innerHTML = 
+                    `<div class="error">❌ Ошибка запроса: ${error.message}</div>`;
+            }
+        }
+
+        // Поиск активного расписания на дату
+        async function getActiveScheduleForDate() {
+            const date = document.getElementById('checkDate').value;
+            
+            try {
+                const response = await fetch(
+                    `${API_BASE()}/service_points/${SERVICE_POINT_ID()}/seasonal_schedules/active_for_date?date=${date}`,
+                    {
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    }
+                );
+
+                const data = await response.json();
+                
+                logResult('Поиск активного расписания', data);
+                
+                const resultDiv = document.getElementById('activeScheduleResult');
+                if (data.data) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ Найдено активное расписание</h4>
+                            <p><strong>Название:</strong> ${data.data.name}</p>
+                            <p><strong>Период:</strong> ${data.data.period_description}</p>
+                            <p><strong>Приоритет:</strong> ${data.data.priority}</p>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = '<div class="info">ℹ️ Активное расписание на указанную дату не найдено</div>';
+                }
+            } catch (error) {
+                logResult('Ошибка поиска', { error: error.message }, true);
+            }
+        }
+
+        // Удаление расписания
+        async function deleteSchedule(scheduleId) {
+            if (!confirm('Вы уверены, что хотите удалить это расписание?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    `${API_BASE()}/service_points/${SERVICE_POINT_ID()}/seasonal_schedules/${scheduleId}`,
+                    {
+                        method: 'DELETE',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    }
+                );
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    logResult('Удаление расписания', data);
+                    // Обновляем список
+                    getSeasonalSchedules();
+                } else {
+                    logResult('Ошибка удаления', data, true);
+                }
+            } catch (error) {
+                logResult('Ошибка запроса удаления', { error: error.message }, true);
+            }
+        }
+
+        // Автоматическая проверка при загрузке
+        window.onload = function() {
+            testConnection();
+            getSeasonalSchedules();
+        };
+    </script>
+</body>
+</html> 

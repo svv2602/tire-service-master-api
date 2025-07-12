@@ -490,6 +490,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_10_120640) do
     t.index ["weekday_id"], name: "index_schedule_templates_on_weekday_id"
   end
 
+  create_table "seasonal_schedules", force: :cascade do |t|
+    t.bigint "service_point_id", null: false
+    t.string "name", limit: 255, null: false, comment: "Название сезонного расписания (например, \"Летнее расписание\", \"Новогодние каникулы\")"
+    t.text "description", comment: "Описание сезонного расписания"
+    t.date "start_date", null: false, comment: "Дата начала действия сезонного расписания"
+    t.date "end_date", null: false, comment: "Дата окончания действия сезонного расписания"
+    t.json "working_hours", null: false, comment: "JSON с расписанием работы по дням недели в формате {monday: {is_working_day: true, start: \"09:00\", end: \"18:00\"}}"
+    t.boolean "is_active", default: true, null: false, comment: "Активно ли сезонное расписание"
+    t.integer "priority", default: 0, null: false, comment: "Приоритет расписания (чем выше число, тем выше приоритет)"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["priority"], name: "idx_seasonal_schedules_priority"
+    t.index ["service_point_id", "is_active"], name: "idx_seasonal_schedules_active"
+    t.index ["service_point_id", "start_date", "end_date"], name: "idx_seasonal_schedules_period"
+    t.index ["service_point_id"], name: "index_seasonal_schedules_on_service_point_id"
+    t.check_constraint "end_date >= start_date", name: "check_seasonal_schedules_date_range"
+  end
+
   create_table "service_categories", force: :cascade do |t|
     t.string "name", null: false
     t.text "description"
@@ -718,6 +736,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_10_120640) do
   add_foreign_key "schedule_slots", "service_posts"
   add_foreign_key "schedule_templates", "service_points"
   add_foreign_key "schedule_templates", "weekdays"
+  add_foreign_key "seasonal_schedules", "service_points"
   add_foreign_key "service_point_amenities", "amenities"
   add_foreign_key "service_point_amenities", "service_points"
   add_foreign_key "service_point_photos", "service_points"

@@ -710,8 +710,6 @@ class DynamicAvailabilityService
 
   # Получение рабочих часов для даты с учетом working_hours
   def self.get_schedule_for_date(service_point, date)
-    return { is_working: false } unless service_point.working_hours.present?
-    
     # Определяем день недели в формате для working_hours
     day_key = case date.wday
     when 0 then 'sunday'
@@ -723,11 +721,44 @@ class DynamicAvailabilityService
     when 6 then 'saturday'
     end
     
+    # Сначала проверяем сезонное расписание
+    seasonal_schedule = SeasonalSchedule.find_active_for_date(service_point.id, date)
+    
+    if seasonal_schedule
+      Rails.logger.info "DynamicAvailabilityService: Найдено сезонное расписание '#{seasonal_schedule.name}' для точки #{service_point.id} на дату #{date}"
+      
+      day_schedule = seasonal_schedule.schedule_for_day(day_key)
+      return { is_working: false, schedule_type: 'seasonal', schedule_name: seasonal_schedule.name } unless day_schedule.present?
+      
+      is_working = day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true'
+      return { is_working: false, schedule_type: 'seasonal', schedule_name: seasonal_schedule.name } unless is_working
+      
+      begin
+        opening_time = Time.parse("#{date} #{day_schedule['start']}:00")
+        closing_time = Time.parse("#{date} #{day_schedule['end']}:00")
+        
+        return {
+          is_working: true,
+          opening_time: opening_time,
+          closing_time: closing_time,
+          schedule_type: 'seasonal',
+          schedule_name: seasonal_schedule.name,
+          schedule_id: seasonal_schedule.id
+        }
+      rescue => e
+        Rails.logger.error "DynamicAvailabilityService: Ошибка парсинга времени из сезонного расписания #{seasonal_schedule.id}, день #{day_key}: #{e.message}"
+        return { is_working: false, schedule_type: 'seasonal', schedule_name: seasonal_schedule.name }
+      end
+    end
+    
+    # Если нет сезонного расписания, используем обычное расписание
+    return { is_working: false, schedule_type: 'regular' } unless service_point.working_hours.present?
+    
     day_schedule = service_point.working_hours[day_key]
-    return { is_working: false } unless day_schedule.present?
+    return { is_working: false, schedule_type: 'regular' } unless day_schedule.present?
     
     is_working = day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true'
-    return { is_working: false } unless is_working
+    return { is_working: false, schedule_type: 'regular' } unless is_working
     
     begin
       opening_time = Time.parse("#{date} #{day_schedule['start']}:00")
@@ -736,11 +767,12 @@ class DynamicAvailabilityService
       {
         is_working: true,
         opening_time: opening_time,
-        closing_time: closing_time
+        closing_time: closing_time,
+        schedule_type: 'regular'
       }
     rescue => e
       Rails.logger.error "DynamicAvailabilityService: Ошибка парсинга времени для точки #{service_point.id}, день #{day_key}: #{e.message}"
-      { is_working: false }
+      { is_working: false, schedule_type: 'regular' }
     end
   end
 
