@@ -6,7 +6,7 @@ class BookingConflictAnalysisJob < ApplicationJob
     
     # Получаем объекты по ID
     service_point = ServicePoint.find(service_point_id) if service_point_id.present?
-    post = ServicePointPost.find(post_id) if post_id.present?
+    post = ServicePost.find(post_id) if post_id.present?
     seasonal_schedule = SeasonalSchedule.find(seasonal_schedule_id) if seasonal_schedule_id.present?
     
     # Запускаем анализ

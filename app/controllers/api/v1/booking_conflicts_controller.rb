@@ -6,7 +6,7 @@ class Api::V1::BookingConflictsController < ApplicationController
   # GET /api/v1/booking_conflicts
   def index
     @booking_conflicts = policy_scope(BookingConflict)
-                        .includes(booking: [:service_point, :category, :client])
+                        .includes(booking: [:service_point, :service_category, :client])
                         .includes(:resolved_by)
 
     # Фильтрация
@@ -200,9 +200,9 @@ class Api::V1::BookingConflictsController < ApplicationController
           id: conflict.booking.service_point.id,
           name: conflict.booking.service_point.name
         },
-        category: {
-          id: conflict.booking.category&.id,
-          name: conflict.booking.category&.name
+        service_category: {
+          id: conflict.booking.service_category&.id,
+          name: conflict.booking.service_category&.name
         },
         client: {
           id: conflict.booking.client.id,
@@ -229,7 +229,7 @@ class Api::V1::BookingConflictsController < ApplicationController
     # Ищем доступные слоты на следующие 7 дней
     7.times do |days_offset|
       check_date = booking.start_time.to_date + days_offset.days
-      available_slots = availability_service.available_slots_for_category(booking.category_id)
+      available_slots = availability_service.available_slots_for_category(booking.service_category_id)
       
       if available_slots.any?
         new_slot = available_slots.first
@@ -267,7 +267,7 @@ class Api::V1::BookingConflictsController < ApplicationController
       date: new_start_time.to_date
     )
     
-    available_slots = availability_service.available_slots_for_category(booking.category_id)
+    available_slots = availability_service.available_slots_for_category(booking.service_category_id)
     slot_time = new_start_time.strftime('%H:%M')
     
     unless available_slots.any? { |slot| slot[:time] == slot_time }

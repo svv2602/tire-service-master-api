@@ -83,43 +83,58 @@ class BookingConflictAnalysisService < ApplicationService
   end
 
   def check_booking_conflict(booking)
-    return nil if booking.start_time.blank?
+    return nil if booking.start_time.blank? || booking.booking_date.blank?
     
-    booking_date = booking.start_time.to_date
+    booking_date = booking.booking_date
     booking_time = booking.start_time.strftime('%H:%M')
+    reasons = []
     
     # Используем DynamicAvailabilityService для проверки доступности слота
-    availability_service = DynamicAvailabilityService.new(
-      service_point: booking.service_point,
-      date: booking_date
+    available_slots = DynamicAvailabilityService.available_slots_for_category(
+      booking.service_point.id, 
+      booking_date, 
+      booking.service_category_id
     )
     
-    # Проверяем, доступен ли слот времени для категории бронирования
-    available_slots = availability_service.available_slots_for_category(booking.category_id)
-    
-    # Проверяем, есть ли слот с таким временем
+    # Проверяем, есть ли доступный слот для этого времени
     slot_available = available_slots.any? { |slot| slot[:time] == booking_time }
     
     unless slot_available
+      # Если слот недоступен, проверяем причины
+      has_working_posts = DynamicAvailabilityService.has_working_posts_for_category_on_date?(
+        booking.service_point, 
+        booking_date, 
+        booking.service_category_id
+      )
+      
+      if has_working_posts
+        reasons << "Время #{booking_time} недоступно в текущем расписании на #{booking_date.strftime('%d.%m.%Y')}"
+      else
+        reasons << "Нет рабочих постов для категории '#{booking.service_category&.name}' на #{booking_date.strftime('%d.%m.%Y')}"
+      end
+      
       # Определяем тип конфликта
       conflict_type = determine_conflict_type(booking)
-      conflict_reason = generate_conflict_reason(booking, booking_date, booking_time)
+      conflict_reason = reasons.join('. ')
       
       # Создаем или обновляем конфликт
-      create_or_update_conflict(booking, conflict_type, conflict_reason)
+      return create_or_update_conflict(booking, conflict_type, conflict_reason)
     end
+    
+    # Если слот доступен, конфликта нет
+    nil
   end
 
   def determine_conflict_type(booking)
     service_point = booking.service_point
     
     # Проверяем статус сервисной точки
-    unless service_point.working?
+    unless service_point.work_status == 'working'
       return 'service_point_status'
     end
     
     # Проверяем статус постов
-    working_posts = service_point.service_point_posts.active
+    working_posts = service_point.service_posts.active
     if working_posts.empty?
       return 'post_status'
     end
@@ -133,25 +148,26 @@ class BookingConflictAnalysisService < ApplicationService
     reasons = []
     
     # Проверяем различные причины конфликта
-    unless service_point.working?
+    unless service_point.work_status == 'working'
       reasons << "Сервисная точка '#{service_point.name}' имеет статус '#{service_point.work_status}'"
     end
     
-    working_posts = service_point.service_point_posts.active
+    working_posts = service_point.service_posts.active
     if working_posts.empty?
       reasons << "Нет активных постов обслуживания"
     end
     
     # Проверяем расписание
-    availability_service = DynamicAvailabilityService.new(
-      service_point: service_point,
-      date: booking_date
+    has_working_posts = DynamicAvailabilityService.has_working_posts_for_category_on_date?(
+      service_point, 
+      booking_date, 
+      booking.service_category_id
     )
     
-    if availability_service.has_working_posts_for_category_on_date?(booking.category_id, booking_date)
+    if has_working_posts
       reasons << "Время #{booking_time} недоступно в текущем расписании на #{booking_date.strftime('%d.%m.%Y')}"
     else
-      reasons << "Нет рабочих постов для категории '#{booking.category&.name}' на #{booking_date.strftime('%d.%m.%Y')}"
+      reasons << "Нет рабочих постов для категории '#{booking.service_category&.name}' на #{booking_date.strftime('%d.%m.%Y')}"
     end
     
     reasons.join('. ')
@@ -186,9 +202,9 @@ class BookingConflictAnalysisService < ApplicationService
     
     Booking.joins(:service_point)
            .where(service_point: service_point)
-           .where('start_time > ? AND start_time <= ?', Date.current.end_of_day, end_date.end_of_day)
-           .where.not(status: ['cancelled', 'completed'])
-           .includes(:service_point, :category, :client)
+           .where('booking_date >= ? AND booking_date <= ?', analysis_date, end_date)
+           .includes(:service_category, :client)
+           .order(:booking_date, :start_time)
   end
 
   def get_future_bookings_for_post(post)
@@ -196,17 +212,19 @@ class BookingConflictAnalysisService < ApplicationService
     
     Booking.joins(:service_point)
            .where(service_point: post.service_point)
-           .where('start_time > ? AND start_time <= ?', Date.current.end_of_day, end_date.end_of_day)
-           .where.not(status: ['cancelled', 'completed'])
-           .includes(:service_point, :category, :client)
+           .where('booking_date >= ? AND booking_date <= ?', analysis_date, end_date)
+           .where.not(status: ['cancelled_by_client', 'cancelled_by_partner', 'completed'])
+           .includes(:service_point, :service_category, :client)
+           .order(:booking_date, :start_time)
   end
 
   def get_all_future_bookings
     end_date = analysis_date + 30.days
     
-    Booking.where('start_time > ? AND start_time <= ?', Date.current.end_of_day, end_date.end_of_day)
-           .where.not(status: ['cancelled', 'completed'])
-           .includes(:service_point, :category, :client)
+    Booking.where('booking_date >= ? AND booking_date <= ?', analysis_date, end_date)
+           .where.not(status: ['cancelled_by_client', 'cancelled_by_partner', 'completed'])
+           .includes(:service_point, :service_category, :client)
+           .order(:booking_date, :start_time)
   end
 
   # Методы для превью (синхронный анализ)
