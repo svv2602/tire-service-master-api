@@ -15,6 +15,9 @@ class Api::V1::AvailabilityController < ApplicationController
     current_time = Time.current
     
     begin
+      # Получаем информацию о расписании (включая сезонные)
+      schedule_info = DynamicAvailabilityService.send(:get_schedule_for_date, @service_point, date)
+      
       available_times = DynamicAvailabilityService.available_times_for_date(
         @service_point.id, 
         date
@@ -44,7 +47,14 @@ class Api::V1::AvailabilityController < ApplicationController
                    slot[:available_posts] > 0 ? 'limited' : 'full'
           }
         end,
-        total_slots: available_times.count
+        total_slots: available_times.count,
+        schedule_info: {
+          is_working: schedule_info[:is_working],
+          schedule_type: schedule_info[:schedule_type],
+          schedule_name: schedule_info[:schedule_name],
+          opening_time: schedule_info[:opening_time]&.strftime('%H:%M'),
+          closing_time: schedule_info[:closing_time]&.strftime('%H:%M')
+        }
       }
     rescue => e
       render json: { error: "Внутренняя ошибка сервера: #{e.message}" }, status: :internal_server_error
@@ -335,12 +345,17 @@ class Api::V1::AvailabilityController < ApplicationController
     end
 
     begin
+      service_point = ServicePoint.find(service_point_id)
+      parsed_date = Date.parse(date)
+      
+      # Получаем информацию о расписании (включая сезонные)
+      schedule_info = DynamicAvailabilityService.send(:get_schedule_for_date, service_point, parsed_date)
+      
       slots = DynamicAvailabilityService.available_slots_for_category(
         service_point_id, date, category_id
       )
       
       # Получаем общее количество постов для категории
-      service_point = ServicePoint.find(service_point_id)
       total_posts_count = service_point.posts_count_for_category(category_id.to_i)
       
       render json: {
@@ -349,7 +364,14 @@ class Api::V1::AvailabilityController < ApplicationController
         category_id: category_id,
         slots: slots,
         total_slots: slots.count,
-        total_posts_count: total_posts_count
+        total_posts_count: total_posts_count,
+        schedule_info: {
+          is_working: schedule_info[:is_working],
+          schedule_type: schedule_info[:schedule_type],
+          schedule_name: schedule_info[:schedule_name],
+          opening_time: schedule_info[:opening_time]&.strftime('%H:%M'),
+          closing_time: schedule_info[:closing_time]&.strftime('%H:%M')
+        }
       }
     rescue => e
       render json: { 

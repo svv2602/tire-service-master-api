@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 Тестирование интеграции сезонных расписаний со слотами</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #007bff;
+        }
+        .test-section h2 {
+            color: #495057;
+            margin-top: 0;
+            font-size: 1.5em;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #495057;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .slots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .slot-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            transition: transform 0.2s;
+        }
+        .slot-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .slot-available {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+        .slot-busy {
+            border-color: #dc3545;
+            background: #fff8f8;
+        }
+        .slot-time {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 10px;
+        }
+        .slot-info {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .schedule-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .schedule-info h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тестирование интеграции сезонных расписаний со слотами</h1>
+        
+        <div class="test-section">
+            <h2>📋 Настройка тестирования</h2>
+            <div class="form-group">
+                <label for="servicePointId">ID сервисной точки:</label>
+                <input type="number" id="servicePointId" value="1" min="1">
+            </div>
+            <div class="form-group">
+                <label for="categoryId">ID категории (опционально):</label>
+                <input type="number" id="categoryId" value="" placeholder="Оставьте пустым для всех категорий">
+            </div>
+            <div class="form-group">
+                <label for="testDate">Дата для тестирования:</label>
+                <input type="date" id="testDate" value="">
+            </div>
+            <button onclick="checkConnection()">🔌 Проверить подключение</button>
+            <button onclick="loadServicePointInfo()" class="btn-success">📍 Загрузить информацию о точке</button>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 Тестирование сезонных расписаний</h2>
+            <button onclick="checkSeasonalSchedules()">📅 Проверить сезонные расписания</button>
+            <button onclick="createTestSeasonalSchedule()" class="btn-success">➕ Создать тестовое расписание</button>
+            <button onclick="deleteTestSeasonalSchedule()" class="btn-danger">🗑️ Удалить тестовое расписание</button>
+            <div id="seasonalScheduleResult" class="result info" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>⏰ Тестирование генерации слотов</h2>
+            <button onclick="getAvailableSlots()">🎰 Получить доступные слоты</button>
+            <button onclick="getSlotsForCategory()" class="btn-success">🎯 Получить слоты для категории</button>
+            <button onclick="compareSchedules()">🔄 Сравнить обычное и сезонное расписание</button>
+            <div id="slotsResult" class="result info" style="display: none;"></div>
+            <div id="slotsGrid" class="slots-grid"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Результаты тестирования</h2>
+            <div id="testResults" class="result info" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let testSeasonalScheduleId = null;
+
+        // Устанавливаем завтрашнюю дату по умолчанию
+        document.getElementById('testDate').value = new Date(Date.now() + 24*60*60*1000).toISOString().split('T')[0];
+
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            };
+            
+            const response = await fetch(url, { ...defaultOptions, ...options });
+            const data = await response.json();
+            
+            return { response, data };
+        }
+
+        async function checkConnection() {
+            try {
+                const { response, data } = await apiRequest('/service_points');
+                showResult('testResults', `✅ Подключение успешно!\nСтатус: ${response.status}\nКоличество сервисных точек: ${data.length || 0}`, 'success');
+            } catch (error) {
+                showResult('testResults', `❌ Ошибка подключения: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadServicePointInfo() {
+            const servicePointId = document.getElementById('servicePointId').value;
+            
+            try {
+                const { response, data } = await apiRequest(`/service_points/${servicePointId}`);
+                
+                if (response.ok) {
+                    const info = `
+📍 Информация о сервисной точке:
+- ID: ${data.id}
+- Название: ${data.name}
+- Адрес: ${data.address}
+- Город: ${data.city?.name || 'Не указан'}
+- Активна: ${data.is_active ? 'Да' : 'Нет'}
+- Количество постов: ${data.service_posts?.length || 0}
+
+📅 Обычное расписание:
+${JSON.stringify(data.working_hours, null, 2)}
+                    `;
+                    showResult('testResults', info, 'info');
+                } else {
+                    showResult('testResults', `❌ Ошибка загрузки: ${response.status} - ${data.error || 'Неизвестная ошибка'}`, 'error');
+                }
+            } catch (error) {
+                showResult('testResults', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkSeasonalSchedules() {
+            const servicePointId = document.getElementById('servicePointId').value;
+            const testDate = document.getElementById('testDate').value;
+            
+            try {
+                // Проверяем все сезонные расписания для точки
+                const { response: listResponse, data: listData } = await apiRequest(`/service_points/${servicePointId}/seasonal_schedules`);
+                
+                let result = `📅 Сезонные расписания для точки ${servicePointId}:\n`;
+                result += `Всего расписаний: ${listData.length}\n\n`;
+                
+                if (listData.length > 0) {
+                    listData.forEach(schedule => {
+                        result += `📋 ${schedule.name}\n`;
+                        result += `  - Период: ${schedule.start_date} - ${schedule.end_date}\n`;
+                        result += `  - Статус: ${schedule.is_active ? 'Активно' : 'Неактивно'}\n`;
+                        result += `  - Приоритет: ${schedule.priority}\n\n`;
+                    });
+                }
+                
+                // Проверяем активное расписание для конкретной даты
+                if (testDate) {
+                    const { response: activeResponse, data: activeData } = await apiRequest(`/service_points/${servicePointId}/seasonal_schedules/active_for_date?date=${testDate}`);
+                    
+                    result += `🎯 Активное расписание для ${testDate}:\n`;
+                    if (activeResponse.ok && activeData.schedule) {
+                        result += `  - Найдено: ${activeData.schedule.name}\n`;
+                        result += `  - Тип: ${activeData.schedule_type}\n`;
+                        result += `  - Рабочий день: ${activeData.is_working ? 'Да' : 'Нет'}\n`;
+                        if (activeData.is_working) {
+                            result += `  - Время работы: ${activeData.opening_time} - ${activeData.closing_time}\n`;
+                        }
+                    } else {
+                        result += `  - Активное расписание не найдено\n`;
+                    }
+                }
+                
+                showResult('seasonalScheduleResult', result, 'info');
+            } catch (error) {
+                showResult('seasonalScheduleResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        async function createTestSeasonalSchedule() {
+            const servicePointId = document.getElementById('servicePointId').value;
+            const testDate = document.getElementById('testDate').value;
+            
+            // Создаем расписание на неделю начиная с тестовой даты
+            const startDate = new Date(testDate);
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + 7);
+            
+            const scheduleData = {
+                seasonal_schedule: {
+                    name: `Тестовое расписание ${new Date().toLocaleString()}`,
+                    description: 'Автоматически созданное расписание для тестирования',
+                    start_date: startDate.toISOString().split('T')[0],
+                    end_date: endDate.toISOString().split('T')[0],
+                    is_active: true,
+                    priority: 1,
+                    working_hours: {
+                        monday: { is_working_day: true, start: '08:00', end: '20:00' },
+                        tuesday: { is_working_day: true, start: '08:00', end: '20:00' },
+                        wednesday: { is_working_day: true, start: '08:00', end: '20:00' },
+                        thursday: { is_working_day: true, start: '08:00', end: '20:00' },
+                        friday: { is_working_day: true, start: '08:00', end: '20:00' },
+                        saturday: { is_working_day: true, start: '09:00', end: '18:00' },
+                        sunday: { is_working_day: false, start: '00:00', end: '00:00' }
+                    }
+                }
+            };
+            
+            try {
+                const { response, data } = await apiRequest(`/service_points/${servicePointId}/seasonal_schedules`, {
+                    method: 'POST',
+                    body: JSON.stringify(scheduleData)
+                });
+                
+                if (response.ok) {
+                    testSeasonalScheduleId = data.id;
+                    showResult('seasonalScheduleResult', `✅ Тестовое расписание создано!\nID: ${data.id}\nНазвание: ${data.name}\nПериод: ${data.start_date} - ${data.end_date}`, 'success');
+                } else {
+                    showResult('seasonalScheduleResult', `❌ Ошибка создания: ${response.status}\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('seasonalScheduleResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteTestSeasonalSchedule() {
+            if (!testSeasonalScheduleId) {
+                showResult('seasonalScheduleResult', '⚠️ Нет тестового расписания для удаления', 'error');
+                return;
+            }
+            
+            const servicePointId = document.getElementById('servicePointId').value;
+            
+            try {
+                const { response, data } = await apiRequest(`/service_points/${servicePointId}/seasonal_schedules/${testSeasonalScheduleId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showResult('seasonalScheduleResult', `✅ Тестовое расписание удалено (ID: ${testSeasonalScheduleId})`, 'success');
+                    testSeasonalScheduleId = null;
+                } else {
+                    showResult('seasonalScheduleResult', `❌ Ошибка удаления: ${response.status}\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('seasonalScheduleResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        async function getAvailableSlots() {
+            const servicePointId = document.getElementById('servicePointId').value;
+            const testDate = document.getElementById('testDate').value;
+            
+            try {
+                const { response, data } = await apiRequest(`/availability/slots?service_point_id=${servicePointId}&date=${testDate}`);
+                
+                if (response.ok) {
+                    let result = `⏰ Доступные слоты для ${testDate}:\n`;
+                    result += `Всего слотов: ${data.slots?.length || 0}\n\n`;
+                    
+                    if (data.slots && data.slots.length > 0) {
+                        displaySlotsGrid(data.slots, data.schedule_info);
+                        
+                        // Группируем слоты по времени
+                        const groupedSlots = {};
+                        data.slots.forEach(slot => {
+                            const time = slot.start_time;
+                            if (!groupedSlots[time]) {
+                                groupedSlots[time] = { available: 0, total: 0 };
+                            }
+                            groupedSlots[time].total++;
+                            if (slot.can_book) {
+                                groupedSlots[time].available++;
+                            }
+                        });
+                        
+                        Object.keys(groupedSlots).sort().forEach(time => {
+                            const slot = groupedSlots[time];
+                            result += `${time}: ${slot.available}/${slot.total} доступно\n`;
+                        });
+                    }
+                    
+                    if (data.schedule_info) {
+                        result += `\n📋 Информация о расписании:\n`;
+                        result += `Тип: ${data.schedule_info.schedule_type}\n`;
+                        if (data.schedule_info.schedule_name) {
+                            result += `Название: ${data.schedule_info.schedule_name}\n`;
+                        }
+                        result += `Рабочий день: ${data.schedule_info.is_working ? 'Да' : 'Нет'}\n`;
+                    }
+                    
+                    showResult('slotsResult', result, 'info');
+                } else {
+                    showResult('slotsResult', `❌ Ошибка: ${response.status}\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('slotsResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        async function getSlotsForCategory() {
+            const servicePointId = document.getElementById('servicePointId').value;
+            const categoryId = document.getElementById('categoryId').value;
+            const testDate = document.getElementById('testDate').value;
+            
+            if (!categoryId) {
+                showResult('slotsResult', '⚠️ Укажите ID категории', 'error');
+                return;
+            }
+            
+            try {
+                const { response, data } = await apiRequest(`/availability/slots?service_point_id=${servicePointId}&category_id=${categoryId}&date=${testDate}`);
+                
+                if (response.ok) {
+                    let result = `🎯 Слоты для категории ${categoryId} на ${testDate}:\n`;
+                    result += `Всего слотов: ${data.slots?.length || 0}\n\n`;
+                    
+                    if (data.slots && data.slots.length > 0) {
+                        displaySlotsGrid(data.slots, data.schedule_info);
+                        
+                        data.slots.forEach(slot => {
+                            result += `${slot.start_time}: ${slot.available_posts}/${slot.total_posts} постов доступно\n`;
+                        });
+                    }
+                    
+                    showResult('slotsResult', result, 'info');
+                } else {
+                    showResult('slotsResult', `❌ Ошибка: ${response.status}\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('slotsResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        async function compareSchedules() {
+            const servicePointId = document.getElementById('servicePointId').value;
+            const testDate = document.getElementById('testDate').value;
+            
+            try {
+                // Получаем слоты с учетом текущих расписаний
+                const { response: slotsResponse, data: slotsData } = await apiRequest(`/availability/slots?service_point_id=${servicePointId}&date=${testDate}`);
+                
+                let result = `🔄 Сравнение расписаний для ${testDate}:\n\n`;
+                
+                if (slotsResponse.ok && slotsData.schedule_info) {
+                    result += `📋 Активное расписание:\n`;
+                    result += `Тип: ${slotsData.schedule_info.schedule_type}\n`;
+                    if (slotsData.schedule_info.schedule_name) {
+                        result += `Название: ${slotsData.schedule_info.schedule_name}\n`;
+                    }
+                    result += `Рабочий день: ${slotsData.schedule_info.is_working ? 'Да' : 'Нет'}\n`;
+                    
+                    if (slotsData.schedule_info.is_working) {
+                        result += `Время работы: ${slotsData.schedule_info.opening_time} - ${slotsData.schedule_info.closing_time}\n`;
+                    }
+                    
+                    result += `\n⏰ Доступные временные слоты:\n`;
+                    if (slotsData.slots && slotsData.slots.length > 0) {
+                        const times = [...new Set(slotsData.slots.map(s => s.start_time))].sort();
+                        result += times.join(', ') + '\n';
+                        result += `Всего уникальных времен: ${times.length}\n`;
+                    } else {
+                        result += 'Нет доступных слотов\n';
+                    }
+                    
+                    // Показываем влияние сезонного расписания
+                    if (slotsData.schedule_info.schedule_type === 'seasonal') {
+                        result += `\n🎯 Влияние сезонного расписания:\n`;
+                        result += `✅ Сезонное расписание активно и переопределяет обычное расписание\n`;
+                        result += `📅 Расписание: ${slotsData.schedule_info.schedule_name}\n`;
+                    } else {
+                        result += `\n📅 Обычное расписание:\n`;
+                        result += `ℹ️ Сезонное расписание не активно, используется обычное расписание\n`;
+                    }
+                }
+                
+                showResult('slotsResult', result, 'info');
+            } catch (error) {
+                showResult('slotsResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        function displaySlotsGrid(slots, scheduleInfo) {
+            const grid = document.getElementById('slotsGrid');
+            grid.innerHTML = '';
+            
+            if (scheduleInfo) {
+                const scheduleInfoDiv = document.createElement('div');
+                scheduleInfoDiv.className = 'schedule-info';
+                scheduleInfoDiv.innerHTML = `
+                    <h3>📋 Активное расписание</h3>
+                    <p><strong>Тип:</strong> ${scheduleInfo.schedule_type === 'seasonal' ? 'Сезонное' : 'Обычное'}</p>
+                    ${scheduleInfo.schedule_name ? `<p><strong>Название:</strong> ${scheduleInfo.schedule_name}</p>` : ''}
+                    <p><strong>Рабочий день:</strong> ${scheduleInfo.is_working ? 'Да' : 'Нет'}</p>
+                    ${scheduleInfo.opening_time && scheduleInfo.closing_time ? 
+                        `<p><strong>Время работы:</strong> ${scheduleInfo.opening_time} - ${scheduleInfo.closing_time}</p>` : ''}
+                `;
+                grid.appendChild(scheduleInfoDiv);
+            }
+            
+            // Группируем слоты по времени
+            const groupedSlots = {};
+            slots.forEach(slot => {
+                const time = slot.start_time;
+                if (!groupedSlots[time]) {
+                    groupedSlots[time] = {
+                        time: time,
+                        available: 0,
+                        total: 0,
+                        can_book: false,
+                        duration: slot.duration_minutes
+                    };
+                }
+                groupedSlots[time].total++;
+                if (slot.can_book) {
+                    groupedSlots[time].available++;
+                    groupedSlots[time].can_book = true;
+                }
+            });
+            
+            // Создаем карточки для каждого времени
+            Object.keys(groupedSlots).sort().forEach(time => {
+                const slot = groupedSlots[time];
+                const card = document.createElement('div');
+                card.className = `slot-card ${slot.can_book ? 'slot-available' : 'slot-busy'}`;
+                
+                card.innerHTML = `
+                    <div class="slot-time">${slot.time}</div>
+                    <div class="slot-info">
+                        <div>${slot.available}/${slot.total} постов доступно</div>
+                        <div>Длительность: ${slot.duration} мин</div>
+                        <div>Статус: ${slot.can_book ? '✅ Доступно' : '❌ Занято'}</div>
+                    </div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+
+        // Автоматическая проверка подключения при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            checkConnection();
+        });
+    </script>
+</body>
+</html> 

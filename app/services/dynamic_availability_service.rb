@@ -23,14 +23,17 @@ class DynamicAvailabilityService
     when 6 then 'saturday'
     end
     
+    # Получаем расписание для этой даты (с учетом сезонных расписаний)
+    schedule_info = get_schedule_for_date(service_point, date)
+    
     # Получаем все активные посты, работающие в этот день
     working_posts = service_point.service_posts.active.select do |post|
       if post.has_custom_schedule && post.working_days.present?
+        # Посты с индивидуальным расписанием не затрагиваются сезонными расписаниями
         post.working_days[day_key] == true || post.working_days[day_key.to_s] == true
       else
-        # Пост работает по расписанию точки
-        day_schedule = service_point.working_hours[day_key]
-        day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+        # Пост работает по расписанию точки (включая сезонные расписания)
+        schedule_info[:is_working]
       end
     end
     
@@ -41,8 +44,22 @@ class DynamicAvailabilityService
     total_posts_count = working_posts.count
     
     # Определяем время работы
-    start_time_str = first_post.start_time_for_day(day_key)
-    end_time_str = first_post.end_time_for_day(day_key)
+    if first_post.has_custom_schedule && first_post.working_days.present?
+      # Пост с индивидуальным расписанием - используем его время
+      start_time_str = first_post.start_time_for_day(day_key)
+      end_time_str = first_post.end_time_for_day(day_key)
+    else
+      # Пост работает по общему расписанию - используем время из schedule_info (включая сезонные)
+      if schedule_info[:opening_time] && schedule_info[:closing_time]
+        start_time_str = schedule_info[:opening_time].strftime('%H:%M')
+        end_time_str = schedule_info[:closing_time].strftime('%H:%M')
+      else
+        # Fallback на время поста
+        start_time_str = first_post.start_time_for_day(day_key)
+        end_time_str = first_post.end_time_for_day(day_key)
+      end
+    end
+    
     slot_duration = first_post.slot_duration
     
     start_time = Time.parse("#{date} #{start_time_str}")
@@ -132,13 +149,16 @@ class DynamicAvailabilityService
     when 6 then 'saturday'
     end
     
+    # Получаем расписание для этой даты (с учетом сезонных расписаний)
+    schedule_info = get_schedule_for_date(service_point, date)
+    
     total_posts = service_point.service_posts.active.select do |post|
       if post.has_custom_schedule && post.working_days.present?
+        # Посты с индивидуальным расписанием не затрагиваются сезонными расписаниями
         post.working_days[day_key] == true || post.working_days[day_key.to_s] == true
       else
-        # Пост работает по расписанию точки
-        day_schedule = service_point.working_hours[day_key]
-        day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+        # Пост работает по расписанию точки (включая сезонные расписания)
+        schedule_info[:is_working]
       end
     end.count
     
@@ -613,9 +633,18 @@ class DynamicAvailabilityService
     when 6 then 'saturday'
     end
     
+    # Получаем расписание для этой даты (с учетом сезонных расписаний)
+    schedule_info = get_schedule_for_date(service_point, date)
+    
     # Фильтруем посты, работающие в этот день
     working_posts = category_posts.select do |post|
-      post.working_on_day?(day_key)
+      if post.has_custom_schedule?
+        # Пост имеет индивидуальный график (не затрагивается сезонными расписаниями)
+        post.working_on_day?(day_key)
+      else
+        # Пост работает по общему расписанию сервисной точки (включая сезонные расписания)
+        schedule_info[:is_working]
+      end
     end
     
     return [] if working_posts.empty?
@@ -625,8 +654,22 @@ class DynamicAvailabilityService
     
     working_posts.each do |post|
       # Определяем время работы для этого поста
-      start_time_str = post.start_time_for_day(day_key)
-      end_time_str = post.end_time_for_day(day_key)
+      if post.has_custom_schedule?
+        # Пост с индивидуальным расписанием
+        start_time_str = post.start_time_for_day(day_key)
+        end_time_str = post.end_time_for_day(day_key)
+      else
+        # Пост работает по общему расписанию (включая сезонные расписания)
+        if schedule_info[:opening_time] && schedule_info[:closing_time]
+          start_time_str = schedule_info[:opening_time].strftime('%H:%M')
+          end_time_str = schedule_info[:closing_time].strftime('%H:%M')
+        else
+          # Fallback на время поста
+          start_time_str = post.start_time_for_day(day_key)
+          end_time_str = post.end_time_for_day(day_key)
+        end
+      end
+      
       slot_duration = post.slot_duration
       
       start_time = Time.parse("#{date} #{start_time_str}")
@@ -840,6 +883,9 @@ class DynamicAvailabilityService
     when 6 then 'saturday'
     end
     
+    # Получаем расписание для этой даты (с учетом сезонных расписаний)
+    schedule_info = get_schedule_for_date(service_point, date)
+    
     # Получаем посты для указанной категории
     category_posts = service_point.service_posts.where(service_category_id: category_id, is_active: true)
     return false if category_posts.empty?
@@ -847,12 +893,11 @@ class DynamicAvailabilityService
     # Проверяем есть ли хотя бы один пост, работающий в этот день
     category_posts.any? do |post|
       if post.has_custom_schedule?
-        # Пост имеет индивидуальный график
+        # Пост имеет индивидуальный график (не затрагивается сезонными расписаниями)
         post.working_on_day?(day_key)
       else
-        # Пост работает по общему расписанию сервисной точки
-        day_schedule = service_point.working_hours&.[](day_key)
-        day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+        # Пост работает по общему расписанию сервисной точки (включая сезонные расписания)
+        schedule_info[:is_working]
       end
     end
   end
@@ -869,13 +914,36 @@ class DynamicAvailabilityService
     when 6 then 'saturday'
     end
     
+    # Получаем расписание для этой даты (с учетом сезонных расписаний)
+    schedule_info = get_schedule_for_date(service_point, date)
+    
     # Получаем работающие посты для данной категории
     category_posts = service_point.service_posts.where(service_category_id: category_id, is_active: true)
-    working_posts = category_posts.select { |post| post.working_on_day?(day_key) }
+    working_posts = category_posts.select do |post|
+      if post.has_custom_schedule?
+        post.working_on_day?(day_key)
+      else
+        schedule_info[:is_working]
+      end
+    end
     
     # Находим самое раннее время открытия и самое позднее время закрытия
-    opening_times = working_posts.map { |post| post.start_time_for_day(day_key) }
-    closing_times = working_posts.map { |post| post.end_time_for_day(day_key) }
+    opening_times = []
+    closing_times = []
+    
+    working_posts.each do |post|
+      if post.has_custom_schedule?
+        # Пост с индивидуальным расписанием
+        opening_times << post.start_time_for_day(day_key)
+        closing_times << post.end_time_for_day(day_key)
+      else
+        # Пост работает по общему расписанию (включая сезонные расписания)
+        if schedule_info[:opening_time] && schedule_info[:closing_time]
+          opening_times << schedule_info[:opening_time].strftime('%H:%M')
+          closing_times << schedule_info[:closing_time].strftime('%H:%M')
+        end
+      end
+    end
     
     earliest_opening = opening_times.min || '09:00'
     latest_closing = closing_times.max || '18:00'
@@ -899,6 +967,9 @@ class DynamicAvailabilityService
     when 6 then 'saturday'
     end
     
+    # Получаем расписание для этой даты (с учетом сезонных расписаний)
+    schedule_info = get_schedule_for_date(service_point, date)
+    
     # Получаем все активные посты
     all_posts = service_point.service_posts.where(is_active: true)
     return false if all_posts.empty?
@@ -906,12 +977,11 @@ class DynamicAvailabilityService
     # Проверяем есть ли хотя бы один пост, работающий в этот день
     all_posts.any? do |post|
       if post.has_custom_schedule?
-        # Пост имеет индивидуальный график
+        # Пост имеет индивидуальный график (не затрагивается сезонными расписаниями)
         post.working_on_day?(day_key)
       else
-        # Пост работает по общему расписанию сервисной точки
-        day_schedule = service_point.working_hours&.[](day_key)
-        day_schedule.present? && (day_schedule['is_working_day'] == true || day_schedule['is_working_day'] == 'true')
+        # Пост работает по общему расписанию сервисной точки (включая сезонные расписания)
+        schedule_info[:is_working]
       end
     end
   end
@@ -928,13 +998,36 @@ class DynamicAvailabilityService
     when 6 then 'saturday'
     end
     
+    # Получаем расписание для этой даты (с учетом сезонных расписаний)
+    schedule_info = get_schedule_for_date(service_point, date)
+    
     # Получаем все работающие посты
     all_posts = service_point.service_posts.where(is_active: true)
-    working_posts = all_posts.select { |post| post.working_on_day?(day_key) }
+    working_posts = all_posts.select do |post|
+      if post.has_custom_schedule?
+        post.working_on_day?(day_key)
+      else
+        schedule_info[:is_working]
+      end
+    end
     
     # Находим самое раннее время открытия и самое позднее время закрытия
-    opening_times = working_posts.map { |post| post.start_time_for_day(day_key) }
-    closing_times = working_posts.map { |post| post.end_time_for_day(day_key) }
+    opening_times = []
+    closing_times = []
+    
+    working_posts.each do |post|
+      if post.has_custom_schedule?
+        # Пост с индивидуальным расписанием
+        opening_times << post.start_time_for_day(day_key)
+        closing_times << post.end_time_for_day(day_key)
+      else
+        # Пост работает по общему расписанию (включая сезонные расписания)
+        if schedule_info[:opening_time] && schedule_info[:closing_time]
+          opening_times << schedule_info[:opening_time].strftime('%H:%M')
+          closing_times << schedule_info[:closing_time].strftime('%H:%M')
+        end
+      end
+    end
     
     earliest_opening = opening_times.min || '09:00'
     latest_closing = closing_times.max || '18:00'
