@@ -218,7 +218,7 @@ class Api::V1::BookingConflictsController < ApplicationController
       resolution_type: conflict.resolution_type,
       resolution_type_human: conflict.resolution_type_human,
       resolution_notes: conflict.resolution_notes,
-      resolved_by: conflict.resolved_by&.name,
+      resolved_by: conflict.resolved_by&.full_name,
       booking: {
         id: booking.id,
         start_time: booking_start_datetime,
@@ -242,29 +242,31 @@ class Api::V1::BookingConflictsController < ApplicationController
   def handle_auto_reschedule_for_conflict(conflict)
     booking = conflict.booking
     
-    # Найдем ближайший доступный слот
-    availability_service = DynamicAvailabilityService.new(
-      service_point: booking.service_point,
-      date: booking.booking_date
-    )
-    
     # Ищем доступные слоты на следующие 7 дней
     7.times do |days_offset|
       check_date = booking.booking_date + days_offset.days
-      available_slots = availability_service.available_slots_for_category(booking.service_category_id)
+      
+      # Используем статический метод для получения доступных слотов для категории
+      available_slots = DynamicAvailabilityService.available_slots_for_category(
+        booking.service_point.id,
+        check_date,
+        booking.service_category_id
+      )
       
       if available_slots.any?
         new_slot = available_slots.first
-        new_start_time = Time.zone.parse("#{check_date} #{new_slot[:time]}")
         
-        # Обновляем бронирование
-        booking.update!(booking_date: check_date, start_time: new_slot[:time] + ':00')
+        # Обновляем бронирование - правильно разделяем дату и время
+        booking.update!(
+          booking_date: check_date, 
+          start_time: new_slot[:start_time] + ':00'
+        )
         
         # Разрешаем конфликт
         conflict.resolve!(
           resolution_type: 'auto_reschedule',
           resolved_by: current_user,
-          notes: "Автоматически перенесено на #{new_start_time.strftime('%d.%m.%Y %H:%M')}"
+          notes: "Автоматически перенесено на #{check_date.strftime('%d.%m.%Y')} #{new_slot[:start_time]}"
         )
         
         # Отправляем уведомление клиенту
@@ -283,16 +285,16 @@ class Api::V1::BookingConflictsController < ApplicationController
     new_start_time = Time.zone.parse(params[:new_start_time])
     booking = @booking_conflict.booking
     
-    # Проверяем доступность нового слота
-    availability_service = DynamicAvailabilityService.new(
-      service_point: booking.service_point,
-      date: new_start_time.to_date
+    # Проверяем доступность нового слота с помощью статического метода
+    available_slots = DynamicAvailabilityService.available_slots_for_category(
+      booking.service_point.id,
+      new_start_time.to_date,
+      booking.service_category_id
     )
     
-    available_slots = availability_service.available_slots_for_category(booking.service_category_id)
     slot_time = new_start_time.strftime('%H:%M')
     
-    unless available_slots.any? { |slot| slot[:time] == slot_time }
+    unless available_slots.any? { |slot| slot[:start_time] == slot_time }
       return render json: { error: 'Выбранный слот недоступен' }, status: :unprocessable_entity
     end
     
