@@ -245,12 +245,12 @@ class Api::V1::BookingConflictsController < ApplicationController
     # Найдем ближайший доступный слот
     availability_service = DynamicAvailabilityService.new(
       service_point: booking.service_point,
-      date: booking.start_time.to_date
+      date: booking.booking_date
     )
     
     # Ищем доступные слоты на следующие 7 дней
     7.times do |days_offset|
-      check_date = booking.start_time.to_date + days_offset.days
+      check_date = booking.booking_date + days_offset.days
       available_slots = availability_service.available_slots_for_category(booking.service_category_id)
       
       if available_slots.any?
@@ -258,7 +258,7 @@ class Api::V1::BookingConflictsController < ApplicationController
         new_start_time = Time.zone.parse("#{check_date} #{new_slot[:time]}")
         
         # Обновляем бронирование
-        booking.update!(start_time: new_start_time)
+        booking.update!(booking_date: check_date, start_time: new_slot[:time] + ':00')
         
         # Разрешаем конфликт
         conflict.resolve!(
@@ -296,8 +296,11 @@ class Api::V1::BookingConflictsController < ApplicationController
       return render json: { error: 'Выбранный слот недоступен' }, status: :unprocessable_entity
     end
     
-    # Обновляем бронирование
-    booking.update!(start_time: new_start_time)
+    # Обновляем бронирование - и дату и время
+    booking.update!(
+      booking_date: new_start_time.to_date,
+      start_time: new_start_time.strftime('%H:%M:%S')
+    )
     
     # Разрешаем конфликт
     @booking_conflict.resolve!(
