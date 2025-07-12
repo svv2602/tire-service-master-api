@@ -199,6 +199,13 @@ class Api::V1::BookingConflictsController < ApplicationController
       }
     end
 
+    # Правильное объединение даты и времени
+    booking_start_datetime = if booking.booking_date && booking.start_time
+      Time.zone.parse("#{booking.booking_date} #{booking.start_time}")
+    else
+      nil
+    end
+
     {
       id: conflict.id,
       conflict_type: conflict.conflict_type,
@@ -214,7 +221,7 @@ class Api::V1::BookingConflictsController < ApplicationController
       resolved_by: conflict.resolved_by&.name,
       booking: {
         id: booking.id,
-        start_time: booking.start_time,
+        start_time: booking_start_datetime,
         service_point: {
           id: booking.service_point.id,
           name: booking.service_point.name
