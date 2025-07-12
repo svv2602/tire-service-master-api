@@ -246,9 +246,10 @@ class ServicePost < ApplicationRecord
   end
   
   def analyze_booking_conflicts_if_status_changed
-    # Анализируем конфликты если изменился статус активности или расписание
+    # Анализируем конфликты если изменился статус активности, расписание или длительность слота
     if saved_change_to_is_active? || saved_change_to_has_custom_schedule? || 
-       saved_change_to_working_days? || saved_change_to_custom_hours?
+       saved_change_to_working_days? || saved_change_to_custom_hours? ||
+       saved_change_to_slot_duration?
       Rails.logger.info "ServicePost #{id} changed, scheduling conflict analysis"
       BookingConflictAnalysisJob.perform_later(post_id: id)
     end

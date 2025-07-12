@@ -322,8 +322,8 @@ class Api::V1::BookingConflictsController < ApplicationController
   def handle_cancel_booking_for_conflict(conflict)
     booking = conflict.booking
     
-    # Отменяем бронирование
-    booking.update!(status: 'cancelled')
+    # Отменяем бронирование с использованием правильного метода
+    booking.cancel_by_partner!
     
     # Разрешаем конфликт
     conflict.resolve!(
