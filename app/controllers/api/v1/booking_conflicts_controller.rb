@@ -18,17 +18,20 @@ class Api::V1::BookingConflictsController < ApplicationController
     @booking_conflicts = @booking_conflicts.recent
 
     # Пагинация
-    page = params[:page] || 1
-    per_page = [params[:per_page]&.to_i || 20, 100].min
-
-    @booking_conflicts = @booking_conflicts.page(page).per(per_page)
+    page = [params[:page].to_i, 1].max  # Минимум 1
+    per_page = [params[:per_page].to_i, 20].max  # Минимум 20
+    per_page = [per_page, 100].min # Ограничиваем максимум 100 записей на страницу
+    
+    offset = (page - 1) * per_page
+    total_count = @booking_conflicts.count
+    @booking_conflicts = @booking_conflicts.limit(per_page).offset(offset)
 
     render json: {
       booking_conflicts: @booking_conflicts.map { |conflict| serialize_conflict(conflict) },
       meta: {
-        current_page: @booking_conflicts.current_page,
-        total_pages: @booking_conflicts.total_pages,
-        total_count: @booking_conflicts.total_count,
+        current_page: page,
+        total_pages: (total_count.to_f / per_page).ceil,
+        total_count: total_count,
         per_page: per_page
       }
     }
@@ -180,6 +183,22 @@ class Api::V1::BookingConflictsController < ApplicationController
   end
 
   def serialize_conflict(conflict)
+    booking = conflict.booking
+    client_info = if booking.client.present?
+      {
+        id: booking.client.id,
+        name: booking.client.user&.full_name || "#{booking.client.user&.first_name} #{booking.client.user&.last_name}".strip,
+        email: booking.client.user&.email
+      }
+    else
+      # Fallback для бронирований без клиента (гостевые или сервисные)
+      {
+        id: nil,
+        name: booking.service_recipient_full_name || "#{booking.service_recipient_first_name} #{booking.service_recipient_last_name}".strip,
+        email: booking.service_recipient_email
+      }
+    end
+
     {
       id: conflict.id,
       conflict_type: conflict.conflict_type,
@@ -194,21 +213,17 @@ class Api::V1::BookingConflictsController < ApplicationController
       resolution_notes: conflict.resolution_notes,
       resolved_by: conflict.resolved_by&.name,
       booking: {
-        id: conflict.booking.id,
-        start_time: conflict.booking.start_time,
+        id: booking.id,
+        start_time: booking.start_time,
         service_point: {
-          id: conflict.booking.service_point.id,
-          name: conflict.booking.service_point.name
+          id: booking.service_point.id,
+          name: booking.service_point.name
         },
         service_category: {
-          id: conflict.booking.service_category&.id,
-          name: conflict.booking.service_category&.name
+          id: booking.service_category&.id,
+          name: booking.service_category&.name
         },
-        client: {
-          id: conflict.booking.client.id,
-          name: conflict.booking.client.name,
-          email: conflict.booking.client.email
-        }
+        client: client_info
       }
     }
   end
@@ -310,13 +325,13 @@ class Api::V1::BookingConflictsController < ApplicationController
   end
 
   def send_reschedule_notification(booking, conflict)
-    return unless booking.client.email.present?
+    return unless booking.client&.user&.email.present?
     
     NotificationMailer.booking_rescheduled(booking, conflict).deliver_later
   end
 
   def send_cancellation_notification(booking, conflict)
-    return unless booking.client.email.present?
+    return unless booking.client&.user&.email.present?
     
     NotificationMailer.booking_cancelled_due_to_conflict(booking, conflict).deliver_later
   end

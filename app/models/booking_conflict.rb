@@ -7,6 +7,7 @@ class BookingConflict < ApplicationRecord
     schedule_change
     service_point_status
     post_status
+    capacity_overload
   ].freeze
 
   # Типы разрешения
@@ -85,6 +86,8 @@ class BookingConflict < ApplicationRecord
       'Изменение статуса сервисной точки'
     when 'post_status'
       'Изменение статуса поста'
+    when 'capacity_overload'
+      'Перегрузка постов'
     else
       conflict_type.humanize
     end

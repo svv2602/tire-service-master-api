@@ -21,6 +21,16 @@ module Api
           @service_categories = @service_categories.where(is_active: true)
         end
         
+        # Фильтрация только категорий с активными постами
+        if params[:with_active_posts] == 'true'
+          @service_categories = @service_categories
+            .joins("INNER JOIN service_posts ON service_posts.service_category_id = service_categories.id")
+            .joins("INNER JOIN service_points ON service_points.id = service_posts.service_point_id")
+            .where("service_posts.is_active = true")
+            .where("service_points.is_active = true")
+            .distinct
+        end
+        
         # Поиск по названию
         if params[:query].present?
           @service_categories = @service_categories.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
