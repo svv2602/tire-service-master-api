@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тестирование Backend - Конфликты бронирований</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background-color: #f5f5f5; 
+        }
+        .container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            margin-bottom: 20px; 
+        }
+        .section { 
+            margin-bottom: 30px; 
+            padding: 15px; 
+            border: 1px solid #ddd; 
+            border-radius: 5px; 
+        }
+        .section h3 { 
+            margin-top: 0; 
+            color: #333; 
+            border-bottom: 2px solid #007bff; 
+            padding-bottom: 10px; 
+        }
+        button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+        button:hover { 
+            background: #0056b3; 
+        }
+        .success { 
+            color: #28a745; 
+            background: #d4edda; 
+            padding: 10px; 
+            border-radius: 3px; 
+            margin: 10px 0; 
+        }
+        .error { 
+            color: #dc3545; 
+            background: #f8d7da; 
+            padding: 10px; 
+            border-radius: 3px; 
+            margin: 10px 0; 
+        }
+        .info { 
+            color: #17a2b8; 
+            background: #d1ecf1; 
+            padding: 10px; 
+            border-radius: 3px; 
+            margin: 10px 0; 
+        }
+        pre { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 5px; 
+            overflow-x: auto; 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+        }
+        .conflict-item {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .conflict-type {
+            font-weight: bold;
+            color: #856404;
+        }
+        .booking-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            margin-top: 10px;
+        }
+        .actions {
+            margin-top: 15px;
+        }
+        .actions button {
+            margin: 2px;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        .btn-resolve { background: #28a745; }
+        .btn-ignore { background: #6c757d; }
+        .btn-cancel { background: #dc3545; }
+        .btn-reschedule { background: #ffc107; color: #212529; }
+        .form-group {
+            margin: 10px 0;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        .form-group textarea {
+            height: 60px;
+            resize: vertical;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Тестирование Backend - Конфликты бронирований</h1>
+        <p>Тестирование системы анализа и управления конфликтами бронирований</p>
+    </div>
+
+    <div class="container">
+        <div class="section">
+            <h3>🔐 Авторизация</h3>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="email" value="admin@test.com" placeholder="admin@test.com">
+            </div>
+            <div class="form-group">
+                <label>Пароль:</label>
+                <input type="password" id="password" value="admin123" placeholder="admin123">
+            </div>
+            <button onclick="login()">Войти</button>
+            <button onclick="logout()">Выйти</button>
+            <div id="auth-status"></div>
+        </div>
+
+        <div class="section">
+            <h3>📊 Статистика конфликтов</h3>
+            <button onclick="getConflictStatistics()">Получить статистику</button>
+            <div id="statistics-result"></div>
+        </div>
+
+        <div class="section">
+            <h3>🔍 Анализ конфликтов</h3>
+            <div class="form-group">
+                <label>ID сервисной точки (опционально):</label>
+                <input type="number" id="service-point-id" placeholder="1">
+            </div>
+            <div class="form-group">
+                <label>ID поста (опционально):</label>
+                <input type="number" id="post-id" placeholder="">
+            </div>
+            <div class="form-group">
+                <label>ID сезонного расписания (опционально):</label>
+                <input type="number" id="seasonal-schedule-id" placeholder="">
+            </div>
+            <button onclick="runAnalysis()">Запустить анализ</button>
+            <button onclick="previewConflicts()">Предварительный просмотр</button>
+            <div id="analysis-result"></div>
+        </div>
+
+        <div class="section">
+            <h3>📋 Список конфликтов</h3>
+            <div class="form-group">
+                <label>Статус:</label>
+                <select id="filter-status">
+                    <option value="">Все</option>
+                    <option value="pending">Ожидает решения</option>
+                    <option value="resolved">Решен</option>
+                    <option value="ignored">Игнорируется</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Тип конфликта:</label>
+                <select id="filter-type">
+                    <option value="">Все</option>
+                    <option value="schedule_change">Изменение расписания</option>
+                    <option value="service_point_status">Статус сервисной точки</option>
+                    <option value="post_status">Статус поста</option>
+                </select>
+            </div>
+            <button onclick="getConflictsList()">Получить список</button>
+            <div id="conflicts-list"></div>
+        </div>
+
+        <div class="section">
+            <h3>⚙️ Управление конфликтами</h3>
+            <div class="form-group">
+                <label>ID конфликта:</label>
+                <input type="number" id="conflict-id" placeholder="1">
+            </div>
+            <div class="form-group">
+                <label>Заметки:</label>
+                <textarea id="resolution-notes" placeholder="Комментарий к решению"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Новое время (для ручного переноса):</label>
+                <input type="datetime-local" id="new-start-time">
+            </div>
+            <button onclick="resolveConflict('auto_reschedule')" class="btn-reschedule">Автоматический перенос</button>
+            <button onclick="resolveConflict('manual_reschedule')" class="btn-reschedule">Ручной перенос</button>
+            <button onclick="resolveConflict('cancel')" class="btn-cancel">Отменить бронирование</button>
+            <button onclick="ignoreConflict()" class="btn-ignore">Игнорировать</button>
+            <div id="resolution-result"></div>
+        </div>
+
+        <div class="section">
+            <h3>🔄 Массовые операции</h3>
+            <div class="form-group">
+                <label>ID конфликтов (через запятую):</label>
+                <input type="text" id="bulk-conflict-ids" placeholder="1,2,3">
+            </div>
+            <div class="form-group">
+                <label>Тип операции:</label>
+                <select id="bulk-resolution-type">
+                    <option value="auto_reschedule">Автоматический перенос</option>
+                    <option value="cancel">Отмена</option>
+                    <option value="ignore">Игнорирование</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Заметки:</label>
+                <textarea id="bulk-notes" placeholder="Комментарий к массовой операции"></textarea>
+            </div>
+            <button onclick="bulkResolveConflicts()">Выполнить массовую операцию</button>
+            <div id="bulk-result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let authToken = null;
+
+        // Авторизация
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    document.getElementById('auth-status').innerHTML = 
+                        `<div class="success">✅ Авторизован как: ${data.user.name}</div>`;
+                } else {
+                    document.getElementById('auth-status').innerHTML = 
+                        `<div class="error">❌ Ошибка авторизации: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('auth-status').innerHTML = 
+                    `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        function logout() {
+            authToken = null;
+            document.getElementById('auth-status').innerHTML = 
+                `<div class="info">ℹ️ Вышли из системы</div>`;
+        }
+
+        // Получение статистики конфликтов
+        async function getConflictStatistics() {
+            if (!authToken) {
+                alert('Необходимо авторизоваться');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/booking_conflicts/statistics`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('statistics-result').innerHTML = 
+                        `<div class="success">
+                            <h4>📊 Статистика конфликтов:</h4>
+                            <pre>${JSON.stringify(data.statistics, null, 2)}</pre>
+                        </div>`;
+                } else {
+                    document.getElementById('statistics-result').innerHTML = 
+                        `<div class="error">❌ Ошибка: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('statistics-result').innerHTML = 
+                    `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        // Запуск анализа конфликтов
+        async function runAnalysis() {
+            if (!authToken) {
+                alert('Необходимо авторизоваться');
+                return;
+            }
+            
+            const servicePointId = document.getElementById('service-point-id').value;
+            const postId = document.getElementById('post-id').value;
+            const seasonalScheduleId = document.getElementById('seasonal-schedule-id').value;
+            
+            const body = {};
+            if (servicePointId) body.service_point_id = servicePointId;
+            if (postId) body.post_id = postId;
+            if (seasonalScheduleId) body.seasonal_schedule_id = seasonalScheduleId;
+            
+            try {
+                const response = await fetch(`${API_BASE}/booking_conflicts/analyze`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('analysis-result').innerHTML = 
+                        `<div class="success">✅ ${data.message}</div>`;
+                } else {
+                    document.getElementById('analysis-result').innerHTML = 
+                        `<div class="error">❌ Ошибка: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('analysis-result').innerHTML = 
+                    `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        // Предварительный просмотр конфликтов
+        async function previewConflicts() {
+            if (!authToken) {
+                alert('Необходимо авторизоваться');
+                return;
+            }
+            
+            const servicePointId = document.getElementById('service-point-id').value;
+            const postId = document.getElementById('post-id').value;
+            const seasonalScheduleId = document.getElementById('seasonal-schedule-id').value;
+            
+            const body = {};
+            if (servicePointId) body.service_point_id = servicePointId;
+            if (postId) body.post_id = postId;
+            if (seasonalScheduleId) body.seasonal_schedule_id = seasonalScheduleId;
+            
+            try {
+                const response = await fetch(`${API_BASE}/booking_conflicts/preview`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('analysis-result').innerHTML = 
+                        `<div class="success">
+                            <h4>🔍 Предварительный просмотр: найдено ${data.count} конфликтов</h4>
+                            <pre>${JSON.stringify(data.conflicts, null, 2)}</pre>
+                        </div>`;
+                } else {
+                    document.getElementById('analysis-result').innerHTML = 
+                        `<div class="error">❌ Ошибка: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('analysis-result').innerHTML = 
+                    `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        // Получение списка конфликтов
+        async function getConflictsList() {
+            if (!authToken) {
+                alert('Необходимо авторизоваться');
+                return;
+            }
+            
+            const status = document.getElementById('filter-status').value;
+            const conflictType = document.getElementById('filter-type').value;
+            
+            let url = `${API_BASE}/booking_conflicts`;
+            const params = new URLSearchParams();
+            if (status) params.append('status', status);
+            if (conflictType) params.append('conflict_type', conflictType);
+            if (params.toString()) url += `?${params.toString()}`;
+            
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let html = `<div class="success">
+                        <h4>📋 Найдено конфликтов: ${data.meta.total_count}</h4>
+                    `;
+                    
+                    data.booking_conflicts.forEach(conflict => {
+                        html += `
+                            <div class="conflict-item">
+                                <div class="conflict-type">${conflict.conflict_type_human}</div>
+                                <p><strong>Причина:</strong> ${conflict.conflict_reason}</p>
+                                <p><strong>Статус:</strong> ${conflict.status_human}</p>
+                                <p><strong>Обнаружено:</strong> ${new Date(conflict.detected_at).toLocaleString('ru-RU')}</p>
+                                
+                                <div class="booking-info">
+                                    <strong>Бронирование ID: ${conflict.booking.id}</strong><br>
+                                    Дата: ${new Date(conflict.booking.start_time).toLocaleDateString('ru-RU')}<br>
+                                    Время: ${new Date(conflict.booking.start_time).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}<br>
+                                    Сервисная точка: ${conflict.booking.service_point.name}<br>
+                                    Клиент: ${conflict.booking.client.name}<br>
+                                    Телефон: ${conflict.booking.client.email}
+                                </div>
+                                
+                                ${conflict.resolution_notes ? `<p><strong>Заметки:</strong> ${conflict.resolution_notes}</p>` : ''}
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    document.getElementById('conflicts-list').innerHTML = html;
+                } else {
+                    document.getElementById('conflicts-list').innerHTML = 
+                        `<div class="error">❌ Ошибка: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('conflicts-list').innerHTML = 
+                    `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        // Разрешение конфликта
+        async function resolveConflict(resolutionType) {
+            if (!authToken) {
+                alert('Необходимо авторизоваться');
+                return;
+            }
+            
+            const conflictId = document.getElementById('conflict-id').value;
+            const notes = document.getElementById('resolution-notes').value;
+            const newStartTime = document.getElementById('new-start-time').value;
+            
+            if (!conflictId) {
+                alert('Укажите ID конфликта');
+                return;
+            }
+            
+            const body = {
+                resolution_type: resolutionType,
+                notes: notes
+            };
+            
+            if (resolutionType === 'manual_reschedule' && newStartTime) {
+                body.new_start_time = newStartTime;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/booking_conflicts/${conflictId}/resolve`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('resolution-result').innerHTML = 
+                        `<div class="success">✅ ${data.message}</div>`;
+                } else {
+                    document.getElementById('resolution-result').innerHTML = 
+                        `<div class="error">❌ Ошибка: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('resolution-result').innerHTML = 
+                    `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        // Игнорирование конфликта
+        async function ignoreConflict() {
+            if (!authToken) {
+                alert('Необходимо авторизоваться');
+                return;
+            }
+            
+            const conflictId = document.getElementById('conflict-id').value;
+            const notes = document.getElementById('resolution-notes').value;
+            
+            if (!conflictId) {
+                alert('Укажите ID конфликта');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/booking_conflicts/${conflictId}/ignore`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ notes })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('resolution-result').innerHTML = 
+                        `<div class="success">✅ ${data.message}</div>`;
+                } else {
+                    document.getElementById('resolution-result').innerHTML = 
+                        `<div class="error">❌ Ошибка: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('resolution-result').innerHTML = 
+                    `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        // Массовое разрешение конфликтов
+        async function bulkResolveConflicts() {
+            if (!authToken) {
+                alert('Необходимо авторизоваться');
+                return;
+            }
+            
+            const conflictIds = document.getElementById('bulk-conflict-ids').value.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+            const resolutionType = document.getElementById('bulk-resolution-type').value;
+            const notes = document.getElementById('bulk-notes').value;
+            
+            if (conflictIds.length === 0) {
+                alert('Укажите ID конфликтов');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/booking_conflicts/bulk_resolve`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        conflict_ids: conflictIds,
+                        resolution_type: resolutionType,
+                        notes: notes
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('bulk-result').innerHTML = 
+                        `<div class="success">
+                            <h4>✅ ${data.message}</h4>
+                            <pre>${JSON.stringify(data.results, null, 2)}</pre>
+                        </div>`;
+                } else {
+                    document.getElementById('bulk-result').innerHTML = 
+                        `<div class="error">❌ Ошибка: ${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('bulk-result').innerHTML = 
+                    `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html> 

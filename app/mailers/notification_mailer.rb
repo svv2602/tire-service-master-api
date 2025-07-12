@@ -34,6 +34,48 @@ class NotificationMailer < ApplicationMailer
     mail(to: to, subject: "Тестовое письмо", body: "Проверка отправки email")
   end
 
+  # Уведомление администраторам о найденных конфликтах бронирований
+  def booking_conflicts_detected(admin, conflicts)
+    @admin = admin
+    @conflicts = conflicts
+    @conflicts_count = conflicts.count
+    
+    mail(
+      to: @admin.email,
+      subject: "Обнаружены конфликты бронирований (#{@conflicts_count})"
+    )
+  end
+
+  # Уведомление клиенту о переносе бронирования
+  def booking_rescheduled(booking, conflict)
+    @booking = booking
+    @conflict = conflict
+    @client = booking.client
+    @service_point = booking.service_point
+    @new_date = booking.start_time.strftime('%d.%m.%Y')
+    @new_time = booking.start_time.strftime('%H:%M')
+    
+    mail(
+      to: @client.email,
+      subject: "Ваше бронирование перенесено"
+    )
+  end
+
+  # Уведомление клиенту об отмене бронирования из-за конфликта
+  def booking_cancelled_due_to_conflict(booking, conflict)
+    @booking = booking
+    @conflict = conflict
+    @client = booking.client
+    @service_point = booking.service_point
+    @original_date = booking.booking_date.strftime('%d.%m.%Y')
+    @original_time = booking.start_time&.strftime('%H:%M') || 'не указано'
+    
+    mail(
+      to: @client.email,
+      subject: "Ваше бронирование отменено"
+    )
+  end
+
   # Пакетная отправка напоминаний о бронированиях
   def booking_reminders_batch(bookings_ids)
     @bookings = Booking.where(id: bookings_ids).includes(:client, :service_point)

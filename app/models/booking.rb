@@ -15,6 +15,7 @@ class Booking < ApplicationRecord
   has_many :booking_services, dependent: :destroy
   has_many :services, through: :booking_services
   has_one :review, dependent: :destroy
+  has_many :booking_conflicts, dependent: :destroy
   
   # Валидации
   validates :booking_date, presence: { message: -> { I18n.t('errors.required') } }

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Бронирование перенесено</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #d4edda; padding: 20px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #c3e6cb; }
+    .booking-info { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    .highlight { background: #fff3cd; padding: 10px; border-radius: 3px; margin: 10px 0; }
+    .contact-info { background: #e9ecef; padding: 10px; border-radius: 3px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>Ваше бронирование перенесено</h2>
+      <p>Уважаемый <%= @client.name %>,</p>
+      <p>Мы вынуждены были перенести ваше бронирование из-за изменений в расписании работы.</p>
+    </div>
+
+    <div class="booking-info">
+      <h3>Новая информация о бронировании:</h3>
+      <p><strong>Дата:</strong> <%= @new_date %></p>
+      <p><strong>Время:</strong> <%= @new_time %></p>
+      <p><strong>Сервисная точка:</strong> <%= @service_point.name %></p>
+      <p><strong>Адрес:</strong> <%= @service_point.address %></p>
+      <% if @service_point.phone.present? %>
+        <p><strong>Телефон:</strong> <%= @service_point.phone %></p>
+      <% end %>
+    </div>
+
+    <div class="highlight">
+      <p><strong>Причина переноса:</strong> <%= @conflict.conflict_reason %></p>
+    </div>
+
+    <div class="contact-info">
+      <p><strong>Если у вас есть вопросы:</strong></p>
+      <p>Свяжитесь с нами по телефону сервисной точки или обратитесь в службу поддержки.</p>
+    </div>
+
+    <p style="margin-top: 30px;">
+      Приносим извинения за неудобства и благодарим за понимание.
+    </p>
+
+    <p style="margin-top: 30px; font-size: 12px; color: #666;">
+      Это автоматическое уведомление от системы управления шиномонтажом.
+    </p>
+  </div>
+</body>
+</html> 

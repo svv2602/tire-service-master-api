@@ -2,6 +2,10 @@ class SeasonalSchedule < ApplicationRecord
   # Связи
   belongs_to :service_point
   
+  # Callbacks для анализа конфликтов
+  after_save :analyze_booking_conflicts_if_changed
+  after_destroy :analyze_booking_conflicts_after_destroy
+  
   # Валидации
   validates :name, presence: true, length: { maximum: 255 }
   validates :start_date, presence: true
@@ -180,5 +184,19 @@ class SeasonalSchedule < ApplicationRecord
     if overlapping_schedules.exists?
       errors.add(:base, 'Период пересекается с другим сезонным расписанием того же приоритета')
     end
+  end
+  
+  def analyze_booking_conflicts_if_changed
+    # Анализируем конфликты если изменились даты, статус активности или рабочие часы
+    if saved_change_to_start_date? || saved_change_to_end_date? || 
+       saved_change_to_is_active? || saved_change_to_working_hours?
+      Rails.logger.info "SeasonalSchedule #{id} changed, scheduling conflict analysis"
+      BookingConflictAnalysisJob.perform_later(seasonal_schedule_id: id)
+    end
+  end
+  
+  def analyze_booking_conflicts_after_destroy
+    Rails.logger.info "SeasonalSchedule #{id} destroyed, scheduling conflict analysis"
+    BookingConflictAnalysisJob.perform_later(service_point_id: service_point_id)
   end
 end 

@@ -34,6 +34,9 @@ class ServicePoint < ApplicationRecord
   # Callback для перенумерации постов после сохранения
   after_save :renumber_service_posts
   
+  # Callback для анализа конфликтов при изменении статуса
+  after_update :analyze_booking_conflicts_if_status_changed
+  
   # Явно объявляем тип атрибута для enum
   attribute :work_status, :string, default: 'working'
   
@@ -310,6 +313,14 @@ class ServicePoint < ApplicationRecord
   def renumber_service_posts
     service_posts.order(created_at: :asc).each_with_index do |post, index|
       post.update(post_number: index + 1)
+    end
+  end
+  
+  def analyze_booking_conflicts_if_status_changed
+    # Анализируем конфликты если изменился статус активности или рабочий статус
+    if saved_change_to_is_active? || saved_change_to_work_status?
+      Rails.logger.info "ServicePoint #{id} status changed, scheduling conflict analysis"
+      BookingConflictAnalysisJob.perform_later(service_point_id: id)
     end
   end
 end

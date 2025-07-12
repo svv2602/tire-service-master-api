@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_10_120640) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_12_062104) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -86,6 +86,26 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_10_120640) do
     t.index ["slug"], name: "index_articles_on_slug", unique: true
     t.index ["status", "published_at"], name: "index_articles_on_status_and_published_at"
     t.index ["status"], name: "index_articles_on_status"
+  end
+
+  create_table "booking_conflicts", force: :cascade do |t|
+    t.bigint "booking_id", null: false
+    t.string "conflict_type", null: false
+    t.text "conflict_reason", null: false
+    t.datetime "detected_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.datetime "resolved_at"
+    t.string "resolution_type"
+    t.text "resolution_notes"
+    t.bigint "resolved_by_id"
+    t.string "status", default: "pending", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["booking_id", "status"], name: "index_booking_conflicts_on_booking_id_and_status"
+    t.index ["booking_id"], name: "index_booking_conflicts_on_booking_id"
+    t.index ["conflict_type"], name: "index_booking_conflicts_on_conflict_type"
+    t.index ["detected_at"], name: "index_booking_conflicts_on_detected_at"
+    t.index ["resolved_by_id"], name: "index_booking_conflicts_on_resolved_by_id"
+    t.index ["status"], name: "index_booking_conflicts_on_status"
   end
 
   create_table "booking_services", force: :cascade do |t|
@@ -691,6 +711,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_10_120640) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "administrators", "users"
   add_foreign_key "articles", "users", column: "author_id"
+  add_foreign_key "booking_conflicts", "bookings"
+  add_foreign_key "booking_conflicts", "users", column: "resolved_by_id"
   add_foreign_key "booking_services", "bookings"
   add_foreign_key "booking_services", "services"
   add_foreign_key "bookings", "booking_statuses", column: "status_id", on_delete: :restrict, validate: false

@@ -18,6 +18,9 @@ class ServicePost < ApplicationRecord
   # Колбэки
   before_save :normalize_working_days_values
   
+  # Callbacks для анализа конфликтов
+  after_update :analyze_booking_conflicts_if_status_changed
+  
   # Валидации для индивидуального расписания
   validate :validate_working_days_format, if: :has_custom_schedule?
   validate :validate_custom_hours_format, if: :has_custom_schedule?
@@ -240,5 +243,14 @@ class ServicePost < ApplicationRecord
   # Проверка формата времени
   def valid_time_format?(time_string)
     time_string.match?(/\A\d{2}:\d{2}\z/)
+  end
+  
+  def analyze_booking_conflicts_if_status_changed
+    # Анализируем конфликты если изменился статус активности или расписание
+    if saved_change_to_is_active? || saved_change_to_has_custom_schedule? || 
+       saved_change_to_working_days? || saved_change_to_custom_hours?
+      Rails.logger.info "ServicePost #{id} changed, scheduling conflict analysis"
+      BookingConflictAnalysisJob.perform_later(post_id: id)
+    end
   end
 end

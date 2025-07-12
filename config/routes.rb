@@ -293,6 +293,20 @@ Rails.application.routes.draw do
         end
       end
 
+      # Конфликты бронирований
+      resources :booking_conflicts, only: [:index, :show] do
+        member do
+          post 'resolve', to: 'booking_conflicts#resolve'
+          post 'ignore', to: 'booking_conflicts#ignore'
+        end
+        collection do
+          get 'statistics', to: 'booking_conflicts#statistics'
+          post 'analyze', to: 'booking_conflicts#analyze'
+          post 'preview', to: 'booking_conflicts#preview'
+          post 'bulk_resolve', to: 'booking_conflicts#bulk_resolve'
+        end
+      end
+
       # Статусы бронирований
       resources :booking_statuses, only: [:index]
       
