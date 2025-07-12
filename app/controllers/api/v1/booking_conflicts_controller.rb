@@ -82,6 +82,31 @@ class Api::V1::BookingConflictsController < ApplicationController
     }
   end
 
+  # POST /api/v1/booking_conflicts/preview_with_form_data
+  def preview_with_form_data
+    service_point_id = params[:service_point_id]
+    form_data = params[:form_data]
+
+    unless service_point_id.present? && form_data.present?
+      return render json: { error: 'service_point_id и form_data обязательны' }, status: :bad_request
+    end
+
+    # Создаем временную копию сервисной точки с данными формы
+    temp_service_point = build_temp_service_point_with_form_data(service_point_id, form_data)
+
+    # Анализируем конфликты с временными данными
+    conflicts = BookingConflictAnalysisService.preview_conflicts_with_temp_data(
+      temp_service_point: temp_service_point
+    )
+
+    render json: {
+      conflicts: conflicts.map { |conflict| serialize_conflict(conflict) },
+      count: conflicts.count,
+      preview_mode: true,
+      form_data_applied: true
+    }
+  end
+
   # POST /api/v1/booking_conflicts/:id/resolve
   def resolve
     resolution_type = params[:resolution_type]
@@ -180,6 +205,82 @@ class Api::V1::BookingConflictsController < ApplicationController
     unless current_user&.admin? || current_user&.partner?
       render json: { error: 'Доступ запрещен' }, status: :forbidden
     end
+  end
+
+  def build_temp_service_point_with_form_data(service_point_id, form_data)
+    # Загружаем исходную сервисную точку
+    original_service_point = ServicePoint.find(service_point_id)
+    
+    # Создаем временную копию с использованием OpenStruct для гибкости
+    temp_service_point = OpenStruct.new(original_service_point.attributes)
+    
+    # Применяем данные формы
+    if form_data[:working_hours].present?
+      temp_service_point.working_hours = form_data[:working_hours]
+    end
+    
+    # Обрабатываем посты обслуживания
+    if form_data[:service_posts_attributes].present?
+      temp_posts = []
+      
+      form_data[:service_posts_attributes].each do |post_data|
+        if post_data[:id].present?
+          # Обновляем существующий пост
+          original_post = original_service_point.service_posts.find(post_data[:id])
+          temp_post = OpenStruct.new(original_post.attributes)
+          
+          # Применяем изменения из формы
+          temp_post.name = post_data[:name] if post_data[:name].present?
+          temp_post.slot_duration = post_data[:slot_duration].to_i if post_data[:slot_duration].present?
+          temp_post.is_active = post_data[:is_active] if post_data.key?(:is_active)
+          temp_post.post_number = post_data[:post_number].to_i if post_data[:post_number].present?
+          temp_post.service_category_id = post_data[:service_category_id].to_i if post_data[:service_category_id].present?
+          temp_post.has_custom_schedule = post_data[:has_custom_schedule] if post_data.key?(:has_custom_schedule)
+          temp_post.working_days = post_data[:working_days] if post_data[:working_days].present?
+          temp_post.custom_hours = post_data[:custom_hours] if post_data[:custom_hours].present?
+          
+          # Добавляем ссылку на сервисную точку
+          temp_post.service_point = temp_service_point
+          
+          temp_posts << temp_post unless post_data[:_destroy]
+        elsif !post_data[:_destroy]
+          # Создаем новый пост
+          temp_post = OpenStruct.new(
+            id: nil,
+            name: post_data[:name],
+            slot_duration: post_data[:slot_duration].to_i,
+            is_active: post_data[:is_active] || true,
+            post_number: post_data[:post_number].to_i,
+            service_category_id: post_data[:service_category_id].to_i,
+            has_custom_schedule: post_data[:has_custom_schedule] || false,
+            working_days: post_data[:working_days] || {},
+            custom_hours: post_data[:custom_hours] || {},
+            service_point: temp_service_point
+          )
+          
+          temp_posts << temp_post
+        end
+      end
+      
+      # Создаем коллекцию постов с методом active
+      temp_service_point.service_posts = ActiveSupport::OrderedOptions.new
+      temp_service_point.service_posts.extend(Enumerable)
+      temp_service_point.service_posts.instance_variable_set(:@posts, temp_posts)
+      
+      def temp_service_point.service_posts.active
+        @posts.select { |post| post.is_active }
+      end
+      
+      def temp_service_point.service_posts.each(&block)
+        @posts.each(&block)
+      end
+      
+      def temp_service_point.service_posts.to_a
+        @posts
+      end
+    end
+    
+    temp_service_point
   end
 
   def serialize_conflict(conflict)

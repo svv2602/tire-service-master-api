@@ -303,6 +303,7 @@ Rails.application.routes.draw do
           get 'statistics', to: 'booking_conflicts#statistics'
           post 'analyze', to: 'booking_conflicts#analyze'
           post 'preview', to: 'booking_conflicts#preview'
+          post 'preview_with_form_data', to: 'booking_conflicts#preview_with_form_data'
           post 'bulk_resolve', to: 'booking_conflicts#bulk_resolve'
         end
       end

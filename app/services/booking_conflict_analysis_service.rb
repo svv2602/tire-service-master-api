@@ -312,6 +312,12 @@ class BookingConflictAnalysisService < ApplicationService
     service.call
   end
 
+  # Новый метод для анализа конфликтов с временными данными формы
+  def self.preview_conflicts_with_temp_data(temp_service_point:)
+    service = new(service_point: temp_service_point)
+    service.call
+  end
+
   # Метод для получения статистики конфликтов
   def self.conflict_statistics
     {
