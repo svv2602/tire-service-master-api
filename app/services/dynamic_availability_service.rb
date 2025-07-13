@@ -118,7 +118,7 @@ class DynamicAvailabilityService
       booking_date: date,
       start_time: slot_start_str
     ).where.not(
-      status_id: BookingStatus.canceled_statuses
+      status: BookingStatuses::CANCELLED_STATUSES.map(&:to_s)
     ).count
   end
 

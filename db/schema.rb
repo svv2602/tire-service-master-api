@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_12_062104) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -156,6 +156,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_12_062104) do
     t.string "car_model", comment: "Модель автомобиля для гостевых бронирований"
     t.string "license_plate", comment: "Номер автомобиля для гостевых бронирований"
     t.string "status", default: "pending", null: false
+    t.boolean "is_service_booking", default: false, null: false
     t.index ["booking_date", "start_time", "end_time"], name: "idx_bookings_time_range"
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_brand", "car_model"], name: "index_bookings_on_car_brand_model"
@@ -163,6 +164,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_12_062104) do
     t.index ["car_type_id"], name: "index_bookings_on_car_type_id"
     t.index ["client_id"], name: "index_bookings_guest_only", where: "(client_id IS NULL)"
     t.index ["client_id"], name: "index_bookings_on_client_id"
+    t.index ["is_service_booking"], name: "index_bookings_on_is_service_booking"
     t.index ["license_plate"], name: "index_bookings_on_license_plate"
     t.index ["payment_status_id"], name: "index_bookings_on_payment_status_id"
     t.index ["service_category_id"], name: "index_bookings_on_service_category_id"

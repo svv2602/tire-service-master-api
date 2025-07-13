@@ -53,7 +53,7 @@ class Booking < ApplicationRecord
   
   validate :end_time_after_start_time
   validate :car_belongs_to_client, if: -> { car_id.present? }
-  validate :booking_time_available, on: :create, unless: -> { skip_availability_check }
+  validate :booking_time_available, on: :create, unless: -> { skip_availability_check || is_service_booking }
   validate :service_category_matches_service_point, if: :service_category_id?
   
   # Атрибуты для пропуска валидаций (нужны для тестов)
@@ -65,6 +65,9 @@ class Booking < ApplicationRecord
   
   # Инициализация статуса при создании
   before_validation :initialize_status, on: :create, unless: -> { status.present? }
+  
+  # Автоматическая установка флага служебного бронирования
+  before_validation :set_service_booking_flag
   
   # Скоупы (обновленные для работы со строковыми статусами)
   scope :upcoming, -> { where('booking_date >= ?', Date.current) }
@@ -94,6 +97,10 @@ class Booking < ApplicationRecord
   scope :guest_bookings, -> { where(client_id: nil) }
   scope :client_bookings, -> { where.not(client_id: nil) }
   scope :by_guest_phone, ->(phone) { where(client_id: nil, service_recipient_phone: phone) }
+  
+  # ✅ Новые скоупы для работы со служебными бронированиями
+  scope :service_bookings, -> { where(is_service_booking: true) }
+  scope :regular_bookings, -> { where(is_service_booking: false) }
   
   # Метод для проверки доступности времени
   def self.available_posts_at_time(service_point_id, date, time)
@@ -199,6 +206,10 @@ class Booking < ApplicationRecord
   
   def client_booking?
     client_id.present?
+  end
+  
+  def service_booking?
+    is_service_booking
   end
   
   def contact_name
@@ -339,5 +350,14 @@ class Booking < ApplicationRecord
     when 'completed'
       BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_completed])
     end
+  end
+  
+  # Автоматическая установка флага служебного бронирования
+  def set_service_booking_flag
+    return unless client&.user
+    
+    # Проверяем роль пользователя
+    user = client.user
+    self.is_service_booking = user.admin? || user.partner? || user.manager? || user.operator?
   end
 end
