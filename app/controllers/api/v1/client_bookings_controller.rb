@@ -312,6 +312,17 @@ module Api
       
       # Проверяет доступность времени для записи
       def perform_availability_check
+        # 🚀 НОВАЯ ЛОГИКА: Пользователи с ролями отличными от клиента могут создавать бронирования вне зависимости от доступности слотов
+        if current_user && !current_user.client?
+          Rails.logger.info "Non-client user (ID: #{current_user.id}, role: #{current_user.role&.name}) is creating booking - skipping availability check"
+          return { 
+            available: true, 
+            reason: "#{current_user.role&.name.capitalize} override - availability check bypassed",
+            user_override: true,
+            user_role: current_user.role&.name
+          }
+        end
+        
         booking_data = booking_params_for_duration
         
         booking_date = booking_data[:booking_date].present? ? Date.parse(booking_data[:booking_date]) : nil
@@ -328,6 +339,17 @@ module Api
       
       # Проверяет доступность времени для обновления
       def perform_availability_check_for_update
+        # 🚀 НОВАЯ ЛОГИКА: Пользователи с ролями отличными от клиента могут обновлять бронирования вне зависимости от доступности слотов
+        if current_user && !current_user.client?
+          Rails.logger.info "Non-client user (ID: #{current_user.id}, role: #{current_user.role&.name}) is updating booking - skipping availability check"
+          return { 
+            available: true, 
+            reason: "#{current_user.role&.name.capitalize} override - availability check bypassed for update",
+            user_override: true,
+            user_role: current_user.role&.name
+          }
+        end
+        
         update_data = client_booking_update_params
         date = update_data[:booking_date] || @booking.booking_date
         time = update_data[:start_time] || @booking.start_time
