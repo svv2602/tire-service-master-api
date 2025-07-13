@@ -332,28 +332,68 @@ class Api::V1::AvailabilityController < ApplicationController
   
   # GET /api/v1/availability/slots_for_category?service_point_id=1&date=2025-01-01&category_id=1
   def slots_for_category
-    service_point_id = params[:service_point_id]
-    date = params[:date]
-    category_id = params[:category_id]
-    
-    # Валидация параметров
-    required_params = [service_point_id, date, category_id]
-    if required_params.any?(&:blank?)
-      return render json: { 
-        error: 'Не все обязательные параметры переданы' 
-      }, status: :bad_request
-    end
-
     begin
+      Rails.logger.info "🚀 slots_for_category started"
+      
+      service_point_id = params[:service_point_id]
+      date = params[:date]
+      category_id = params[:category_id]
+      
+      Rails.logger.info "📋 Parameters: service_point_id=#{service_point_id}, date=#{date}, category_id=#{category_id}"
+      
+      # Валидация параметров
+      required_params = [service_point_id, date, category_id]
+      if required_params.any?(&:blank?)
+        return render json: { 
+          error: 'Не все обязательные параметры переданы' 
+        }, status: :bad_request
+      end
+
+      Rails.logger.info "✅ Parameters validated"
+      
       service_point = ServicePoint.find(service_point_id)
+      Rails.logger.info "✅ ServicePoint found: #{service_point.name}"
+      
       parsed_date = Date.parse(date)
+      Rails.logger.info "✅ Date parsed: #{parsed_date}"
       
       # Получаем информацию о расписании (включая сезонные)
-      schedule_info = DynamicAvailabilityService.send(:get_schedule_for_date, service_point, parsed_date)
+      Rails.logger.info "🔄 Getting schedule info..."
+      schedule_info = DynamicAvailabilityService.get_schedule_for_date(service_point, parsed_date)
+      Rails.logger.info "✅ Schedule info received: #{schedule_info.inspect}"
       
-      slots = DynamicAvailabilityService.available_slots_for_category(
-        service_point_id, date, category_id
-      )
+      # Определяем роль пользователя для служебных бронирований
+      # Пробуем получить пользователя опционально (без требования авторизации)
+      Rails.logger.info "🔄 Getting current user..."
+      current_user = try_get_current_user
+      Rails.logger.info "✅ Current user: #{current_user&.email || 'not authenticated'}"
+      
+      is_service_user = current_user && current_user.role && ['admin', 'partner', 'manager', 'operator'].include?(current_user.role.name)
+      Rails.logger.info "✅ Is service user: #{is_service_user}"
+      
+      # Получаем слоты в зависимости от роли пользователя
+      if is_service_user
+        # Для служебных ролей возвращаем ВСЕ слоты с информацией о загруженности
+        Rails.logger.info "  🔧 Используем all_slots_for_category_with_occupancy"
+        slots = DynamicAvailabilityService.all_slots_for_category_with_occupancy(
+          service_point.id, parsed_date, category_id
+        )
+      else
+        # Для обычных клиентов возвращаем только доступные слоты
+        Rails.logger.info "  👤 Используем available_slots_for_category"
+        slots = DynamicAvailabilityService.available_slots_for_category(
+          service_point.id, parsed_date, category_id
+        )
+      end
+      
+      Rails.logger.info "  📊 Получено слотов: #{slots.count}"
+      Rails.logger.info "  🕘 Времена слотов: #{slots.map { |s| s[:start_time] }.join(', ')}"
+      slot_945 = slots.find { |s| s[:start_time] == '09:45' }
+      if slot_945
+        Rails.logger.info "  🎯 Слот 9:45 найден: #{slot_945}"
+      else
+        Rails.logger.info "  ❌ Слот 9:45 НЕ найден"
+      end
       
       # Получаем общее количество постов для категории
       total_posts_count = service_point.posts_count_for_category(category_id.to_i)
@@ -365,6 +405,7 @@ class Api::V1::AvailabilityController < ApplicationController
         slots: slots,
         total_slots: slots.count,
         total_posts_count: total_posts_count,
+        is_service_user: is_service_user, # Добавляем информацию о типе пользователя
         schedule_info: {
           is_working: schedule_info[:is_working],
           schedule_type: schedule_info[:schedule_type],
@@ -421,5 +462,57 @@ class Api::V1::AvailabilityController < ApplicationController
   rescue ArgumentError, TypeError
     render json: { error: 'Некорректный формат даты' }, status: :bad_request
     nil
+  end
+  
+  # Метод для опционального получения текущего пользователя
+  def try_get_current_user
+    begin
+      Rails.logger.info "🔍 try_get_current_user: starting..."
+      
+      # Сначала пробуем получить токен из cookies (приоритет)
+      access_token = cookies.encrypted[:access_token]
+      Rails.logger.info "🔍 try_get_current_user: cookies token = #{access_token ? 'present' : 'nil'}"
+      
+      # Если нет в cookies, пробуем из заголовка Authorization (для обратной совместимости)
+      if access_token.nil?
+        header = request.headers['Authorization']
+        Rails.logger.info "🔍 try_get_current_user: Authorization header = #{header ? 'present' : 'nil'}"
+        access_token = header.split(' ').last if header
+        Rails.logger.info "🔍 try_get_current_user: extracted token = #{access_token ? 'present' : 'nil'}"
+      end
+      
+      if access_token.nil?
+        Rails.logger.info "🔍 try_get_current_user: no token found, returning nil"
+        return nil
+      end
+      
+      Rails.logger.info "🔍 try_get_current_user: decoding token..."
+      decoded = Auth::JsonWebToken.decode(access_token)
+      Rails.logger.info "🔍 try_get_current_user: token decoded successfully, token_type=#{decoded[:token_type]}, user_id=#{decoded[:user_id]}"
+      
+      return nil unless decoded[:token_type] == 'access'
+      Rails.logger.info "🔍 try_get_current_user: token type is access, finding user..."
+      
+      user = User.find(decoded[:user_id])
+      Rails.logger.info "🔍 try_get_current_user: user found: #{user.email}, is_active=#{user.is_active}"
+      
+      if user&.is_active
+        Rails.logger.info "🔍 try_get_current_user: user is active, returning user"
+        return user
+      else
+        Rails.logger.info "🔍 try_get_current_user: user is not active, returning nil"
+        return nil
+      end
+    rescue JWT::DecodeError => e
+      Rails.logger.warn "🔍 try_get_current_user: JWT decode error: #{e.message}"
+      nil
+    rescue ActiveRecord::RecordNotFound => e
+      Rails.logger.warn "🔍 try_get_current_user: User not found: #{e.message}"
+      nil
+    rescue => e
+      Rails.logger.error "🚨 try_get_current_user: unexpected error: #{e.class}: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      nil
+    end
   end
 end 

@@ -811,6 +811,149 @@ class DynamicAvailabilityService
     available_slots.sort_by { |slot| slot[:datetime] }
   end
 
+  # Получение ВСЕХ временных слотов для конкретной категории с информацией о загруженности
+  # Используется для служебных бронирований (admin, partner, manager, operator)
+  def self.all_slots_for_category_with_occupancy(service_point_id, date, category_id)
+    service_point = ServicePoint.find(service_point_id)
+    
+    # Преобразуем строку даты в объект Date
+    date = Date.parse(date) if date.is_a?(String)
+    
+    # Получаем посты только для указанной категории
+    category_posts = service_point.service_posts.where(service_category_id: category_id, is_active: true)
+    return [] if category_posts.empty?
+    
+    # Проверяем есть ли работающие посты для данной категории в этот день
+    return [] unless has_working_posts_for_category_on_date?(service_point, date, category_id)
+    
+    # Определяем день недели  
+    day_key = case date.wday
+    when 0 then 'sunday'
+    when 1 then 'monday'
+    when 2 then 'tuesday'
+    when 3 then 'wednesday'
+    when 4 then 'thursday'
+    when 5 then 'friday'
+    when 6 then 'saturday'
+    end
+    
+    # Получаем расписание для этой даты (с учетом сезонных расписаний)
+    schedule_info = get_schedule_for_date(service_point, date)
+    
+    # Фильтруем посты, работающие в этот день
+    working_posts = category_posts.select do |post|
+      if post.has_custom_schedule?
+        # Пост имеет индивидуальный график (не затрагивается сезонными расписаниями)
+        post.working_on_day?(day_key)
+      else
+        # Пост работает по общему расписанию сервисной точки (включая сезонные расписания)
+        schedule_info[:is_working]
+      end
+    end
+    
+    return [] if working_posts.empty?
+    
+    # Генерируем все возможные временные слоты и группируем по времени
+    time_slots = {}
+    
+    working_posts.each do |post|
+      # Определяем время работы для этого поста
+      if post.has_custom_schedule?
+        # Пост с индивидуальным расписанием
+        start_time_str = post.start_time_for_day(day_key)
+        end_time_str = post.end_time_for_day(day_key)
+      else
+        # Пост работает по общему расписанию (включая сезонные расписания)
+        if schedule_info[:opening_time] && schedule_info[:closing_time]
+          start_time_str = schedule_info[:opening_time].strftime('%H:%M')
+          end_time_str = schedule_info[:closing_time].strftime('%H:%M')
+        else
+          # Fallback на время поста
+          start_time_str = post.start_time_for_day(day_key)
+          end_time_str = post.end_time_for_day(day_key)
+        end
+      end
+      
+      slot_duration = post.slot_duration
+      
+      start_time = Time.parse("#{date} #{start_time_str}")
+      end_time = Time.parse("#{date} #{end_time_str}")
+      
+      current_time = start_time
+      
+      while current_time + slot_duration.minutes <= end_time
+        time_key = current_time.strftime('%H:%M')
+        
+        if time_slots[time_key].nil?
+          time_slots[time_key] = {
+            datetime: current_time,
+            posts: [],
+            total_posts: 0
+          }
+        end
+        
+        time_slots[time_key][:posts] << {
+          service_post_id: post.id,
+          post_number: post.post_number,
+          post_name: post.name,
+          duration_minutes: slot_duration
+        }
+        time_slots[time_key][:total_posts] += 1
+        
+        current_time += slot_duration.minutes
+      end
+    end
+    
+    # Преобразуем сгруппированные слоты в окончательный формат
+    all_slots = []
+    
+    time_slots.each do |time_key, slot_data|
+      # Подсчитываем количество бронирований на это время
+      bookings_count = Booking.joins(:service_category)
+        .where(
+          service_point_id: service_point_id,
+          booking_date: date,
+          start_time: "#{time_key}:00",
+          service_category_id: category_id
+        )
+        .where.not(
+          status_id: BookingStatus.canceled_statuses
+        ).count
+      
+      # Вычисляем количество доступных постов
+      available_posts_count = slot_data[:total_posts] - bookings_count
+      
+      # Добавляем слот независимо от доступности (для служебных ролей)
+      # Берем данные первого поста для duration_minutes (они одинаковые для одного времени)
+      first_post = slot_data[:posts].first
+      slot_end_time = slot_data[:datetime] + first_post[:duration_minutes].minutes
+      
+      all_slots << {
+        service_post_id: first_post[:service_post_id],
+        post_number: first_post[:post_number],
+        post_name: first_post[:post_name],
+        category_id: category_id,
+        category_name: working_posts.first.category_name,
+        start_time: time_key,
+        end_time: slot_end_time.strftime('%H:%M'),
+        duration_minutes: first_post[:duration_minutes],
+        datetime: slot_data[:datetime],
+        available_posts: available_posts_count,
+        total_posts: slot_data[:total_posts],
+        bookings_count: bookings_count,
+        is_available: available_posts_count > 0, # Информация о доступности
+        occupancy_status: if available_posts_count > 0
+                           'available'
+                         else
+                           'full'
+                         end
+      }
+    end
+    
+    # Сортируем по времени
+    all_slots.sort_by { |slot| slot[:datetime] }
+  end
+
   private
 
   # Получение рабочих часов для даты с учетом working_hours
