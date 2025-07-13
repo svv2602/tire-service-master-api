@@ -116,7 +116,7 @@ class Api::V1::BookingConflictsController < ApplicationController
       return render json: { error: 'Неверный тип разрешения' }, status: :unprocessable_entity
     end
 
-    case resolution_type
+    result = case resolution_type
     when 'auto_reschedule'
       handle_auto_reschedule
     when 'manual_reschedule'
@@ -129,7 +129,11 @@ class Api::V1::BookingConflictsController < ApplicationController
         resolved_by: current_user,
         notes: notes
       )
+      true
     end
+
+    # Если один из handle методов уже отрендерил ответ, не рендерим повторно
+    return if result == :rendered
 
     render json: { 
       message: 'Конфликт разрешен',
@@ -263,21 +267,27 @@ class Api::V1::BookingConflictsController < ApplicationController
       end
       
       # Создаем коллекцию постов с методом active
-      temp_service_point.service_posts = ActiveSupport::OrderedOptions.new
-      temp_service_point.service_posts.extend(Enumerable)
-      temp_service_point.service_posts.instance_variable_set(:@posts, temp_posts)
+      posts_collection = temp_posts
       
-      def temp_service_point.service_posts.active
-        @posts.select { |post| post.is_active }
+      # Создаем объект-обертку с необходимыми методами
+      service_posts_wrapper = Object.new
+      service_posts_wrapper.define_singleton_method(:active) do
+        posts_collection.select { |post| post.is_active }
       end
       
-      def temp_service_point.service_posts.each(&block)
-        @posts.each(&block)
+      service_posts_wrapper.define_singleton_method(:each) do |&block|
+        posts_collection.each(&block)
       end
       
-      def temp_service_point.service_posts.to_a
-        @posts
+      service_posts_wrapper.define_singleton_method(:to_a) do
+        posts_collection
       end
+      
+      service_posts_wrapper.define_singleton_method(:count) do
+        posts_collection.count
+      end
+      
+      temp_service_point.service_posts = service_posts_wrapper
     end
     
     temp_service_point
@@ -338,6 +348,7 @@ class Api::V1::BookingConflictsController < ApplicationController
 
   def handle_auto_reschedule
     handle_auto_reschedule_for_conflict(@booking_conflict)
+    true
   end
 
   def handle_auto_reschedule_for_conflict(conflict)
@@ -386,17 +397,21 @@ class Api::V1::BookingConflictsController < ApplicationController
     new_start_time = Time.zone.parse(params[:new_start_time])
     booking = @booking_conflict.booking
     
-    # Проверяем доступность нового слота с помощью статического метода
-    available_slots = DynamicAvailabilityService.available_slots_for_category(
-      booking.service_point.id,
-      new_start_time.to_date,
-      booking.service_category_id
-    )
-    
-    slot_time = new_start_time.strftime('%H:%M')
-    
-    unless available_slots.any? { |slot| slot[:start_time] == slot_time }
-      return render json: { error: 'Выбранный слот недоступен' }, status: :unprocessable_entity
+    # Проверяем доступность нового слота ТОЛЬКО для клиентов
+    # Администраторы, партнеры, операторы и менеджеры могут назначать любое время
+    if current_user&.client?
+      available_slots = DynamicAvailabilityService.available_slots_for_category(
+        booking.service_point.id,
+        new_start_time.to_date,
+        booking.service_category_id
+      )
+      
+      slot_time = new_start_time.strftime('%H:%M')
+      
+      unless available_slots.any? { |slot| slot[:start_time] == slot_time }
+        render json: { error: 'Выбранный слот недоступен' }, status: :unprocessable_entity
+        return :rendered
+      end
     end
     
     # Обновляем бронирование - и дату и время
@@ -414,10 +429,13 @@ class Api::V1::BookingConflictsController < ApplicationController
     
     # Отправляем уведомление клиенту
     send_reschedule_notification(booking, @booking_conflict)
+    
+    true
   end
 
   def handle_cancel_booking
     handle_cancel_booking_for_conflict(@booking_conflict)
+    true
   end
 
   def handle_cancel_booking_for_conflict(conflict)
