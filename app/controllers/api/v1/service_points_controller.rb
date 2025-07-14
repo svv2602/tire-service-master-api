@@ -74,7 +74,8 @@ module Api
       # GET /api/v1/service_points/:id
       def show
         authorize @service_point
-        render json: @service_point
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        render json: @service_point, locale: locale
       end
       
       # POST /api/v1/partners/:partner_id/service_points

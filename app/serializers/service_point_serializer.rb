@@ -30,8 +30,9 @@ class ServicePointSerializer < ActiveModel::Serializer
   end
   
   def service_posts
+    locale = instance_options[:locale]
     object.service_posts.order(:post_number).map do |post|
-      ServicePostSerializer.new(post).as_json
+      ServicePostSerializer.new(post, locale: locale).as_json
     end
   end
   

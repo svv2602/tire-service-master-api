@@ -23,14 +23,17 @@ module Api
         # Сортировка по умолчанию по имени услуги
         @service_point_services = @service_point_services.joins(:service).order('services.name')
         
+        # Получаем локаль из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
         # Формируем JSON с полной информацией для обновления
         services_data = @service_point_services.map do |sps|
           service = sps.service
           {
             id: sps.id,  # ID записи ServicePointService для обновления
             service_id: service.id,
-            name: service.name,
-            description: service.description,
+            name: service.localized_name(locale),
+            description: service.localized_description(locale),
             category: service.category&.as_json,
     
             current_price: sps.price,  # Цена из ServicePointService

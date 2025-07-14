@@ -6,7 +6,10 @@ class ServicePostSerializer < ActiveModel::Serializer
              :category_name, :service_category_id
   
   belongs_to :service_point, serializer: ServicePointBasicSerializer
-  belongs_to :service_category, serializer: ServiceCategorySerializer
+  def service_category
+    return nil unless object.service_category
+    ServiceCategorySerializer.new(object.service_category, locale: instance_options[:locale]).as_json
+  end
   
   # Дополнительные атрибуты для удобства
   def display_name
@@ -18,7 +21,8 @@ class ServicePostSerializer < ActiveModel::Serializer
   end
   
   def category_name
-    object.category_name
+    locale = instance_options[:locale] || 'ru'
+    object.service_category&.localized_name(locale) || object.category_name
   end
   
   # Возвращает список рабочих дней для удобства фронтенда
