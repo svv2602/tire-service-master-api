@@ -1,11 +1,4 @@
 # syntax=docker/dockerfile:1
-# check=error=true
-
-# This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t api .
-# docker run -d -p 80:80 -e RAILS_MASTER_KEY=<value from config/master.key> --name api api
-
-# For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
 FROM ruby:3.3.7-alpine
@@ -15,8 +8,9 @@ RUN apk add --no-cache --virtual .build-deps \
     build-base \
     yaml-dev \
     postgresql-dev \
-    postgresql-client \
     git \
+    && apk add --no-cache \
+    postgresql-client \
     curl \
     tzdata \
     bash \
@@ -24,31 +18,36 @@ RUN apk add --no-cache --virtual .build-deps \
     npm \
     imagemagick \
     vips-dev \
-    shared-mime-info
+    shared-mime-info \
+    ca-certificates
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
+# Создаем пользователя приложения
+#RUN addgroup -g 1000 -S appgroup && \
+#    adduser -u 1000 -S appuser -G appgroup
+
 # Копируем Gemfile и Gemfile.lock
-COPY Gemfile Gemfile.lock ./
+#COPY --chown=appuser:appgroup Gemfile Gemfile.lock ./
 
 # Устанавливаем bundler и зависимости
 RUN gem install bundler:2.5.23 && \
     bundle config set --local deployment 'false' && \
     bundle config set --local without 'production' && \
-    bundle install --jobs 4 --retry 3
+    bundle install --jobs 4 --retry 3 && \
+    bundle clean --force
+
+# Удаляем build зависимости для уменьшения размера образа
+RUN apk del .build-deps
 
 # Копируем весь код приложения
-COPY . .
+# COPY --chown=appuser:appgroup . .
 
 # Создаем директории для логов и временных файлов
 RUN mkdir -p tmp/pids tmp/cache tmp/sockets log && \
-    chmod -R 755 tmp log
-
-# Устанавливаем права доступа
-#RUN addgroup -g 1000 -S appgroup && \
-#    adduser -u 1000 -S appuser -G appgroup && \
-#    chown -R appuser:appgroup /app
+    chmod -R 755 tmp log && \
+    chown -R root:root tmp log
 
 # Переключаемся на пользователя приложения
 USER root
@@ -56,5 +55,9 @@ USER root
 # Открываем порт 8000
 EXPOSE 8000
 
-# Команда по умолчанию (может быть переопределена в docker-compose.yml)
+# Добавляем health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+# Команда по умолчанию
 CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "8000"]
