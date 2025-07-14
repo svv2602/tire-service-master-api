@@ -11,6 +11,19 @@ services = Service.includes(:category).all
 
 puts "  Found: #{partners.count} partners, #{cities.count} cities, #{categories.count} categories, #{services.count} services"
 
+# Получаем конкретных партнеров по email для точной привязки
+shino_express_partner = partners.find { |p| p.user.email == 'petrov@shino-express.ua' }
+autoshina_plus_partner = partners.find { |p| p.user.email == 'kovalenko@autoshina-plus.ua' }
+shinmaister_partner = partners.find { |p| p.user.email == 'savchenko@shinmaister.ua' }
+
+# Fallback на первого партнера если конкретные не найдены
+fallback_partner = partners.first
+
+puts "  📍 Найденные партнеры:"
+puts "    ШиноСервис Экспресс: #{shino_express_partner&.company_name || 'НЕ НАЙДЕН'}"
+puts "    АвтоШина Плюс: #{autoshina_plus_partner&.company_name || 'НЕ НАЙДЕН'}"
+puts "    ШинМайстер: #{shinmaister_partner&.company_name || 'НЕ НАЙДЕН'}"
+
 # Проверяем наличие необходимых данных
 if partners.empty? || cities.empty? || categories.empty? || services.empty?
   puts "❌ Недостаточно данных для создания сервисных точек"
@@ -50,7 +63,7 @@ extended_working_hours = {
 service_points_config = [
   # Киев - 3 точки
   {
-    partner: partners[0],
+    partner: shino_express_partner || fallback_partner,
     name: 'ШиноСервіс Експрес на Хрещатику',
     description: 'Швидкий та якісний шиномонтаж у центрі Києва',
     city: cities.find { |c| c.name == 'Київ' } || cities.first,
@@ -86,7 +99,7 @@ service_points_config = [
     ]
   },
   {
-    partner: partners[0],
+    partner: shino_express_partner || fallback_partner,
     name: 'ШиноСервіс Експрес на Оболоні',
     description: 'Зручний шиномонтаж на Оболоні',
     city: cities.find { |c| c.name == 'Київ' } || cities.first,
@@ -115,7 +128,7 @@ service_points_config = [
     ]
   },
   {
-    partner: partners[1] || partners[0],
+    partner: autoshina_plus_partner || fallback_partner,
     name: 'АвтоШина Плюс на Позняках',
     description: 'Професійний шиномонтаж та ремонт коліс',
     city: cities.find { |c| c.name == 'Київ' } || cities.first,
@@ -153,7 +166,7 @@ service_points_config = [
   
   # Львів - 2 точки
   {
-    partner: partners[1] || partners[0],
+    partner: autoshina_plus_partner || fallback_partner,
     name: 'АвтоШина Плюс центр',
     description: 'Центральна точка у Львові',
     city: cities.find { |c| c.name == 'Львів' } || cities[1],
@@ -189,7 +202,7 @@ service_points_config = [
     ]
   },
   {
-    partner: partners[1] || partners[0],
+    partner: autoshina_plus_partner || fallback_partner,
     name: 'АвтоШина Плюс на Сихові',
     description: 'Шиномонтаж та ремонт дисків',
     city: cities.find { |c| c.name == 'Львів' } || cities[1],
@@ -220,7 +233,7 @@ service_points_config = [
   
   # Одеса - 2 точки (используем города из Киевской области, так как Одеса может отсутствовать)
   {
-    partner: partners[2] || partners[0],
+    partner: shinmaister_partner || fallback_partner,
     name: 'ШинМайстер Одеса Центр',
     description: 'Найкращі послуги шиномонтажу в місті',
     city: cities.find { |c| c.name == 'Бориспіль' } || cities[2],
@@ -256,7 +269,7 @@ service_points_config = [
     ]
   },
   {
-    partner: partners[2] || partners[0],
+    partner: shinmaister_partner || fallback_partner,
     name: 'ШинМайстер Одеса Пересип',
     description: 'Швидкий шиномонтаж для всіх типів авто',
     city: cities.find { |c| c.name == 'Бориспіль' } || cities[2],

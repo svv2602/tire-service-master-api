@@ -36,15 +36,22 @@ begin
     )
   end
 
-  # Получаем регионы и города для партнеров
-  kyiv_region = Region.find_or_create_by!(name: "Киевская область", is_active: true)
-  kyiv_city = City.find_or_create_by!(name: "Киев", region: kyiv_region, is_active: true)
+  # Получаем существующие регионы и города для партнеров
+  kyiv_region = Region.find_by(name_uk: "Київська область") || Region.find_by(name_ru: "Киевская область")
+  kyiv_city = City.find_by(name_uk: "Київ") || City.find_by(name_ru: "Киев")
   
-  lviv_region = Region.find_or_create_by!(name: "Львовская область", is_active: true)  
-  lviv_city = City.find_or_create_by!(name: "Львов", region: lviv_region, is_active: true)
+  lviv_region = Region.find_by(name_uk: "Львівська область") || Region.find_by(name_ru: "Львовская область")
+  lviv_city = City.find_by(name_uk: "Львів") || City.find_by(name_ru: "Львов")
   
-  odesa_region = Region.find_or_create_by!(name: "Одесская область", is_active: true)
-  odesa_city = City.find_or_create_by!(name: "Одесса", region: odesa_region, is_active: true)
+  odesa_region = Region.find_by(name_uk: "Одеська область") || Region.find_by(name_ru: "Одесская область")
+  odesa_city = City.find_by(name_uk: "Одеса") || City.find_by(name_ru: "Одесса")
+  
+  # Проверяем что все регионы и города найдены
+  unless kyiv_region && kyiv_city && lviv_region && lviv_city && odesa_region && odesa_city
+    puts "❌ Ошибка: Не найдены необходимые регионы или города для партнеров"
+    puts "Убедитесь что сиды регионов и городов загружены перед партнерами"
+    raise "Missing required regions or cities"
+  end
 
   partners_data = [
     {
