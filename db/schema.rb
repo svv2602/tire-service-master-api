@@ -61,14 +61,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_14_084449) do
   end
 
   create_table "articles", force: :cascade do |t|
-    t.string "title", limit: 255, null: false
-    t.text "content", null: false
-    t.text "excerpt"
+    t.string "title", limit: 255, null: false, comment: "Заголовок статьи на русском языке"
+    t.text "content", null: false, comment: "Содержимое статьи на русском языке"
+    t.text "excerpt", comment: "Краткое описание статьи на русском языке"
     t.string "category", limit: 50, default: "tips", null: false
     t.string "status", limit: 20, default: "draft", null: false
     t.boolean "featured", default: false
-    t.string "meta_title", limit: 60
-    t.text "meta_description"
+    t.string "meta_title", limit: 60, comment: "SEO заголовок на русском языке"
+    t.text "meta_description", comment: "SEO описание на русском языке"
     t.string "slug", limit: 255
     t.bigint "author_id", null: false
     t.datetime "published_at"
@@ -80,6 +80,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_14_084449) do
     t.json "tags"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "title_uk", limit: 255, comment: "Заголовок статьи на украинском языке"
+    t.text "content_uk", comment: "Содержимое статьи на украинском языке"
+    t.text "excerpt_uk", comment: "Краткое описание статьи на украинском языке"
+    t.string "meta_title_uk", limit: 60, comment: "SEO заголовок на украинском языке"
+    t.text "meta_description_uk", comment: "SEO описание на украинском языке"
     t.index ["author_id"], name: "index_articles_on_author_id"
     t.index ["category", "status"], name: "index_articles_on_category_and_status"
     t.index ["category"], name: "index_articles_on_category"
@@ -88,6 +93,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_14_084449) do
     t.index ["slug"], name: "index_articles_on_slug", unique: true
     t.index ["status", "published_at"], name: "index_articles_on_status_and_published_at"
     t.index ["status"], name: "index_articles_on_status"
+    t.index ["title", "title_uk"], name: "index_articles_on_localized_titles"
+    t.index ["title_uk"], name: "index_articles_on_title_uk"
   end
 
   create_table "booking_conflicts", force: :cascade do |t|

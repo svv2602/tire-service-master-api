@@ -50,12 +50,17 @@ module Api
         total = articles.count
         articles = articles.limit(per_page).offset(offset)
 
+        # Определяем язык из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+
         render json: {
           data: articles.map do |article|
             {
               id: article.id,
-              title: article.title,
-              excerpt: article.excerpt,
+              title: article.localized_title(locale),
+              title_uk: article.title_uk,
+              excerpt: article.localized_excerpt(locale),
+              excerpt_uk: article.excerpt_uk,
               category: article.category,
               status: article.status,
               featured: article.featured,
@@ -83,11 +88,17 @@ module Api
         # Увеличиваем счетчик просмотров
         @article.increment!(:views_count)
 
+        # Определяем язык из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+
         render json: {
           id: @article.id,
-          title: @article.title,
-          content: @article.content,
-          excerpt: @article.excerpt,
+          title: @article.localized_title(locale),
+          title_uk: @article.title_uk,
+          content: @article.localized_content(locale),
+          content_uk: @article.content_uk,
+          excerpt: @article.localized_excerpt(locale),
+          excerpt_uk: @article.excerpt_uk,
           category: @article.category,
           featured: @article.featured,
           reading_time: @article.reading_time,
@@ -98,9 +109,22 @@ module Api
           featured_image_url: @article.featured_image_url,
           gallery_images: @article.gallery_images || [],
           tags: @article.tags || [],
-          meta_title: @article.meta_title,
-          meta_description: @article.meta_description,
-          allow_comments: @article.allow_comments
+          meta_title: @article.localized_meta_title(locale),
+          meta_title_uk: @article.meta_title_uk,
+          meta_description: @article.localized_meta_description(locale),
+          meta_description_uk: @article.meta_description_uk,
+          allow_comments: @article.allow_comments,
+          # Добавляем все поля для админки
+          title_ru: @article.title,
+          content_ru: @article.content,
+          excerpt_ru: @article.excerpt,
+          meta_title_ru: @article.meta_title,
+          meta_description_ru: @article.meta_description,
+          title_uk: @article.title_uk,
+          content_uk: @article.content_uk,
+          excerpt_uk: @article.excerpt_uk,
+          meta_title_uk: @article.meta_title_uk,
+          meta_description_uk: @article.meta_description_uk
         }
       end
       
@@ -199,6 +223,7 @@ module Api
         params.require(:article).permit(
           :title, :content, :excerpt, :category, :status, :featured,
           :meta_title, :meta_description, :featured_image_url, :allow_comments,
+          :title_uk, :content_uk, :excerpt_uk, :meta_title_uk, :meta_description_uk,
           tags: [], gallery_images: []
         )
       end
@@ -214,10 +239,13 @@ module Api
       
       # Краткая информация о статье для списка
       def article_summary_json(article)
+        # Определяем язык из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
         {
           id: article.id,
-          title: article.title,
-          excerpt: article.excerpt_or_truncated_content,
+          title: article.localized_title(locale),
+          excerpt: article.localized_excerpt(locale).presence || article.excerpt_or_truncated_content,
           category: article.category,
           category_name: article.category_name,
           status: article.status,
@@ -233,16 +261,30 @@ module Api
             id: article.author.id,
             name: "#{article.author.first_name} #{article.author.last_name}".strip,
             email: article.author.email
-          }
+          },
+          # Добавляем все поля для админки
+          title_ru: article.title,
+          content_ru: article.content,
+          excerpt_ru: article.excerpt,
+          meta_title_ru: article.meta_title,
+          meta_description_ru: article.meta_description,
+          title_uk: article.title_uk,
+          content_uk: article.content_uk,
+          excerpt_uk: article.excerpt_uk,
+          meta_title_uk: article.meta_title_uk,
+          meta_description_uk: article.meta_description_uk
         }
       end
       
       # Полная информация о статье
       def article_full_json(article)
+        # Определяем язык из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
         article_summary_json(article).merge(
-          content: article.content,
-          meta_title: article.meta_title,
-          meta_description: article.meta_description,
+          content: article.localized_content(locale),
+          meta_title: article.localized_meta_title(locale),
+          meta_description: article.localized_meta_description(locale),
           gallery_images: article.gallery_images,
           tags: article.tags,
           allow_comments: article.allow_comments,

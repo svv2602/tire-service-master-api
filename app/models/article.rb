@@ -52,6 +52,13 @@ class Article < ApplicationRecord
   validates :meta_description, length: { maximum: 160 }
   validates :reading_time, presence: true, numericality: { greater_than: 0 }
   
+  # Валидации для украинских полей
+  validates :title_uk, presence: true, length: { maximum: 255 }
+  validates :content_uk, presence: true
+  validates :excerpt_uk, length: { maximum: 500 }
+  validates :meta_title_uk, length: { maximum: 60 }
+  validates :meta_description_uk, length: { maximum: 160 }
+  
   # Колбеки
   before_validation :generate_slug, if: -> { title.present? && slug.blank? }
   before_validation :calculate_reading_time, if: -> { content_changed? }
@@ -67,16 +74,72 @@ class Article < ApplicationRecord
   scope :popular, -> { order(views_count: :desc) }
   scope :with_author, -> { includes(:author) }
   
-  # Поиск
+  # Поиск с поддержкой локализации
   scope :search, ->(query) {
     return all if query.blank?
     
     where(
-      "title ILIKE ? OR content ILIKE ? OR excerpt ILIKE ?",
-      "%#{query}%", "%#{query}%", "%#{query}%"
+      "title ILIKE ? OR content ILIKE ? OR excerpt ILIKE ? OR title_uk ILIKE ? OR content_uk ILIKE ? OR excerpt_uk ILIKE ?",
+      "%#{query}%", "%#{query}%", "%#{query}%", "%#{query}%", "%#{query}%", "%#{query}%"
     )
   }
   
+  # Методы локализации
+  def localized_title(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      title_uk.presence || title.presence || ''
+    when 'ru'
+      title.presence || title_uk.presence || ''
+    else
+      title.presence || title_uk.presence || ''
+    end
+  end
+  
+  def localized_content(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      content_uk.presence || content.presence || ''
+    when 'ru'
+      content.presence || content_uk.presence || ''
+    else
+      content.presence || content_uk.presence || ''
+    end
+  end
+  
+  def localized_excerpt(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      excerpt_uk.presence || excerpt.presence || ''
+    when 'ru'
+      excerpt.presence || excerpt_uk.presence || ''
+    else
+      excerpt.presence || excerpt_uk.presence || ''
+    end
+  end
+  
+  def localized_meta_title(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      meta_title_uk.presence || meta_title.presence || localized_title(locale)
+    when 'ru'
+      meta_title.presence || meta_title_uk.presence || localized_title(locale)
+    else
+      meta_title.presence || meta_title_uk.presence || localized_title(locale)
+    end
+  end
+  
+  def localized_meta_description(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      meta_description_uk.presence || meta_description.presence || localized_excerpt(locale)
+    when 'ru'
+      meta_description.presence || meta_description_uk.presence || localized_excerpt(locale)
+    else
+      meta_description.presence || meta_description_uk.presence || localized_excerpt(locale)
+    end
+  end
+
   # Методы экземпляра
   def published?
     status == 'published' && published_at&.past?
