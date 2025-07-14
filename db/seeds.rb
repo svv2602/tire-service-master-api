@@ -13,7 +13,7 @@ priority_seeds = [
   'clients.rb',              # Создаем клиентов
   'car_types.rb',            # Создаем типы автомобилей
   'car_brands_and_models.rb', # Создаем бренды и модели автомобилей
-  'services.rb',             # Создаем услуги для сервисных точек
+  'services_localized.rb',   # Создаем локализованные услуги для сервисных точек
   'service_points_improved.rb', # Создаем сервисные точки
   'schedule_generation.rb',  # Создаем шаблоны расписания
   '04_service_point_photos.rb', # Добавляем фотографии сервисных точек
@@ -29,7 +29,9 @@ excluded_seeds = [
   'create_ukrainian_articles.rb', # Временный файл
   'reset_and_seed_all.rb',   # Файл полного сброса БД (запускается отдельно)
   'create_admin_user.rb',    # Удален (дублировал test_users.rb)
-  'test_data.rb'             # Удален (ошибки валидации)
+  'test_data.rb',            # Удален (ошибки валидации)
+  'services.rb',             # Старый файл услуг без локализации
+  '03_services.rb'           # Старый файл услуг без локализации
 ]
 
 # Сначала выполняем приоритетные сидеры в заданном порядке
