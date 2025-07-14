@@ -9,9 +9,13 @@ module Api
       def index
         @regions = Region.includes(:cities).order(:name)
         
-        # Фильтрация по поиску
+        # Фильтрация по поиску (поиск по всем языковым полям)
         if params[:search].present?
-          @regions = @regions.where("name ILIKE ?", "%#{params[:search]}%")
+          search_term = "%#{params[:search]}%"
+          @regions = @regions.where(
+            "name ILIKE ? OR name_ru ILIKE ? OR name_uk ILIKE ?", 
+            search_term, search_term, search_term
+          )
         end
         
         # Фильтрация по статусу активности
@@ -27,10 +31,15 @@ module Api
         total_count = @regions.count
         @regions = @regions.offset(offset).limit(per_page)
         
+        # Определяем язык для сериализации
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
         render json: {
-          data: @regions.as_json(include: { 
-            cities: { only: [:id, :name], where: { is_active: true } }
-          }),
+          data: ActiveModel::Serializer::CollectionSerializer.new(
+            @regions, 
+            serializer: RegionSerializer,
+            locale: locale
+          ),
           pagination: {
             total_count: total_count,
             total_pages: (total_count.to_f / per_page).ceil,
@@ -91,7 +100,7 @@ module Api
       end
       
       def region_params
-        params.require(:region).permit(:name, :code, :is_active)
+        params.require(:region).permit(:name, :name_ru, :name_uk, :code, :is_active)
       end
       
       def authorize_admin

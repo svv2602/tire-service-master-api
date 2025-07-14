@@ -26,16 +26,15 @@ module Api
         total_count = cities.count
         cities = cities.limit(per_page).offset(offset)
 
+        # Определяем язык для сериализации
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
         render json: {
-          data: cities.map do |city|
-            {
-              id: city.id,
-              name: city.name,
-              region_id: city.region_id,
-              region_name: city.region.name,
-              is_active: city.is_active
-            }
-          end,
+          data: ActiveModel::Serializer::CollectionSerializer.new(
+            cities, 
+            serializer: CitySerializer,
+            locale: locale
+          ),
           total: total_count,
           page: page,
           per_page: per_page,
@@ -131,7 +130,7 @@ module Api
       end
       
       def city_params
-        params.require(:city).permit(:name, :region_id, :is_active)
+        params.require(:city).permit(:name, :name_ru, :name_uk, :region_id, :is_active)
       end
       
       def authorize_admin

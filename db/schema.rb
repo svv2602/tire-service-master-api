@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_14_084449) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -56,6 +56,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
     t.string "icon"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "name_uk"
+    t.index ["name_uk"], name: "index_amenities_on_name_uk"
   end
 
   create_table "articles", force: :cascade do |t|
@@ -193,7 +195,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
     t.boolean "is_active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "name_uk"
     t.index ["name"], name: "index_car_brands_on_name", unique: true
+    t.index ["name_uk"], name: "index_car_brands_on_name_uk"
   end
 
   create_table "car_models", force: :cascade do |t|
@@ -202,8 +206,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
     t.boolean "is_active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "name_uk"
     t.index ["brand_id", "name"], name: "index_car_models_on_brand_id_and_name", unique: true
     t.index ["brand_id"], name: "index_car_models_on_brand_id"
+    t.index ["name_uk"], name: "index_car_models_on_name_uk"
   end
 
   create_table "car_types", force: :cascade do |t|
@@ -240,6 +246,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
     t.boolean "is_active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "name_uk"
+    t.string "name_ru"
+    t.index ["name_ru"], name: "index_cities_on_name_ru"
+    t.index ["name_uk"], name: "index_cities_on_name_uk"
     t.index ["region_id", "name"], name: "index_cities_on_region_id_and_name", unique: true
     t.index ["region_id"], name: "index_cities_on_region_id"
   end
@@ -444,8 +454,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
     t.boolean "is_active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "name_uk"
+    t.string "name_ru"
     t.index ["code"], name: "index_regions_on_code", unique: true
     t.index ["name"], name: "index_regions_on_name", unique: true
+    t.index ["name_ru"], name: "index_regions_on_name_ru"
+    t.index ["name_uk"], name: "index_regions_on_name_uk"
   end
 
   create_table "reviews", force: :cascade do |t|
@@ -538,7 +552,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
     t.boolean "is_active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "name_uk"
+    t.text "description_uk"
     t.index ["name"], name: "index_service_categories_on_name", unique: true
+    t.index ["name_uk"], name: "index_service_categories_on_name_uk"
   end
 
   create_table "service_point_amenities", force: :cascade do |t|
@@ -643,7 +660,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
     t.boolean "is_active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "name_uk"
+    t.text "description_uk"
     t.index ["category_id"], name: "index_services_on_category_id"
+    t.index ["name_uk"], name: "index_services_on_name_uk"
   end
 
   create_table "system_logs", force: :cascade do |t|
@@ -677,7 +697,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_13_042936) do
     t.boolean "is_active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "name_uk"
+    t.text "description_uk"
     t.index ["name"], name: "index_user_roles_on_name", unique: true
+    t.index ["name_uk"], name: "index_user_roles_on_name_uk"
   end
 
   create_table "users", force: :cascade do |t|
