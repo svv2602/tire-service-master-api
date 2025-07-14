@@ -156,8 +156,8 @@ regions_data.each do |region_data|
         next
       end
     else
-      puts "  ✅ Регион уже существует: #{region.name} (ID: #{region.id})"
-      regions_updated += 1
+    puts "  ✅ Регион уже существует: #{region.name} (ID: #{region.id})"
+    regions_updated += 1
     end
   else
     if region.save
@@ -186,8 +186,8 @@ regions_data.each do |region_data|
           puts "    ❌ Ошибка обновления города #{city_data[:name_uk]}: #{city.errors.full_messages.join(', ')}"
         end
       else
-        puts "    ✅ Город уже существует: #{city.name}"
-        cities_updated += 1
+      puts "    ✅ Город уже существует: #{city.name}"
+      cities_updated += 1
       end
     else
       if city.save

@@ -690,10 +690,14 @@ module Api
             {
               id: city.id,
               name: city.name,
+              name_ru: city.name_ru,
+              name_uk: city.name_uk,
               region_id: city.region_id,
               region: city.region ? {
                 id: city.region.id,
-                name: city.region.name
+                name: city.region.name,
+                name_ru: city.region.name_ru,
+                name_uk: city.region.name_uk
               } : nil,
               created_at: city.created_at,
               updated_at: city.updated_at

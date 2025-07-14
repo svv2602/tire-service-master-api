@@ -57,10 +57,14 @@ module Api
             {
               id: city.id,
               name: city.name,
+              name_ru: city.name_ru,
+              name_uk: city.name_uk,
               region_id: city.region_id,
               region: {
                 id: city.region.id,
                 name: city.region.name,
+                name_ru: city.region.name_ru,
+                name_uk: city.region.name_uk,
                 code: city.region.code
               },
               service_points_count: service_points_count,
