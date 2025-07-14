@@ -9,6 +9,9 @@ module Api
       # GET /api/v1/service_categories/:service_category_id/services
       # GET /api/v1/services
       def index
+        # Определяем язык из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
         @services = if @service_category
           @service_category.services.includes(:category)
         else
@@ -23,9 +26,13 @@ module Api
         # Фильтрация активных услуг
         @services = @services.where(is_active: true) if params[:active].present? && params[:active] == 'true'
         
-        # Поиск по названию
+        # Поиск по названию (учитываем локализацию)
         if params[:query].present?
-          @services = @services.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
+          query = params[:query].downcase
+          @services = @services.where(
+            "LOWER(name) LIKE ? OR LOWER(name_uk) LIKE ? OR LOWER(description) LIKE ? OR LOWER(description_uk) LIKE ?",
+            "%#{query}%", "%#{query}%", "%#{query}%", "%#{query}%"
+          )
         end
         
         # Сортировка
@@ -40,7 +47,12 @@ module Api
         @services = @services.offset(offset).limit(per_page)
         
         render json: {
-          data: @services.as_json(include: { category: { only: [:id, :name] } }),
+          data: ActiveModel::Serializer::CollectionSerializer.new(
+            @services,
+            serializer: ServiceSerializer,
+            locale: locale,
+            include: { category: { only: [:id, :name, :name_uk, :localized_name] } }
+          ),
           pagination: {
             current_page: page,
             total_pages: (total_count.to_f / per_page).ceil,
@@ -53,7 +65,8 @@ module Api
       # GET /api/v1/service_categories/:service_category_id/services/:id
       # GET /api/v1/services/:id
       def show
-        render json: @service.as_json(include: { category: { only: [:id, :name] } })
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        render json: ServiceSerializer.new(@service, locale: locale, include: { category: { only: [:id, :name, :name_uk, :localized_name] } })
       end
       
       # POST /api/v1/services
@@ -71,7 +84,8 @@ module Api
         @service = @service_category.services.build(service_params)
         
         if @service.save
-          render json: @service.as_json(include: { category: { only: [:id, :name] } }), status: :created
+          locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+          render json: ServiceSerializer.new(@service, locale: locale, include: { category: { only: [:id, :name, :name_uk, :localized_name] } }), status: :created
         else
           render json: { errors: @service.errors }, status: :unprocessable_entity
         end
@@ -82,7 +96,8 @@ module Api
       # PUT /api/v1/service_categories/:service_category_id/services/:id
       def update
         if @service.update(service_params)
-          render json: @service.as_json(include: { category: { only: [:id, :name] } })
+          locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+          render json: ServiceSerializer.new(@service, locale: locale, include: { category: { only: [:id, :name, :name_uk, :localized_name] } })
         else
           render json: { errors: @service.errors }, status: :unprocessable_entity
         end
@@ -90,44 +105,31 @@ module Api
       
       # DELETE /api/v1/service_categories/:service_category_id/services/:id
       def destroy
-        if @service.booking_services.exists?
-          render json: { error: 'Невозможно удалить услугу, так как она используется в бронированиях' }, status: :unprocessable_entity
-        else
-          @service.destroy
-          head :no_content
-        end
+        @service.destroy
+        head :no_content
       end
       
       private
       
       def set_service_category
-        @service_category = ServiceCategory.find(params[:service_category_id]) if params[:service_category_id]
+        return unless params[:service_category_id]
+        @service_category = ServiceCategory.find(params[:service_category_id])
+      rescue ActiveRecord::RecordNotFound
+        render json: { errors: { category: ['Category not found'] } }, status: :not_found
       end
       
       def set_service
-        @service = if params[:service_category_id]
-          ServiceCategory.find(params[:service_category_id]).services.find(params[:id])
-        else
-          Service.find(params[:id])
-        end
+        @service = Service.find(params[:id])
+      rescue ActiveRecord::RecordNotFound
+        render json: { errors: { service: ['Service not found'] } }, status: :not_found
       end
       
       def service_params
-        # Поддерживаем как вложенные данные в 'data', так и прямые параметры
-        if params[:service][:data].present?
-          params.require(:service).require(:data).permit(:name, :description, :is_active, :sort_order)
-        else
-          params.require(:service).permit(:name, :description, :is_active, :sort_order)
-        end
+        params.require(:service).permit(:name, :name_uk, :description, :description_uk, :is_active, :sort_order)
       end
       
       def authorize_admin
-        unless current_user
-          render json: { error: 'Unauthorized' }, status: :unauthorized
-          return
-        end
-        
-        unless current_user.admin?
+        unless current_user && current_user.admin?
           render json: { error: 'Forbidden' }, status: :forbidden
         end
       end

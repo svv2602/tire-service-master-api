@@ -10,12 +10,36 @@ class Service < ApplicationRecord
   
   # Валидации
   validates :name, presence: true, uniqueness: { scope: :category_id }
+  validates :name_uk, presence: true
   validates :sort_order, numericality: { greater_than_or_equal_to: 0 }
   
   # Скоупы
   scope :active, -> { where(is_active: true) }
   scope :by_category, ->(category_id) { where(category_id: category_id) }
   scope :sorted, -> { order(sort_order: :asc) }
+  
+  # Методы локализации
+  def localized_name(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      name_uk.presence || name.presence || ''
+    when 'ru'
+      name.presence || name_uk.presence || ''
+    else
+      name.presence || name_uk.presence || ''
+    end
+  end
+  
+  def localized_description(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      description_uk.presence || description.presence || ''
+    when 'ru'
+      description.presence || description_uk.presence || ''
+    else
+      description.presence || description_uk.presence || ''
+    end
+  end
   
   # Методы
   def current_price_for_service_point(service_point_id)
@@ -49,5 +73,16 @@ class Service < ApplicationRecord
   def base_price
     # Возвращаем дефолтную цену 1000 для тестов
     1000
+  end
+  
+  # Переопределяем as_json для добавления локализованных полей
+  def as_json(options = {})
+    json = super(options)
+    # Добавляем локализованные поля если указана локаль
+    if options[:locale]
+      json['localized_name'] = localized_name(options[:locale])
+      json['localized_description'] = localized_description(options[:locale])
+    end
+    json
   end
 end

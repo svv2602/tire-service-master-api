@@ -7,6 +7,9 @@ module Api
       
       # GET /api/v1/service_categories
       def index
+        # Определяем язык из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
         @service_categories = ServiceCategory.all
         
         # Фильтрация: по умолчанию показываем только активные, если не указано иначе
@@ -31,9 +34,13 @@ module Api
             .distinct
         end
         
-        # Поиск по названию
+        # Поиск по названию (учитываем локализацию)
         if params[:query].present?
-          @service_categories = @service_categories.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
+          query = params[:query].downcase
+          @service_categories = @service_categories.where(
+            "LOWER(name) LIKE ? OR LOWER(name_uk) LIKE ? OR LOWER(description) LIKE ? OR LOWER(description_uk) LIKE ?",
+            "%#{query}%", "%#{query}%", "%#{query}%", "%#{query}%"
+          )
         end
         
         # Сортировка
@@ -48,7 +55,12 @@ module Api
         @service_categories = @service_categories.offset(offset).limit(per_page)
         
         render json: {
-          data: @service_categories.as_json(include_services_count: true),
+          data: ActiveModel::Serializer::CollectionSerializer.new(
+            @service_categories,
+            serializer: ServiceCategorySerializer,
+            locale: locale,
+            include_services_count: true
+          ),
           pagination: {
             current_page: page,
             total_pages: (total_count.to_f / per_page).ceil,
@@ -60,99 +72,34 @@ module Api
       
       # GET /api/v1/service_categories/:id
       def show
-        render json: category_json(@service_category, include_services: true)
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        render json: category_json(@service_category, include_services: true, locale: locale)
       end
 
       # GET /api/v1/service_categories/by_city/:city_name
       def by_city
         city_name = params[:city_name]
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
         
-        if city_name.blank?
-          return render json: { error: 'Название города обязательно' }, status: :bad_request
-        end
-
-        # Найти город
-        city = City.where("LOWER(name) = LOWER(?)", city_name).first
-        
-        unless city
-          return render json: { 
-            error: 'Город не найден',
-            data: [],
-            total_count: 0 
-          }, status: :not_found
-        end
-
-        # Получить категории услуг, доступные в этом городе
-        @service_categories = ServiceCategory
-          .joins(services: { service_point_services: { service_post: :service_point } })
-          .where(service_points: { city_id: city.id, is_active: true })
-          .where(is_active: true)
-          .distinct
-          .includes(:services)
-
-        # Подсчитать количество сервисных точек для каждой категории
-        categories_with_stats = @service_categories.map do |category|
-          service_points_count = ServicePoint
-            .joins(service_posts: { service_point_services: { service: :category } })
-            .where(city_id: city.id, is_active: true)
-            .where(service_categories: { id: category.id })
-            .distinct
-            .count
-
-          services_count = category.services
-            .joins(service_point_services: { service_post: :service_point })
-            .where(service_points: { city_id: city.id, is_active: true })
-            .distinct
-            .count
-
-          category.as_json.merge({
-            'service_points_count' => service_points_count,
-            'services_count' => services_count,
-            'city_name' => city.name
-          })
-        end
-
-        render json: {
-          data: categories_with_stats,
-          city: {
-            id: city.id,
-            name: city.name,
-            region: city.region&.name
-          },
-          total_count: categories_with_stats.length
-        }
-      end
-
-      # GET /api/v1/service_categories/by_city_id/:city_id
-      def by_city_id
-        city_id = params[:city_id]
-        
-        if city_id.blank?
-          return render json: { error: 'ID города обязателен' }, status: :bad_request
-        end
-
-        # Найти город по ID
-        city = City.find_by(id: city_id)
+        # Ищем город по имени (учитываем локализацию)
+        city = City.where(
+          "LOWER(name) = ? OR LOWER(name_ru) = ? OR LOWER(name_uk) = ?",
+          city_name.downcase, city_name.downcase, city_name.downcase
+        ).first
         
         unless city
-          return render json: { 
-            error: 'Город не найден',
-            data: [],
-            total_count: 0 
-          }, status: :not_found
+          render json: { error: 'Город не найден' }, status: :not_found
+          return
         end
-
-        # Получить категории услуг, доступные в этом городе
-        # Логика: через service_posts, которые привязаны к service_category_id
-        @service_categories = ServiceCategory
-          .joins("INNER JOIN service_posts ON service_posts.service_category_id = service_categories.id")
-          .joins("INNER JOIN service_points ON service_points.id = service_posts.service_point_id")
-          .where("service_points.city_id = ? AND service_points.is_active = true", city.id)
-          .where("service_posts.is_active = true")
-          .where(is_active: true)
-          .distinct
-
-        # Подсчитать количество сервисных точек для каждой категории
+        
+        # Получаем категории услуг, доступные в этом городе
+        @service_categories = ServiceCategory.joins(:service_posts)
+                                           .joins("INNER JOIN service_points ON service_points.id = service_posts.service_point_id")
+                                           .where("service_points.city_id = ? AND service_points.is_active = true", city.id)
+                                           .where("service_posts.is_active = true")
+                                           .distinct
+                                           .order(:name)
+        
         categories_with_stats = @service_categories.map do |category|
           # Подсчет сервисных точек для категории в данном городе
           service_points_count = ServicePoint
@@ -172,10 +119,10 @@ module Api
             .distinct
             .count
 
-          category.as_json.merge({
+          ServiceCategorySerializer.new(category, locale: locale).as_json.merge({
             'service_points_count' => service_points_count,
             'services_count' => services_count,
-            'city_name' => city.name
+            'city_name' => city.localized_name(locale)
           })
         end
 
@@ -183,8 +130,64 @@ module Api
           data: categories_with_stats,
           city: {
             id: city.id,
-            name: city.name,
-            region: city.region&.name
+            name: city.localized_name(locale),
+            region: city.region&.localized_name(locale)
+          },
+          total_count: categories_with_stats.length
+        }
+      end
+      
+      # GET /api/v1/service_categories/by_city_id/:city_id
+      def by_city_id
+        city_id = params[:city_id]
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
+        city = City.find_by(id: city_id)
+        unless city
+          render json: { error: 'Город не найден' }, status: :not_found
+          return
+        end
+        
+        # Получаем категории услуг, доступные в этом городе
+        @service_categories = ServiceCategory.joins(:service_posts)
+                                           .joins("INNER JOIN service_points ON service_points.id = service_posts.service_point_id")
+                                           .where("service_points.city_id = ? AND service_points.is_active = true", city.id)
+                                           .where("service_posts.is_active = true")
+                                           .distinct
+                                           .order(:name)
+        
+        categories_with_stats = @service_categories.map do |category|
+          # Подсчет сервисных точек для категории в данном городе
+          service_points_count = ServicePoint
+            .joins(:service_posts)
+            .where("service_points.city_id = ? AND service_points.is_active = true", city.id)
+            .where("service_posts.service_category_id = ? AND service_posts.is_active = true", category.id)
+            .distinct
+            .count
+
+          # Подсчет услуг для категории в данном городе (через service_point_services)
+          services_count = Service
+            .joins(:service_point_services)
+            .joins("INNER JOIN service_points ON service_points.id = service_point_services.service_point_id")
+            .where("service_points.city_id = ? AND service_points.is_active = true", city.id)
+            .where("services.category_id = ?", category.id)
+            .where("service_point_services.is_available = true")
+            .distinct
+            .count
+
+          ServiceCategorySerializer.new(category, locale: locale).as_json.merge({
+            'service_points_count' => service_points_count,
+            'services_count' => services_count,
+            'city_name' => city.localized_name(locale)
+          })
+        end
+
+        render json: {
+          data: categories_with_stats,
+          city: {
+            id: city.id,
+            name: city.localized_name(locale),
+            region: city.region&.localized_name(locale)
           },
           total_count: categories_with_stats.length
         }
@@ -229,7 +232,7 @@ module Api
       end
       
       def service_category_params
-        params.require(:service_category).permit(:name, :description, :is_active, :sort_order)
+        params.require(:service_category).permit(:name, :name_uk, :description, :description_uk, :is_active, :sort_order)
       end
       
       def authorize_admin!
@@ -238,10 +241,14 @@ module Api
         end
       end
       
-      def category_json(category, include_services: false)
-        json = category.as_json(include_services_count: true)
+      def category_json(category, include_services: false, locale: 'ru')
+        json = ServiceCategorySerializer.new(category, locale: locale, include_services_count: true).as_json
         if include_services
-          json['services'] = category.services.as_json(include: :category)
+          json['services'] = ActiveModel::Serializer::CollectionSerializer.new(
+            category.services,
+            serializer: ServiceSerializer,
+            locale: locale
+          )
         end
         json
       end
