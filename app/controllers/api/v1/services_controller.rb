@@ -66,7 +66,7 @@ module Api
       # GET /api/v1/services/:id
       def show
         locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
-        render json: ServiceSerializer.new(@service, locale: locale, include: { category: { only: [:id, :name, :name_uk, :localized_name] } })
+        render json: @service, serializer: ServiceSerializer, locale: locale
       end
       
       # POST /api/v1/services
@@ -85,7 +85,7 @@ module Api
         
         if @service.save
           locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
-          render json: ServiceSerializer.new(@service, locale: locale, include: { category: { only: [:id, :name, :name_uk, :localized_name] } }), status: :created
+          render json: @service, serializer: ServiceSerializer, locale: locale, status: :created
         else
           render json: { errors: @service.errors }, status: :unprocessable_entity
         end
@@ -97,7 +97,7 @@ module Api
       def update
         if @service.update(service_params)
           locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
-          render json: ServiceSerializer.new(@service, locale: locale, include: { category: { only: [:id, :name, :name_uk, :localized_name] } })
+          render json: @service, serializer: ServiceSerializer, locale: locale
         else
           render json: { errors: @service.errors }, status: :unprocessable_entity
         end
