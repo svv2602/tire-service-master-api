@@ -242,8 +242,10 @@ module Api
           @service_points = @service_points.joins(:city).where(cities: { region_id: region_id })
         end
         
-        # Фильтрация по городу (поиск по названию) - опциональная
-        if city_name.present?
+        # Фильтрация по id города (приоритетнее, чем по имени)
+        if params[:city_id].present?
+          @service_points = @service_points.where(city_id: params[:city_id])
+        elsif city_name.present?
           city = City.joins(:region).where("LOWER(cities.name) LIKE LOWER(?)", "%#{city_name}%").first
           if city
             @service_points = @service_points.where(city_id: city.id)
