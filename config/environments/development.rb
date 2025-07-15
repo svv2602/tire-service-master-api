@@ -30,9 +30,14 @@ Rails.application.configure do
   config.active_storage.service = :local
 
   # Настройка URL для Active Storage
-  Rails.application.routes.default_url_options[:host] = 'http://localhost:8000'
-  config.action_mailer.default_url_options = { host: 'localhost', port: 8000 }
-  config.active_storage.default_url_options = { host: 'http://localhost:8000' }
+  # Используем ENV для универсальности (Docker/локально)
+api_host = ENV.fetch("API_HOST", "localhost")
+api_port = ENV.fetch("API_PORT", 8000)
+
+Rails.application.routes.default_url_options[:host] = api_host
+Rails.application.routes.default_url_options[:port] = api_port
+config.action_mailer.default_url_options = { host: api_host, port: api_port }
+config.active_storage.default_url_options = { host: api_host, port: api_port }
 
   # Don't care if the mailer can't send.
   config.action_mailer.raise_delivery_errors = true
