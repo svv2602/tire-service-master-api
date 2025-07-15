@@ -301,37 +301,6 @@ class ServicePoint < ApplicationRecord
                  .count
   end
   
-  private
-  
-  # Валидация: нельзя активировать сервисную точку, если партнер неактивен
-  def partner_must_be_active_to_activate_service_point
-    if is_active? && partner.present? && !partner.is_active?
-      errors.add(:is_active, 'нельзя активировать, так как партнер неактивен')
-    end
-  end
-  
-  def calculate_cancellation_rate
-    total = bookings.count
-    return 0.0 if total.zero?
-    
-    cancelled = bookings.where(status: ['cancelled_by_client', 'cancelled_by_partner', 'no_show']).count
-    (cancelled.to_f / total) * 100
-  end
-  
-  def renumber_service_posts
-    service_posts.order(created_at: :asc).each_with_index do |post, index|
-      post.update(post_number: index + 1)
-    end
-  end
-  
-  def analyze_booking_conflicts_if_status_changed
-    # Анализируем конфликты если изменился статус активности или рабочий статус
-    if saved_change_to_is_active? || saved_change_to_work_status?
-      Rails.logger.info "ServicePoint #{id} status changed, scheduling conflict analysis"
-      BookingConflictAnalysisJob.perform_later(service_point_id: id)
-    end
-  end
-  
   # Методы локализации согласно TABLE_LOCALIZATION_RULES.md
   def localized_name(locale = 'ru')
     case locale.to_s
@@ -363,6 +332,39 @@ class ServicePoint < ApplicationRecord
       address_ru.presence || address_uk.presence || address.presence || ''
     else
       address_ru.presence || address_uk.presence || address.presence || ''
+    end
+  end
+  
+  private
+  
+  # Валидация: нельзя активировать сервисную точку, если партнер неактивен
+  def partner_must_be_active_to_activate_service_point
+    if is_active? && partner.present? && !partner.is_active?
+      errors.add(:is_active, 'нельзя активировать, так как партнер неактивен')
+    end
+  end
+  
+  def calculate_cancellation_rate
+    total = bookings.count
+    return 0.0 if total.zero?
+    
+    cancelled = bookings.where(status: ['cancelled_by_client', 'cancelled_by_partner', 'no_show']).count
+    (cancelled.to_f / total) * 100
+  end
+  
+  def analyze_booking_conflicts_if_status_changed
+    # Анализируем конфликты если изменился статус активности или рабочий статус
+    if saved_change_to_is_active? || saved_change_to_work_status?
+      Rails.logger.info "ServicePoint #{id} status changed, scheduling conflict analysis"
+      BookingConflictAnalysisJob.perform_later(service_point_id: id)
+    end
+  end
+  
+  private
+  
+  def renumber_service_posts
+    service_posts.order(created_at: :asc).each_with_index do |post, index|
+      post.update(post_number: index + 1)
     end
   end
 end
