@@ -26,12 +26,23 @@ class Api::V1::ClientAuthController < ApplicationController
         refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
         
         # Устанавливаем refresh токен в HttpOnly куки
-        cookies.encrypted[:refresh_token] = {
+        cookies[:refresh_token] = {
           value: refresh_token,
           httponly: true,
           secure: Rails.env.production?,
-          same_site: :strict,
-          expires: 30.days.from_now
+          same_site: :lax,
+          expires: 30.days.from_now,
+          path: '/'
+        }
+        
+        # Устанавливаем access токен в HttpOnly куки для автоматической аутентификации
+        cookies[:access_token] = {
+          value: access_token,
+          httponly: true,
+          secure: Rails.env.production?,
+          same_site: :lax,
+          expires: 1.hour.from_now,
+          path: '/'
         }
         
         # Возвращаем ответ в формате, соответствующем тестам
@@ -94,12 +105,22 @@ class Api::V1::ClientAuthController < ApplicationController
       refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
       
       # Устанавливаем refresh токен в HttpOnly куки
-      cookies.encrypted[:refresh_token] = {
+      cookies[:refresh_token] = {
         value: refresh_token,
         httponly: true,
         secure: Rails.env.production?,
         same_site: :lax,
         expires: 30.days.from_now,
+        path: '/'
+      }
+      
+      # Устанавливаем access токен в HttpOnly куки для автоматической аутентификации
+      cookies[:access_token] = {
+        value: access_token,
+        httponly: true,
+        secure: Rails.env.production?,
+        same_site: :lax,
+        expires: 1.hour.from_now,
         path: '/'
       }
 

@@ -19,7 +19,7 @@ class ApplicationController < ActionController::API
   
   def authenticate_request
     # Сначала пробуем получить токен из cookies (приоритет)
-    access_token = cookies.encrypted[:access_token]
+    access_token = cookies[:access_token]
     Rails.logger.info("Auth: access_token from cookies: #{access_token.present? ? 'present' : 'nil'}")
     
     # Если нет в cookies, пробуем из заголовка Authorization (для обратной совместимости)
@@ -70,19 +70,20 @@ class ApplicationController < ActionController::API
 
   # Попытка автоматического обновления токена
   def try_refresh_token
-    refresh_token = cookies.encrypted[:refresh_token]
+    refresh_token = cookies[:refresh_token]
     return false if refresh_token.blank?
 
     begin
       new_access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
       
       # Устанавливаем новый access токен в cookie
-      cookies.encrypted[:access_token] = {
+      cookies[:access_token] = {
         value: new_access_token,
         httponly: true,
         secure: Rails.env.production?,
         same_site: :lax,
-        expires: 1.hour.from_now
+        expires: 1.hour.from_now,
+        path: '/'
       }
       
       Rails.logger.info("Token auto-refreshed successfully")
