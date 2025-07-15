@@ -10,7 +10,8 @@ RUN apk update && apk add --no-cache \
     tzdata \
     git \
     nodejs \
-    npm
+    npm \
+    yaml-dev
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
@@ -31,8 +32,8 @@ COPY . .
 RUN chmod +x bin/rails
 
 # Создаем пользователя для безопасности
-RUN addgroup -g 1000 -S appgroup && \
-    adduser -u 1000 -S appuser -G appgroup
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
 
 # Создаем необходимые директории
 RUN mkdir -p tmp/pids log && \
