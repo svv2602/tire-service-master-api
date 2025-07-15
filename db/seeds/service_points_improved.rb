@@ -65,9 +65,12 @@ service_points_config = [
   {
     partner: shino_express_partner || fallback_partner,
     name: 'ШиноСервіс Експрес на Хрещатику',
+    name_uk: 'ШиноСервіс Експрес на Хрещатику',
     description: 'Швидкий та якісний шиномонтаж у центрі Києва',
+    description_uk: 'Швидкий та якісний шиномонтаж у центрі Києва',
     city: cities.find { |c| c.name == 'Київ' } || cities.first,
     address: 'вул. Хрещатик, 22',
+    address_uk: 'вул. Хрещатик, 22',
     contact_phone: '+380 44 555 55 55',
     is_active: true,
     work_status: 'working',
@@ -301,13 +304,20 @@ service_points_config.each_with_index do |config, index|
     next
   end
   
-  # Создаем сервисную точку
+  # Создаем сервисную точку с локализованными полями
   service_point = ServicePoint.create!(
     partner: config[:partner],
     name: config[:name],
     description: config[:description],
     city: config[:city],
     address: config[:address],
+    # Локализованные поля
+    name_ru: config[:name],
+    name_uk: config[:name_uk] || config[:name],
+    description_ru: config[:description],
+    description_uk: config[:description_uk] || config[:description],
+    address_ru: config[:address],
+    address_uk: config[:address_uk] || config[:address],
     contact_phone: config[:contact_phone],
     is_active: config[:is_active],
     work_status: config[:work_status],

@@ -18,31 +18,31 @@ class Booking < ApplicationRecord
   has_many :booking_conflicts, dependent: :destroy
   
   # Валидации
-  validates :booking_date, presence: { message: -> { I18n.t('errors.required') } }
-  validates :start_time, presence: { message: -> { I18n.t('errors.required') } }
+  validates :booking_date, presence: { message: -> (record, data) { I18n.t('errors.required') } }
+  validates :start_time, presence: { message: -> (record, data) { I18n.t('errors.required') } }
   # end_time не обязателен при создании - может быть NULL в слотовой архитектуре
-  validates :car_type_id, presence: { message: -> { I18n.t('errors.required') } }
+  validates :car_type_id, presence: { message: -> (record, data) { I18n.t('errors.required') } }
   # validates :client_id, presence: true  # ❌ Убираем обязательную валидацию client_id
-  validates :service_point_id, presence: { message: -> { I18n.t('errors.required') } }
+  validates :service_point_id, presence: { message: -> (record, data) { I18n.t('errors.required') } }
   # Валидация статуса теперь в модуле BookingStatuses
   
   # Валидации для получателя услуги
   validates :service_recipient_first_name, 
-    presence: { message: -> { I18n.t('errors.required') } }, 
+    presence: { message: -> (record, data) { I18n.t('errors.required') } }, 
     length: { maximum: 100 }
   validates :service_recipient_last_name, 
-    presence: { message: -> { I18n.t('errors.required') } }, 
+    presence: { message: -> (record, data) { I18n.t('errors.required') } }, 
     length: { maximum: 100 }
   validates :service_recipient_phone, 
-    presence: { message: -> { I18n.t('errors.required') } }, 
+    presence: { message: -> (record, data) { I18n.t('errors.required') } }, 
     format: { 
       with: /\A\+?[\d\s\-\(\)]+\z/, 
-      message: -> { I18n.t('errors.phone_format') }
+      message: -> (record, data) { I18n.t('errors.phone_format') }
     }
   validates :service_recipient_email, 
     format: { 
       with: URI::MailTo::EMAIL_REGEXP, 
-      message: -> { I18n.t('errors.email_format') }
+      message: -> (record, data) { I18n.t('errors.email_format') }
     }, 
     allow_blank: true
   
