@@ -1,86 +1,24 @@
-# See https://docs.docker.com/engine/reference/builder/#dockerignore-file for more about ignoring files.
-
-# Ignore git directory.
-/.git/
-/.gitignore
-
-# Ignore bundler config.
-/.bundle
-
-# Ignore all environment files.
-/.env*
-
-# Ignore all default key files.
-/config/master.key
-/config/credentials/*.key
-
-# Ignore all logfiles and tempfiles.
-/log/*
-/tmp/*
-!/log/.keep
-!/tmp/.keep
-
-# Ignore pidfiles, but keep the directory.
-/tmp/pids/*
-!/tmp/pids/.keep
-
-# Ignore storage (uploaded files in development and any SQLite databases).
-/storage/*
-!/storage/.keep
-/tmp/storage/*
-!/tmp/storage/.keep
-
-# Ignore CI service files.
-/.github
-
-# Ignore Kamal files.
-/config/deploy*.yml
-/.kamal
-
-# Ignore development files
-/.devcontainer
-
-# Ignore Docker-related files
-/.dockerignore
-/Dockerfile*
+# Git
+.git
+.gitignore
 
 # Logs
+*.log
 log/*
 tmp/*
-*.log
 
-# Runtime data
-pids
-*.pid
-*.seed
+# Dependencies
+node_modules/
+vendor/bundle/
 
-# Coverage directory used by tools like istanbul
-coverage
+# Database
+*.sqlite3
+*.db
 
-# Dependency directories
-node_modules
-
-# Optional npm cache directory
-.npm
-
-# Optional REPL history
-.node_repl_history
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# IDE files
-.vscode
-.idea
-*.swp
-*.swo
-*~
+# Test files
+spec/
+test/
+coverage/
 
 # Environment files
 .env
@@ -89,17 +27,32 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
-# Test files
-spec/tmp
-test/tmp
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Rails specific
+public/assets/
+public/packs/
+public/packs-test/
+storage/
+tmp/
 
 # Documentation
 docs/
 *.md
+README*
 
 # External files
 external-files/
 
-# Backup files
-*.bak
-*.backup
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore 

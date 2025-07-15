@@ -21,8 +21,8 @@ Rails.application.routes.draw do
           patch 'toggle_active'
         end
       end
-      # Health check endpoint
-      get 'health', to: 'health#index'
+      # Health check endpoint для Docker
+      get '/health', to: 'health#index'
       
       # Настройки системы
       get 'settings', to: 'settings#show'

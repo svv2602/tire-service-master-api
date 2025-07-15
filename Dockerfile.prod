@@ -1,11 +1,10 @@
-# Многоэтапная сборка для Rails API
-FROM ruby:3.3.7-alpine AS base
+# Многоэтапная сборка для production Rails API
+FROM ruby:3.3.7-alpine AS builder
 
-# Устанавливаем системные зависимости
+# Устанавливаем системные зависимости для сборки
 RUN apk update && apk add --no-cache \
     build-base \
     postgresql-dev \
-    postgresql-client \
     curl \
     tzdata \
     git \
@@ -18,24 +17,43 @@ WORKDIR /app
 # Копируем Gemfile и Gemfile.lock
 COPY Gemfile Gemfile.lock ./
 
-# Устанавливаем bundler и gems
+# Устанавливаем bundler и gems только для production
 RUN gem install bundler:2.5.23 && \
     bundle config set --local deployment 'true' && \
     bundle config set --local without 'development test' && \
-    bundle install --jobs $(nproc) --retry 3
+    bundle install --jobs $(nproc) --retry 3 && \
+    bundle clean --force
 
 # Копируем исходный код приложения
 COPY . .
 
-# Устанавливаем права доступа
-RUN chmod +x bin/rails
+# Компилируем ассеты (если есть)
+RUN bundle exec rails assets:precompile
+
+# Production образ
+FROM ruby:3.3.7-alpine AS production
+
+# Устанавливаем только runtime зависимости
+RUN apk update && apk add --no-cache \
+    postgresql-client \
+    curl \
+    tzdata
 
 # Создаем пользователя для безопасности
 RUN addgroup -g 1000 -S appgroup && \
     adduser -u 1000 -S appuser -G appgroup
 
+# Устанавливаем рабочую директорию
+WORKDIR /app
+
+# Копируем gems из builder stage
+COPY --from=builder /usr/local/bundle /usr/local/bundle
+
+# Копируем приложение из builder stage
+COPY --from=builder --chown=appuser:appgroup /app /app
+
 # Создаем необходимые директории
-RUN mkdir -p tmp/pids log && \
+RUN mkdir -p tmp/pids log storage && \
     chown -R appuser:appgroup /app
 
 # Переключаемся на пользователя
