@@ -246,3 +246,32 @@ ru:
       cancellation_urgent: "Если вам нужно отменить или перенести запись, пожалуйста, сделайте это как можно скорее."
     actions:
       view_booking: "Посмотреть запись"
+
+  activerecord:
+    errors:
+      messages:
+        record_invalid: "Ошибка валидации: %{errors}"
+        blank: "не может быть пустым"
+        present: "должно быть пустым"
+        confirmation: "не совпадает с подтверждением"
+        accepted: "должно быть принято"
+        empty: "не может быть пустым"
+        equal_to: "должно равняться %{count}"
+        even: "должно быть четным"
+        exclusion: "имеет зарезервированное значение"
+        greater_than: "должно быть больше %{count}"
+        greater_than_or_equal_to: "должно быть больше или равно %{count}"
+        inclusion: "не входит в перечень допустимых значений"
+        invalid: "имеет неверное значение"
+        less_than: "должно быть меньше %{count}"
+        less_than_or_equal_to: "должно быть меньше или равно %{count}"
+        model_invalid: "Ошибка валидации: %{errors}"
+        not_a_number: "не является числом"
+        not_an_integer: "должно быть целым числом"
+        odd: "должно быть нечетным"
+        other_than: "должно отличаться от %{count}"
+        required: "обязательное"
+        taken: "уже занято"
+        too_long: "слишком длинный (максимум %{count} символов)"
+        too_short: "слишком короткий (минимум %{count} символов)"
+        wrong_length: "неправильная длина (должно быть %{count} символов)"

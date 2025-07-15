@@ -60,8 +60,11 @@ categories_data.each do |category_data|
   begin
     category = ServiceCategory.find_or_initialize_by(name: category_data[:name])
     
+    # Присваиваем все поля
+    category.assign_attributes(category_data)
+    
     if category.persisted?
-      category.update!(category_data)
+      category.save!
       puts "  ✅ Обновлена категория: #{category.name} / #{category.name_uk} (ID: #{category.id})"
       categories_updated += 1
     else
@@ -367,12 +370,14 @@ services_data.each do |service_data|
   begin
     service = Service.find_or_initialize_by(name: service_data[:name])
     
+    # Присваиваем все поля
+    service.assign_attributes(service_attrs)
+    
     if service.persisted?
-      service.update!(service_attrs)
+      service.save!
       puts "  ✅ Обновлена услуга: #{service.name} / #{service.name_uk} (ID: #{service.id}, Категория: #{category.name})"
       services_updated += 1
     else
-      service.assign_attributes(service_attrs)
       service.save!
       puts "  ✨ Создана услуга: #{service.name} / #{service.name_uk} (ID: #{service.id}, Категория: #{category.name})"
       services_created += 1
