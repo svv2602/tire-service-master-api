@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_14_084449) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_15_063306) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -630,11 +630,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_14_084449) do
     t.string "work_status", default: "working", null: false
     t.json "working_hours"
     t.jsonb "category_contacts", default: {}
+    t.string "name_ru", null: false
+    t.string "name_uk", null: false
+    t.text "description_ru", null: false
+    t.text "description_uk", null: false
+    t.string "address_ru", null: false
+    t.string "address_uk", null: false
     t.index ["category_contacts"], name: "index_service_points_on_category_contacts", using: :gin
     t.index ["city_id"], name: "index_service_points_on_city_id"
     t.index ["is_active", "work_status"], name: "index_service_points_on_is_active_and_work_status"
     t.index ["is_active"], name: "index_service_points_on_is_active"
     t.index ["latitude", "longitude"], name: "idx_service_points_location"
+    t.index ["name_ru"], name: "index_service_points_on_name_ru"
+    t.index ["name_uk"], name: "index_service_points_on_name_uk"
     t.index ["partner_id"], name: "index_service_points_on_partner_id"
     t.index ["work_status"], name: "index_service_points_on_work_status"
   end

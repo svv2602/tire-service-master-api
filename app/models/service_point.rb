@@ -58,6 +58,14 @@ class ServicePoint < ApplicationRecord
   validates :address, presence: true
   validates :work_status, presence: true, inclusion: { in: work_statuses.keys }
   
+  # Валидации для локализованных полей
+  validates :name_ru, presence: true, length: { minimum: 2 }
+  validates :name_uk, presence: true, length: { minimum: 2 }
+  validates :description_ru, presence: true, length: { minimum: 10 }
+  validates :description_uk, presence: true, length: { minimum: 10 }
+  validates :address_ru, presence: true, length: { minimum: 5 }
+  validates :address_uk, presence: true, length: { minimum: 5 }
+  
   # Валидация: нельзя активировать сервисную точку, если партнер неактивен
   validate :partner_must_be_active_to_activate_service_point
   
@@ -321,6 +329,40 @@ class ServicePoint < ApplicationRecord
     if saved_change_to_is_active? || saved_change_to_work_status?
       Rails.logger.info "ServicePoint #{id} status changed, scheduling conflict analysis"
       BookingConflictAnalysisJob.perform_later(service_point_id: id)
+    end
+  end
+  
+  # Методы локализации согласно TABLE_LOCALIZATION_RULES.md
+  def localized_name(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      name_uk.presence || name_ru.presence || name.presence || ''
+    when 'ru'
+      name_ru.presence || name_uk.presence || name.presence || ''
+    else
+      name_ru.presence || name_uk.presence || name.presence || ''
+    end
+  end
+  
+  def localized_description(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      description_uk.presence || description_ru.presence || description.presence || ''
+    when 'ru'
+      description_ru.presence || description_uk.presence || description.presence || ''
+    else
+      description_ru.presence || description_uk.presence || description.presence || ''
+    end
+  end
+  
+  def localized_address(locale = 'ru')
+    case locale.to_s
+    when 'uk'
+      address_uk.presence || address_ru.presence || address.presence || ''
+    when 'ru'
+      address_ru.presence || address_uk.presence || address.presence || ''
+    else
+      address_ru.presence || address_uk.presence || address.presence || ''
     end
   end
 end

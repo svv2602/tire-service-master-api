@@ -67,8 +67,11 @@ module Api
           @service_points = @service_points.order(sort_params)
         end
         
+        # Получаем локаль из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
         # Возвращаем результат в формате JSON с пагинацией
-        render json: paginate(@service_points)
+        render json: paginate(@service_points, locale: locale)
       end
       
       # GET /api/v1/service_points/:id
@@ -93,7 +96,8 @@ module Api
         
         if @service_point.save
           log_action('create', 'service_point', @service_point.id, {}, @service_point.as_json)
-          render json: @service_point, status: :created
+          locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+          render json: @service_point, serializer: ServicePointSerializer, locale: locale, status: :created
         else
           Rails.logger.error "Ошибки при сохранении сервисной точки: #{@service_point.errors.full_messages}"
           render json: { errors: @service_point.errors }, status: :unprocessable_entity
@@ -138,7 +142,8 @@ module Api
             log_action('update', 'service_point', @service_point.id, old_values, @service_point.as_json)
             
             # Возвращаем обновленные данные с timestamp для кеша
-            render json: @service_point.as_json.merge(
+            locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+            render json: ServicePointSerializer.new(@service_point, locale: locale).as_json.merge(
               cache_timestamp: @service_point.updated_at.to_i,
               posts_updated: service_posts_changed?
             )
@@ -720,6 +725,8 @@ module Api
         params.require(:service_point).permit(
           :name, :description, :address, :city_id, :partner_id, :latitude, :longitude,
           :contact_phone, :is_active, :work_status,
+          # Локализованные поля
+          :name_ru, :name_uk, :description_ru, :description_uk, :address_ru, :address_uk,
           working_hours: [
             :monday => [:start, :end, :is_working_day],
             :tuesday => [:start, :end, :is_working_day], 
@@ -1063,7 +1070,7 @@ module Api
       # Этот метод реализует пагинацию коллекции и включает данные о городах и регионах в ответ
       # @param collection [ActiveRecord::Relation] коллекция объектов для пагинации
       # @return [Hash] хэш с данными и информацией о пагинации
-      def paginate(collection)
+      def paginate(collection, locale: 'ru')
         page = [params[:page].to_i, 1].max  # Минимум 1
         per_page = (params[:per_page] || 10).to_i
         per_page = [per_page, 100].min # ограничиваем максимальным значением
@@ -1074,12 +1081,10 @@ module Api
         paginated_collection = collection.offset(offset).limit(per_page)
         
         {
-          data: paginated_collection.as_json(
-            only: [:id, :name, :address, :latitude, :longitude, :contact_phone, :average_rating, :total_clients_served, :cancellation_rate, :post_count, :partner_id, :city_id, :is_active, :work_status, :working_hours],
-            include: {
-              city: { only: [:id, :name], include: { region: { only: [:id, :name] } } },
-              partner: { only: [:id, :company_name] }
-            }
+          data: ActiveModel::Serializer::CollectionSerializer.new(
+            paginated_collection,
+            serializer: ServicePointSerializer,
+            locale: locale
           ),
           pagination: {
             current_page: page,

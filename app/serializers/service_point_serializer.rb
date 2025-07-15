@@ -2,7 +2,10 @@ class ServicePointSerializer < ActiveModel::Serializer
   attributes :id, :name, :description, :address, :latitude, :longitude, :contact_phone, 
              :is_active, :work_status, :status_display, :post_count, :default_slot_duration, 
              :rating, :total_clients_served, :average_rating, :cancellation_rate, :created_at, :updated_at,
-             :posts_count, :service_posts_summary, :service_posts, :services, :working_hours
+             :posts_count, :service_posts_summary, :service_posts, :services, :working_hours,
+             # Локализованные поля
+             :name_ru, :name_uk, :description_ru, :description_uk, :address_ru, :address_uk,
+             :localized_name, :localized_description, :localized_address
   
   belongs_to :partner
   belongs_to :city
@@ -94,5 +97,21 @@ class ServicePointSerializer < ActiveModel::Serializer
       end
     end
     normalized
+  end
+  
+  # Методы локализации согласно TABLE_LOCALIZATION_RULES.md
+  def localized_name
+    locale = instance_options[:locale] || 'ru'
+    object.localized_name(locale)
+  end
+  
+  def localized_description
+    locale = instance_options[:locale] || 'ru'
+    object.localized_description(locale)
+  end
+  
+  def localized_address
+    locale = instance_options[:locale] || 'ru'
+    object.localized_address(locale)
   end
 end
