@@ -1,0 +1,233 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: tire_service_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tire_service_development
+      POSTGRES_USER: tire_service_user
+      POSTGRES_PASSWORD: tire_service_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./tire-service-master-api/db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tire_service_user -d tire_service_development"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - tire_service_network
+
+  # Redis для кэширования и фоновых задач
+  redis:
+    image: redis:7-alpine
+    container_name: tire_service_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - tire_service_network
+
+  # Ruby on Rails API Backend
+  api:
+    build:
+      context: ./tire-service-master-api
+      dockerfile: Dockerfile
+    container_name: tire_service_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Rails окружение
+      RAILS_ENV: development
+      RAILS_LOG_TO_STDOUT: "true"
+      
+      # База данных PostgreSQL
+      DATABASE_URL: "postgresql://tire_service_user:tire_service_password@postgres:5432/tire_service_development"
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tire_service_development
+      DB_USER: tire_service_user
+      DB_PASSWORD: tire_service_password
+      
+      # Redis
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # Секретные ключи (для development)
+      SECRET_KEY_BASE: "development_secret_key_base_change_in_production"
+      JWT_SECRET: "development_jwt_secret_change_in_production"
+      
+      # CORS настройки
+      ALLOWED_ORIGINS: "http://localhost:3008,http://127.0.0.1:3008,http://192.168.3.145:3008,http://web:3008"
+      
+      # Другие настройки
+      RAILS_SERVE_STATIC_FILES: "true"
+      RAILS_LOG_LEVEL: "debug"
+      
+      # Active Storage настройки для Docker
+      API_HOST: "localhost"
+      API_PORT: "8000"
+    volumes:
+      - ./tire-service-master-api:/app
+      - api_bundle:/usr/local/bundle
+      - api_tmp:/app/tmp
+      - api_log:/app/log
+      - api_storage:/app/storage
+    working_dir: /app
+    command: >
+      bash -c "
+        echo '=== Установка зависимостей ===' &&
+        bundle install &&
+        echo '=== Ожидание PostgreSQL ===' &&
+        until pg_isready -h postgres -p 5432 -U tire_service_user; do
+          echo 'Ожидание PostgreSQL...'
+          sleep 2
+        done &&
+        echo '=== Настройка базы данных ===' &&
+        bundle exec rails db:create db:migrate db:seed &&
+        echo '=== Запуск Rails сервера ===' &&
+        bundle exec rails server -b 0.0.0.0 -p 8000
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - tire_service_network
+
+  # React Frontend Web приложение
+  web:
+    build:
+      context: ./tire-service-master-web
+      dockerfile: Dockerfile
+    container_name: tire_service_web
+    restart: unless-stopped
+    ports:
+      - "3008:3008"
+    environment:
+      # Node.js окружение
+      NODE_ENV: development
+      
+      # API настройки - используем localhost для браузера пользователя
+      REACT_APP_API_URL: "http://localhost:8000"
+      REACT_APP_API_BASE_URL: "http://localhost:8000/api/v1"
+      
+      # Development настройки
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      FAST_REFRESH: "true"
+      
+      # Настройки сервера разработки
+      HOST: "0.0.0.0"
+      PORT: 3008
+      BROWSER: "none"
+    volumes:
+      - ./tire-service-master-web:/app
+      - web_node_modules:/app/node_modules
+      - web_build:/app/build
+    working_dir: /app
+    command: >
+      bash -c "
+        echo '=== Установка зависимостей ===' &&
+        npm install &&
+        echo '=== Ожидание API сервера ===' &&
+        until curl -f http://api:8000/api/v1/health; do
+          echo 'Ожидание API сервера...'
+          sleep 5
+        done &&
+        echo '=== Запуск React приложения ===' &&
+        npm start
+      "
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3008"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    networks:
+      - tire_service_network
+
+  # Nginx для проксирования запросов (опционально)
+  nginx:
+    image: nginx:alpine
+    container_name: tire_service_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - tire_service_network
+
+# Volumes для персистентности данных
+volumes:
+  # PostgreSQL данные
+  postgres_data:
+    driver: local
+    
+  # Redis данные
+  redis_data:
+    driver: local
+    
+  # Rails API volumes
+  api_bundle:
+    driver: local
+  api_tmp:
+    driver: local
+  api_log:
+    driver: local
+  api_storage:
+    driver: local
+    
+  # React Web volumes
+  web_node_modules:
+    driver: local
+  web_build:
+    driver: local
+
+# Сеть для всех сервисов
+networks:
+  tire_service_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
