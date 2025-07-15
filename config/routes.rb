@@ -47,6 +47,7 @@ Rails.application.routes.draw do
       # Автомобили текущего клиента
       get 'auth/me/cars', to: 'auth#my_cars'
       post 'auth/me/cars', to: 'auth#create_car'
+      patch 'auth/me/cars/:id', to: 'auth#update_car'
       delete 'auth/me/cars/:id', to: 'auth#delete_car'
       
       # ✅ НОВЫЕ МАРШРУТЫ: Избранные сервисные точки текущего пользователя

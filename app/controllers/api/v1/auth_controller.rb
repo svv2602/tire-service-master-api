@@ -233,6 +233,27 @@ module Api
         end
       end
 
+      # PATCH /api/v1/auth/me/cars/:id
+      # Обновление автомобиля текущего пользователя
+      def update_car
+        # Автоматически создаем клиентский профиль для всех ролей (если каким-то образом его нет)
+        ensure_client_profile
+
+        car = current_user.client.cars.find(params[:id])
+        car_params = params.require(:car).permit(:brand_id, :model_id, :car_type_id, :year, :license_plate, :is_primary)
+
+        if car.update(car_params)
+          render json: { 
+            car: ClientCarSerializer.new(car).as_json, 
+            message: I18n.t('auth.messages.car_updated')
+          }, status: :ok
+        else
+          render json: { errors: car.errors }, status: :unprocessable_entity
+        end
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: I18n.t('auth.errors.car_not_found') }, status: :not_found
+      end
+
       # DELETE /api/v1/auth/me/cars/:id
       # Удаление автомобиля текущего пользователя
       def delete_car
