@@ -319,7 +319,13 @@ Rails.application.routes.draw do
       post 'schedule/generate_for_period/:service_point_id/:from_date/:to_date', to: 'schedule#generate_for_period', as: 'generate_schedule_for_period'
       
       # Уведомления
-      resources :notifications, only: [:index, :show, :update]
+      resources :notifications, only: [:index, :show, :create, :update, :destroy] do
+        collection do
+          post 'mark_all_as_read'
+          delete 'destroy_all'
+          get 'stats'
+        end
+      end
       
       # Системные логи (только для администраторов)
       resources :system_logs, only: [:index, :show]

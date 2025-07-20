@@ -1,146 +1,256 @@
 class NotificationService
-  # Типы уведомлений
-  NOTIFICATION_TYPES = {
-    booking_created: 'booking_created',
-    booking_confirmed: 'booking_confirmed',
-    booking_reminder: 'booking_reminder',
-    booking_cancelled: 'booking_cancelled',
-    booking_completed: 'booking_completed',
-    partner_new_booking: 'partner_new_booking',
-    partner_booking_cancelled: 'partner_booking_cancelled'
-  }.freeze
-
-  # Отправка уведомления о бронировании
-  def self.send_booking_notification(booking, notification_type)
-    return unless booking.present?
-
-    # Отправка email клиенту
-    case notification_type
-    when NOTIFICATION_TYPES[:booking_created]
-      BookingMailer.booking_created(booking.id).deliver_later
-    when NOTIFICATION_TYPES[:booking_confirmed]
-      BookingMailer.booking_confirmed(booking.id).deliver_later
-    when NOTIFICATION_TYPES[:booking_reminder]
-      BookingMailer.booking_reminder(booking.id).deliver_later
-    when NOTIFICATION_TYPES[:booking_cancelled]
-      BookingMailer.booking_cancelled(booking.id).deliver_later
-    when NOTIFICATION_TYPES[:booking_completed]
-      BookingMailer.booking_completed(booking.id).deliver_later
-    end
-
-    # Отправка email партнеру
-    if booking.service_point && booking.service_point.partner
-      partner_id = booking.service_point.partner_id
+  class << self
+    # Основной метод для создания и отправки уведомления
+    def send_notification(recipient, type_name, data = {})
+      # Ищем тип уведомления
+      notification_type = NotificationType.find_by(name: type_name)
+      return false unless notification_type&.is_active?
       
-      case notification_type
-      when NOTIFICATION_TYPES[:booking_created]
-        BookingMailer.new_booking_notification(booking.id, partner_id).deliver_later
-      when NOTIFICATION_TYPES[:booking_cancelled]
-        BookingMailer.booking_cancelled_notification(booking.id, partner_id).deliver_later
-      end
-    end
-
-    # Создание записи уведомления для клиента
-    if booking.client && notification_type_record = NotificationType.find_by(name: notification_type)
-      create_notification(
-        recipient_type: 'Client',
-        recipient_id: booking.client_id,
-        notification_type: notification_type_record,
-        data: {
-          booking_id: booking.id,
-          service_point_id: booking.service_point_id,
-          booking_date: booking.booking_date,
-          start_time: booking.start_time,
-          end_time: booking.end_time
-        }
-      )
-    end
-  end
-
-  # Отправка ежедневных напоминаний
-  def self.send_daily_reminders
-    tomorrow = Date.current + 1.day
-    bookings = Booking.where(booking_date: tomorrow)
-                      .where.not(status: [3, 4]) # Не отмененные или завершенные
-                      .includes(:client, :service_point)
-
-    bookings.find_each do |booking|
-      send_booking_notification(booking, NOTIFICATION_TYPES[:booking_reminder])
-    end
-  end
-
-  # Отправка напоминаний за 2 часа
-  def self.send_booking_reminders
-    current_time = Time.current
-    two_hours_later = current_time + 2.hours
-    today = Date.current
-
-    # Находим записи, которые будут через 2 часа
-    bookings = Booking.where(booking_date: today)
-                      .where.not(status: [3, 4]) # Не отмененные или завершенные
-                      .includes(:client, :service_point)
-
-    bookings.each do |booking|
-      # Проверяем, что запись начинается примерно через 2 часа
-      booking_start_time = Time.parse("#{booking.booking_date} #{booking.start_time}")
+      # Получаем данные для создания уведомления
+      notification_data = prepare_notification_data(recipient, notification_type, data)
       
-      if booking_start_time > current_time && booking_start_time < two_hours_later
-        send_booking_notification(booking, NOTIFICATION_TYPES[:booking_reminder])
-      end
+      # Создаем уведомление в БД
+      notification = create_notification(recipient, notification_type, notification_data)
+      return false unless notification
+      
+      # Отправляем уведомление по указанным каналам
+      send_channels = determine_channels(notification_type, data[:channels])
+      send_via_channels(notification, send_channels, data)
+      
+      # Помечаем как отправленное
+      notification.mark_as_sent!
+      
+      notification
     end
-  end
-
-  # Отправка ежедневных сводок партнерам
-  def self.send_daily_summaries
-    tomorrow = Date.current + 1.day
     
-    Partner.find_each do |partner|
-      NotificationMailer.daily_summary(partner.id, tomorrow).deliver_later
+    # Создание уведомления о бронировании
+    def booking_notification(booking, type, additional_data = {})
+      case type
+      when :created
+        send_booking_created(booking, additional_data)
+      when :confirmed
+        send_booking_confirmed(booking, additional_data)
+      when :cancelled
+        send_booking_cancelled(booking, additional_data)
+      when :reminder
+        send_booking_reminder(booking, additional_data)
+      when :completed
+        send_booking_completed(booking, additional_data)
+      end
     end
-  end
-
-  # Создание записи уведомления
-  def self.create_notification(recipient_type:, recipient_id:, notification_type:, data: {})
-    # Получаем шаблон уведомления
-    template = notification_type.template
-
-    # Рендерим шаблон с данными
-    title, message = render_template(template, data)
-
-    # Определяем каналы отправки
-    send_via = []
-    send_via << 'email' if notification_type.is_email
-    send_via << 'push' if notification_type.is_push
-    send_via << 'sms' if notification_type.is_sms
-
-    # Создаем уведомления для каждого канала
-    send_via.each do |channel|
+    
+    # Системные уведомления
+    def system_notification(recipients, title, message, priority: 'normal', category: 'system')
+      recipients = [recipients] unless recipients.is_a?(Array)
+      
+      recipients.map do |recipient|
+        send_notification(recipient, 'system_notification', {
+          title: title,
+          message: message,
+          priority: priority,
+          category: category,
+          channels: ['push', 'email']
+        })
+      end
+    end
+    
+    private
+    
+    def prepare_notification_data(recipient, notification_type, data)
+      # Данные по умолчанию
+      default_data = {
+        title: data[:title] || notification_type.name.humanize,
+        message: data[:message] || 'No message provided',
+        priority: data[:priority] || 'normal',
+        category: data[:category] || 'general',
+        action_url: data[:action_url],
+        expires_at: data[:expires_at]
+      }
+      
+      # Если есть шаблон, заполняем его данными
+      if notification_type.template.present? && data[:template_data]
+        default_data[:message] = fill_template(notification_type.template, data[:template_data])
+      end
+      
+      default_data
+    end
+    
+    def create_notification(recipient, notification_type, data)
+      # Определяем тип и ID получателя
+      recipient_type = recipient.class.name
+      recipient_id = recipient.id
+      
+      # Создаем уведомление
       Notification.create(
         notification_type: notification_type,
         recipient_type: recipient_type,
         recipient_id: recipient_id,
-        title: title,
-        message: message,
-        send_via: channel,
-        data: data
+        title: data[:title],
+        message: data[:message],
+        priority: data[:priority],
+        category: data[:category],
+        send_via: data[:channels]&.first || 'push',
+        action_url: data[:action_url],
+        expires_at: data[:expires_at]
       )
+    rescue => e
+      Rails.logger.error "Failed to create notification: #{e.message}"
+      nil
     end
-  end
-
-  # Обработка шаблонов
-  def self.render_template(template, data)
-    return ['Уведомление', 'Новое уведомление'] unless template.present?
-
-    # Простая обработка шаблона с заменой переменных
-    message = template.dup
     
-    data.each do |key, value|
-      message.gsub!("{{#{key}}}", value.to_s)
+    def determine_channels(notification_type, requested_channels = nil)
+      # Если каналы заданы явно, используем их
+      return requested_channels if requested_channels.present?
+      
+      # Иначе определяем на основе типа уведомления
+      channels = []
+      channels << 'push' if notification_type.is_push?
+      channels << 'email' if notification_type.is_email?
+      channels << 'sms' if notification_type.is_sms?
+      
+      channels.presence || ['push'] # По умолчанию push
     end
-
-    # Генерируем заголовок из первых 50 символов сообщения
-    title = message.split('.').first || message[0..50]
     
-    [title, message]
+    def send_via_channels(notification, channels, data)
+      channels.each do |channel|
+        case channel.to_s
+        when 'email'
+          send_email_notification(notification, data)
+        when 'push'
+          send_push_notification(notification, data)
+        when 'sms'
+          send_sms_notification(notification, data)
+        when 'telegram'
+          send_telegram_notification(notification, data)
+        end
+      end
+    end
+    
+    def send_email_notification(notification, data)
+      return unless notification.recipient_type == 'User' || 
+                   (notification.recipient_type == 'Client' && 
+                    notification.recipient.user&.email.present?)
+      
+      recipient_email = if notification.recipient_type == 'User'
+                         notification.recipient.email
+                       else
+                         notification.recipient.user&.email
+                       end
+      
+      return unless recipient_email.present?
+      
+      # Отправляем через mailer
+      NotificationMailer.general_notification(
+        notification.id,
+        recipient_email
+      ).deliver_later
+      
+      Rails.logger.info "Email notification sent to #{recipient_email}"
+    rescue => e
+      Rails.logger.error "Failed to send email notification: #{e.message}"
+    end
+    
+    def send_push_notification(notification, data)
+      # Заглушка для push уведомлений
+      # Здесь будет интеграция с Firebase FCM
+      Rails.logger.info "Push notification sent for notification #{notification.id}"
+    end
+    
+    def send_sms_notification(notification, data)
+      # Заглушка для SMS уведомлений
+      Rails.logger.info "SMS notification sent for notification #{notification.id}"
+    end
+    
+    def send_telegram_notification(notification, data)
+      # Заглушка для Telegram уведомлений
+      Rails.logger.info "Telegram notification sent for notification #{notification.id}"
+    end
+    
+    def fill_template(template, data)
+      result = template.dup
+      data.each do |key, value|
+        result.gsub!("{{#{key}}}", value.to_s)
+      end
+      result
+    end
+    
+    # Методы для конкретных типов уведомлений
+    
+    def send_booking_created(booking, data)
+      send_notification(booking.client, 'booking_created', {
+        title: 'Бронирование создано',
+        message: "Ваша запись на #{booking.booking_date} в #{booking.start_time} создана",
+        category: 'booking',
+        priority: 'normal',
+        template_data: {
+          date: booking.booking_date,
+          time: booking.start_time,
+          service_point: booking.service_point.name
+        },
+        action_url: "/client/bookings/#{booking.id}",
+        channels: ['push', 'email']
+      }.merge(data))
+    end
+    
+    def send_booking_confirmed(booking, data)
+      send_notification(booking.client, 'booking_confirmed', {
+        title: 'Бронирование подтверждено',
+        message: "Ваша запись на #{booking.booking_date} в #{booking.start_time} подтверждена",
+        category: 'booking',
+        priority: 'high',
+        template_data: {
+          date: booking.booking_date,
+          time: booking.start_time,
+          service_point: booking.service_point.name
+        },
+        action_url: "/client/bookings/#{booking.id}",
+        channels: ['push', 'email', 'sms']
+      }.merge(data))
+    end
+    
+    def send_booking_cancelled(booking, data)
+      send_notification(booking.client, 'booking_canceled', {
+        title: 'Бронирование отменено',
+        message: "Ваша запись на #{booking.booking_date} в #{booking.start_time} отменена",
+        category: 'booking',
+        priority: 'high',
+        template_data: {
+          date: booking.booking_date,
+          time: booking.start_time,
+          service_point: booking.service_point.name
+        },
+        action_url: "/client/bookings",
+        channels: ['push', 'email', 'sms']
+      }.merge(data))
+    end
+    
+    def send_booking_reminder(booking, data)
+      send_notification(booking.client, 'booking_reminder', {
+        title: 'Напоминание о записи',
+        message: "Напоминаем о вашей записи завтра в #{booking.start_time}",
+        category: 'reminder',
+        priority: 'high',
+        template_data: {
+          time: booking.start_time,
+          service_point: booking.service_point.name
+        },
+        action_url: "/client/bookings/#{booking.id}",
+        channels: ['push', 'sms']
+      }.merge(data))
+    end
+    
+    def send_booking_completed(booking, data)
+      send_notification(booking.client, 'booking_completed', {
+        title: 'Обслуживание завершено',
+        message: 'Спасибо за посещение! Пожалуйста, оцените наш сервис',
+        category: 'booking',
+        priority: 'normal',
+        template_data: {
+          service_point: booking.service_point.name
+        },
+        action_url: "/client/review/new?booking_id=#{booking.id}",
+        channels: ['push', 'email']
+      }.merge(data))
+    end
   end
 end 
