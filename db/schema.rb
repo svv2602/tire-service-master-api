@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_15_063306) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_20_100639) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -696,6 +696,16 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_15_063306) do
     t.index ["created_at"], name: "index_system_logs_on_created_at"
     t.index ["entity_type", "entity_id"], name: "idx_system_logs_entity"
     t.index ["user_id"], name: "index_system_logs_on_user_id"
+  end
+
+  create_table "telegram_notifications", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "telegram_subscriptions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "tire_types", force: :cascade do |t|

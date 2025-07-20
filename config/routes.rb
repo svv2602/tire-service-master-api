@@ -28,6 +28,26 @@ Rails.application.routes.draw do
       get 'settings', to: 'settings#show'
       patch 'settings', to: 'settings#update'
       
+      # Telegram интеграция
+      post 'telegram_webhook', to: 'telegram_webhook#webhook'
+      get 'telegram_webhook', to: 'telegram_webhook#show_config'
+      
+      resources :telegram_subscriptions do
+        member do
+          post 'toggle_status'
+          post 'test_notification'
+        end
+      end
+      
+      resources :telegram_notifications do
+        member do
+          post 'retry'
+        end
+        collection do
+          get 'stats'
+        end
+      end
+      
       # Управление локалью
       get 'locale', to: 'locale#show'
       put 'locale', to: 'locale#update'
