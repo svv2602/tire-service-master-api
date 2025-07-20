@@ -102,6 +102,7 @@ Rails.application.configure do
     "127.0.0.1",       # Локальный IP
     "0.0.0.0",         # Все интерфейсы
     "tire_service_api", # Docker compose service name (если используется)
-    /.*\.local/        # Локальные домены (.local)
+    /.*\.local/,       # Локальные домены (.local)
+    /.*\.ngrok-free\.app/  # ngrok домены для Telegram webhook
   ]
 end

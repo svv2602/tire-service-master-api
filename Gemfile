@@ -88,3 +88,6 @@ group :development do
 end
 
 gem "base64", "~> 0.2.0"
+
+# HTTP клиент для Telegram API
+gem "httparty", "~> 0.21"
