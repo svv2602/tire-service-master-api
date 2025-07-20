@@ -25,10 +25,10 @@ class TelegramNotification < ApplicationRecord
   # serialize :telegram_response, JSON
 
   # Типы уведомлений
-  enum :notification_type, ['booking', 'general', 'promotion', 'reminder', 'system']
+  enum :notification_type, { booking: 'booking', general: 'general', promotion: 'promotion', reminder: 'reminder', system: 'system' }
 
   # Статусы отправки
-  enum :status, ['pending', 'sent', 'failed']
+  enum :status, { pending: 'pending', sent: 'sent', failed: 'failed' }
 
   before_validation :set_defaults
 

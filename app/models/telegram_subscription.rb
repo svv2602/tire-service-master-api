@@ -6,17 +6,16 @@ class TelegramSubscription < ApplicationRecord
   validates :user_id, presence: true
   validates :is_active, inclusion: { in: [true, false] }
   validates :language_code, presence: true, inclusion: { in: %w[ru uk en] }
-  validates :status, presence: true, inclusion: { in: %w[active blocked inactive] }
+  validates :status, presence: true
 
-  scope :active, -> { where(is_active: true, status: 'active') }
-  scope :blocked, -> { where(status: 'blocked') }
+  scope :active, -> { where(is_active: true, status: :active) }
+  scope :blocked, -> { where(status: :blocked) }
   scope :inactive, -> { where(is_active: false) }
 
-  # Предпочтения уведомлений (JSON)
-  serialize :notification_preferences, coder: JSON
+  # Предпочтения уведомлений (JSON) - используем атрибут типа JSON
 
-  # Статусы подписки
-  enum :status, ['active', 'blocked', 'inactive']
+  # Статусы подписки  
+  enum :status, { active: 'active', blocked: 'blocked', inactive: 'inactive' }
 
   before_validation :set_defaults
 

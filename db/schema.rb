@@ -698,16 +698,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_20_100639) do
     t.index ["user_id"], name: "index_system_logs_on_user_id"
   end
 
-  create_table "telegram_notifications", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-  end
-
-  create_table "telegram_subscriptions", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-  end
-
   create_table "tire_types", force: :cascade do |t|
     t.string "name", null: false
     t.text "description"
