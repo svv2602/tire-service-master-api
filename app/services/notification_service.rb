@@ -1,4 +1,16 @@
 class NotificationService
+  # Константы для типов уведомлений
+  NOTIFICATION_TYPES = {
+    booking_created: 'booking_created',
+    booking_confirmed: 'booking_confirmed', 
+    booking_cancelled: 'booking_cancelled',
+    booking_completed: 'booking_completed',
+    booking_reminder: 'booking_reminder',
+    system_notification: 'system_notification',
+    payment_successful: 'payment_successful',
+    review_request: 'review_request'
+  }.freeze
+
   class << self
     # Основной метод для создания и отправки уведомления
     def send_notification(recipient, type_name, data = {})
