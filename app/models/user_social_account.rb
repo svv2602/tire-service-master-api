@@ -1,14 +1,16 @@
 class UserSocialAccount < ApplicationRecord
-  # Связи
   belongs_to :user
-  
-  # Валидации
-  validates :provider, presence: true
+
+  validates :provider, presence: true, inclusion: { in: %w[google facebook apple], message: "%{value} не поддерживается" }
   validates :provider_user_id, presence: true
-  validates :provider, uniqueness: { scope: :provider_user_id }
-  
-  # Поддерживаемые провайдеры
-  PROVIDERS = ['google', 'apple', 'facebook'].freeze
-  
-  validates :provider, inclusion: { in: PROVIDERS }
+  validates :provider_user_id, uniqueness: { scope: :provider, message: "уже существует для этого провайдера" }
+
+  scope :by_provider, ->(provider) { where(provider: provider) }
+  scope :google, -> { by_provider('google') }
+  scope :facebook, -> { by_provider('facebook') }
+  scope :apple, -> { by_provider('apple') }
+
+  def self.find_by_provider_credentials(provider, provider_user_id)
+    find_by(provider: provider, provider_user_id: provider_user_id)
+  end
 end

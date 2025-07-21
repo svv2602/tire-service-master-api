@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_20_114201) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_21_074047) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -768,6 +768,16 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_20_114201) do
     t.index ["name_uk"], name: "index_user_roles_on_name_uk"
   end
 
+  create_table "user_social_accounts", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "provider", null: false
+    t.string "provider_user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider", "provider_user_id"], name: "index_user_social_accounts_on_provider_and_provider_user_id", unique: true
+    t.index ["user_id"], name: "index_user_social_accounts_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "email", comment: "Email пользователя (необязательное поле)"
     t.string "phone", comment: "Номер телефона (один из email/phone обязателен)"
@@ -863,5 +873,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_20_114201) do
   add_foreign_key "telegram_notifications", "bookings"
   add_foreign_key "telegram_notifications", "users"
   add_foreign_key "telegram_subscriptions", "users"
+  add_foreign_key "user_social_accounts", "users"
   add_foreign_key "users", "user_roles", column: "role_id"
 end
