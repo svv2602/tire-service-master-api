@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_21_115436) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_21_195532) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -772,6 +772,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_21_115436) do
     t.index ["sent_at"], name: "index_telegram_notifications_on_sent_at"
     t.index ["status"], name: "index_telegram_notifications_on_status"
     t.index ["user_id"], name: "index_telegram_notifications_on_user_id"
+  end
+
+  create_table "telegram_settings", force: :cascade do |t|
+    t.string "bot_token"
+    t.string "webhook_url"
+    t.string "admin_chat_id"
+    t.boolean "enabled", default: false, null: false
+    t.boolean "test_mode", default: false, null: false
+    t.boolean "auto_subscription", default: true, null: false
+    t.text "welcome_message"
+    t.text "help_message"
+    t.text "error_message"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "telegram_subscriptions", force: :cascade do |t|

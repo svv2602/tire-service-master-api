@@ -61,9 +61,21 @@ class Booking < ApplicationRecord
   
   # Коллбэки для отправки уведомлений
   after_create :send_creation_notification, unless: -> { skip_notifications }
+  after_create :send_admin_new_booking_notification, unless: -> { skip_notifications }
+  after_create :send_telegram_creation_notification, unless: -> { skip_notifications }
+  
   after_update :send_status_change_notification, if: -> { saved_change_to_status? && !skip_notifications }
+  after_update :send_status_change_admin_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
+  after_update :send_telegram_cancellation_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
+  
   after_update :send_time_change_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
+  after_update :send_time_change_admin_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
+  after_update :send_telegram_time_change_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
+  
   after_update :send_service_point_change_notification, if: -> { saved_change_to_service_point_id? && !skip_notifications }
+  after_update :send_service_point_change_admin_notification, if: -> { saved_change_to_service_point_id? && !skip_notifications }
+  after_update :send_telegram_location_change_notification, if: -> { saved_change_to_service_point_id? && !skip_notifications }
+  
   after_update :send_client_info_change_notification, if: -> { client_info_changed? && !skip_notifications }
   
   # Инициализация статуса при создании
@@ -379,6 +391,94 @@ class Booking < ApplicationRecord
   def send_client_info_change_notification
     Rails.logger.info "👤 Отправка уведомления об изменении данных клиента для бронирования ##{id}"
     BookingNotificationJob.perform_later(id, 'booking_client_info_changed')
+    # Также уведомляем администраторов об изменении
+    send_admin_booking_changed_notification
+  end
+
+  # Админские уведомления для конкретных изменений
+  def send_status_change_admin_notification
+    send_admin_booking_cancelled_notification if booking_cancelled?
+  end
+
+  def send_time_change_admin_notification
+    send_admin_booking_changed_notification
+  end
+
+  def send_service_point_change_admin_notification
+    send_admin_booking_changed_notification
+  end
+
+  # Проверка статуса отмены
+  def booking_cancelled?
+    status == 'cancelled' || status == 'canceled'
+  end
+
+  # === АДМИНСКИЕ УВЕДОМЛЕНИЯ ===
+
+  # Отправка уведомления администраторам о новом бронировании
+  def send_admin_new_booking_notification
+    Rails.logger.info "🔔 Отправка админского уведомления о новом бронировании ##{id}"
+    admin_emails.each do |email|
+      BookingNotificationJob.perform_later(id, 'admin_new_booking', email)
+    end
+  end
+
+  # Отправка уведомления администраторам об изменении бронирования
+  def send_admin_booking_changed_notification
+    Rails.logger.info "🔔 Отправка админского уведомления об изменении бронирования ##{id}"
+    admin_emails.each do |email|
+      BookingNotificationJob.perform_later(id, 'admin_booking_changed', email)
+    end
+  end
+
+  # Отправка уведомления администраторам об отмене бронирования
+  def send_admin_booking_cancelled_notification
+    Rails.logger.info "🔔 Отправка админского уведомления об отмене бронирования ##{id}"
+    admin_emails.each do |email|
+      BookingNotificationJob.perform_later(id, 'admin_booking_cancelled', email)
+    end
+  end
+
+  # === TELEGRAM УВЕДОМЛЕНИЯ ===
+
+  # Отправка Telegram уведомления о создании бронирования
+  def send_telegram_creation_notification
+    Rails.logger.info "📱 Отправка Telegram уведомления о создании бронирования ##{id}"
+    BookingNotificationJob.perform_later(id, 'telegram_booking_created')
+  end
+
+  # Отправка Telegram уведомления об отмене бронирования
+  def send_telegram_cancellation_notification
+    Rails.logger.info "📱 Отправка Telegram уведомления об отмене бронирования ##{id}"
+    BookingNotificationJob.perform_later(id, 'telegram_booking_cancelled')
+  end
+
+  # Отправка Telegram уведомления об изменении времени
+  def send_telegram_time_change_notification
+    Rails.logger.info "📱 Отправка Telegram уведомления об изменении времени бронирования ##{id}"
+    BookingNotificationJob.perform_later(id, 'telegram_booking_time_changed')
+  end
+
+  # Отправка Telegram уведомления об изменении места
+  def send_telegram_location_change_notification
+    Rails.logger.info "📱 Отправка Telegram уведомления об изменении места бронирования ##{id}"
+    BookingNotificationJob.perform_later(id, 'telegram_booking_location_changed')
+  end
+
+  private
+
+  # Получение списка email администраторов
+  def admin_emails
+    # Можно настроить через ENV или базу данных
+    admin_list = ENV['ADMIN_NOTIFICATION_EMAILS']&.split(',') || ['admin@tireservice.ua']
+    
+    # Добавляем email из базы данных если есть модель Administrator
+    if defined?(Administrator)
+      db_admin_emails = Administrator.where(receive_notifications: true).pluck(:email)
+      admin_list.concat(db_admin_emails)
+    end
+    
+    admin_list.compact.uniq
   end
 
   # Автоматическая установка флага служебного бронирования

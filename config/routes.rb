@@ -58,6 +58,16 @@ Rails.application.routes.draw do
       post 'telegram_webhook', to: 'telegram_webhook#webhook'
       get 'telegram_webhook', to: 'telegram_webhook#show_config'
       
+      # Управление настройками Telegram
+      resource :telegram_settings, only: [:show, :update] do
+        member do
+          post :test_connection
+          post :test_message
+          post :set_webhook
+          get :webhook_info
+        end
+      end
+      
       resources :telegram_subscriptions do
         member do
           post 'toggle_status'

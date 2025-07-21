@@ -8,8 +8,16 @@ class TelegramService
   base_uri 'https://api.telegram.org'
   
   def initialize
-    @token = ENV['TELEGRAM_BOT_TOKEN']
-    raise 'TELEGRAM_BOT_TOKEN не установлен' unless @token
+    # Получаем настройки из БД или переменных окружения
+    settings = TelegramSetting.current
+    @token = settings.effective_bot_token
+    
+    unless @token.present?
+      Rails.logger.error "❌ TELEGRAM_BOT_TOKEN не установлен ни в БД, ни в ENV"
+      raise 'TELEGRAM_BOT_TOKEN не установлен'
+    end
+    
+    Rails.logger.info "✅ TelegramService инициализирован с токеном: #{@token[0..10]}..."
   end
 
   # Отправка сообщения с поддержкой клавиатур
@@ -98,26 +106,48 @@ class TelegramService
   end
 
   # Получение обновлений (для webhook)
-  def get_updates(offset = 0)
-    response = self.class.get("/bot#{@token}/getUpdates", query: { offset: offset })
+  def get_updates(offset = nil)
+    params = {}
+    params[:offset] = offset if offset
+    
+    response = self.class.get("/bot#{@token}/getUpdates", query: params)
     handle_response(response)
   end
 
   # Установка webhook
-  def set_webhook(url)
+  def set_webhook(webhook_url)
+    Rails.logger.info "🔗 Устанавливаем webhook: #{webhook_url}"
+    
     params = {
-      url: url,
-      allowed_updates: ['message', 'callback_query']
+      url: webhook_url
     }
     
     response = self.class.post("/bot#{@token}/setWebhook", body: params)
-    handle_response(response)
+    result = handle_response(response)
+    
+    if result[:ok]
+      Rails.logger.info "✅ Webhook успешно установлен"
+    else
+      Rails.logger.error "❌ Ошибка установки webhook: #{result[:description]}"
+    end
+    
+    result
   end
 
   # Удаление webhook
   def delete_webhook
+    Rails.logger.info "🗑️ Удаляем webhook"
+    
     response = self.class.post("/bot#{@token}/deleteWebhook")
-    handle_response(response)
+    result = handle_response(response)
+    
+    if result[:ok]
+      Rails.logger.info "✅ Webhook успешно удален"
+    else
+      Rails.logger.error "❌ Ошибка удаления webhook: #{result[:description]}"
+    end
+    
+    result
   end
 
   # Получение информации о webhook

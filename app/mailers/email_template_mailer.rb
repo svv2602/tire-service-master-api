@@ -44,12 +44,17 @@ class EmailTemplateMailer < ApplicationMailer
     
     Rails.logger.info "📧 Отправка email по шаблону: #{template.name} → #{recipient_email}"
     
+    # Принудительно устанавливаем кодировку для subject
+    subject_utf8 = subject.force_encoding('UTF-8')
+    
     mail(
       to: recipient_email,
-      subject: subject,
+      subject: subject_utf8,
       body: html_body,
       content_type: 'text/html; charset=UTF-8'
-    )
+    ) do |format|
+      format.html { render plain: html_body }
+    end
   end
 
   # Отправка подтверждения бронирования
@@ -258,6 +263,38 @@ class EmailTemplateMailer < ApplicationMailer
 
     variables = build_booking_variables(booking)
     send_by_template('booking_client_info_changed', recipient_email, variables)
+  end
+
+  # === АДМИНСКИЕ УВЕДОМЛЕНИЯ ===
+
+  # Уведомление администратора о новом бронировании
+  def admin_new_booking(booking_id, admin_email)
+    booking = Booking.find_by(id: booking_id)
+    return nil unless booking
+    return nil unless admin_email.present?
+
+    variables = build_booking_variables(booking)
+    send_by_template('admin_new_booking', admin_email, variables)
+  end
+
+  # Уведомление администратора об изменении бронирования
+  def admin_booking_changed(booking_id, admin_email)
+    booking = Booking.find_by(id: booking_id)
+    return nil unless booking
+    return nil unless admin_email.present?
+
+    variables = build_booking_variables(booking)
+    send_by_template('admin_booking_changed', admin_email, variables)
+  end
+
+  # Уведомление администратора об отмене бронирования
+  def admin_booking_cancelled(booking_id, admin_email)
+    booking = Booking.find_by(id: booking_id)
+    return nil unless booking
+    return nil unless admin_email.present?
+
+    variables = build_booking_variables(booking)
+    send_by_template('admin_booking_cancelled', admin_email, variables)
   end
 
   private
