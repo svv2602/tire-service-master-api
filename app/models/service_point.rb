@@ -37,6 +37,14 @@ class ServicePoint < ApplicationRecord
   # Callback для анализа конфликтов при изменении статуса
   after_update :analyze_booking_conflicts_if_status_changed
   
+  # Колбэки для уведомлений администраторов
+  after_create :send_service_point_creation_notification, unless: -> { skip_notifications }
+  after_update :send_service_point_change_notification, if: -> { significant_changes? && !skip_notifications }
+  after_update :send_service_point_status_change_notification, if: -> { saved_change_to_work_status? && !skip_notifications }
+  
+  # Флаг для отключения уведомлений (для тестов и массовых операций)
+  attr_accessor :skip_notifications
+  
   # Явно объявляем тип атрибута для enum
   attribute :work_status, :string, default: 'working'
   
@@ -366,5 +374,44 @@ class ServicePoint < ApplicationRecord
     service_posts.order(created_at: :asc).each_with_index do |post, index|
       post.update(post_number: index + 1)
     end
+  end
+  
+  # Уведомление о создании новой сервисной точки
+  def send_service_point_creation_notification
+    # Email уведомление администраторам
+    BookingNotificationJob.perform_later(id, 'admin_service_point_created', 'admin@test.com')
+    
+    # Telegram уведомление администраторам
+    BookingNotificationJob.perform_later(id, 'telegram_admin_service_point_created')
+    
+    Rails.logger.info "🏢 Отправлены уведомления о создании сервисной точки ID: #{id}"
+  end
+  
+  # Уведомление об изменении сервисной точки
+  def send_service_point_change_notification
+    # Email уведомление администраторам
+    BookingNotificationJob.perform_later(id, 'admin_service_point_changed', 'admin@test.com')
+    
+    # Telegram уведомление администраторам
+    BookingNotificationJob.perform_later(id, 'telegram_admin_service_point_changed')
+    
+    Rails.logger.info "🏢 Отправлены уведомления об изменении сервисной точки ID: #{id}"
+  end
+  
+  # Уведомление об изменении статуса сервисной точки
+  def send_service_point_status_change_notification
+    # Email уведомление администраторам
+    BookingNotificationJob.perform_later(id, 'admin_service_point_status_changed', 'admin@test.com')
+    
+    # Telegram уведомление администраторам
+    BookingNotificationJob.perform_later(id, 'telegram_admin_service_point_status_changed')
+    
+    Rails.logger.info "🏢 Отправлены уведомления об изменении статуса сервисной точки ID: #{id} на #{work_status}"
+  end
+  
+  # Проверка значимых изменений для уведомлений
+  def significant_changes?
+    significant_fields = %w[name address phone email latitude longitude is_active]
+    significant_fields.any? { |field| saved_change_to_attribute?(field) }
   end
 end

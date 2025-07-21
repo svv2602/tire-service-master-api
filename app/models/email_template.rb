@@ -4,18 +4,12 @@ class EmailTemplate < ApplicationRecord
   has_many :custom_variables, through: :email_template_custom_variables
 
   # Валидации
-  validates :name, presence: true, length: { maximum: 255 }
-  validates :subject, presence: true, length: { maximum: 500 }
+  validates :name, presence: true
+  validates :subject, presence: true
   validates :body, presence: true
-  validates :template_type, presence: true, inclusion: { 
-    in: %w[booking_confirmation booking_reminder booking_cancelled user_welcome password_reset review_request service_completed maintenance_invitation review_thanks newsletter booking_time_changed booking_location_changed booking_client_info_changed admin_new_booking admin_booking_changed admin_booking_cancelled],
-    message: "должен быть одним из допустимых типов"
-  }
-  validates :language, presence: true, inclusion: { in: %w[ru uk], message: "должен быть ru или uk" }
-  validates :template_type, uniqueness: { 
-    scope: :language, 
-    message: "уже существует для данного языка" 
-  }
+  validates :language, presence: true, inclusion: { in: %w[uk ru en] }
+  validates :template_type, presence: true
+  validates :template_type, uniqueness: { scope: :language }, message: 'Шаблон этого типа для данного языка уже существует'
 
   # Скоупы
   scope :active, -> { where(is_active: true) }
@@ -54,19 +48,28 @@ class EmailTemplate < ApplicationRecord
 
   def self.template_types
     {
-      'booking_confirmation' => 'Підтвердження бронювання',
-      'booking_reminder' => 'Нагадування про бронювання',
-      'booking_cancelled' => 'Скасування бронювання',
-      'user_welcome' => 'Привітання нового користувача',
-      'password_reset' => 'Скидання пароля',
-      'review_request' => 'Запит на відгук',
-      'service_completed' => 'Завершення послуги',
-      'booking_time_changed' => 'Зміна часу бронювання',
-      'booking_location_changed' => 'Зміна сервісної точки',
-      'booking_client_info_changed' => 'Зміна даних клієнта',
-      'admin_new_booking' => 'Нове бронювання (адмін)',
-      'admin_booking_changed' => 'Зміна бронювання (адмін)',
-      'admin_booking_cancelled' => 'Скасування бронювання (адмін)'
+      # Уведомления клиентам
+      'booking_confirmation' => 'Подтверждение бронирования',
+      'booking_reminder' => 'Напоминание о бронировании',
+      'booking_cancellation' => 'Отмена бронирования',
+      'booking_time_changed' => 'Изменение времени бронирования',
+      'booking_location_changed' => 'Изменение места обслуживания',
+      'booking_client_info_changed' => 'Изменение данных клиента',
+      
+      # Уведомления администраторам
+      'admin_new_booking' => 'Новое бронирование (админ)',
+      'admin_booking_changed' => 'Изменение бронирования (админ)',
+      'admin_booking_cancelled' => 'Отмена бронирования (админ)',
+      
+      # Уведомления об отзывах
+      'admin_new_review' => 'Новый отзыв (админ)',
+      'review_published' => 'Отзыв опубликован',
+      'review_rejected' => 'Отзыв отклонен',
+      
+      # Уведомления о сервисных точках
+      'admin_service_point_created' => 'Новая сервисная точка (админ)',
+      'admin_service_point_changed' => 'Изменение сервисной точки (админ)',
+      'admin_service_point_status_changed' => 'Изменение статуса сервисной точки (админ)'
     }
   end
 

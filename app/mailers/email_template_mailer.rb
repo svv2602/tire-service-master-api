@@ -158,60 +158,80 @@ class EmailTemplateMailer < ApplicationMailer
     result
   end
 
-  # Строит переменные для бронирования
+  # Построение переменных для бронирования
   def build_booking_variables(booking)
-    variables = build_system_variables
-
-    # Клиент
-    variables.merge!({
-      'client_name' => "#{booking.service_recipient_first_name} #{booking.service_recipient_last_name}".strip,
-      'client_email' => booking.service_recipient_email || booking.client&.email || '',
-      'client_phone' => booking.service_recipient_phone || booking.client&.phone || '',
-      'client_first_name' => booking.service_recipient_first_name || booking.client&.first_name || '',
-      'client_last_name' => booking.service_recipient_last_name || booking.client&.last_name || ''
-    })
-
-    # Бронирование
-    variables.merge!({
-      'booking_id' => "##{booking.id}",
-      'booking_number' => booking.id.to_s,
-      'booking_date' => booking.booking_date&.strftime('%d.%m.%Y') || '',
-      'booking_time' => booking.start_time&.strftime('%H:%M') || '',
-      'booking_status' => booking.status&.humanize || '',
-      'booking_notes' => booking.notes || ''
-    })
-
-    # Сервисная точка
-    if booking.service_point
-      variables.merge!({
-        'service_point_name' => booking.service_point.name || '',
-        'service_point_address' => booking.service_point.address || '',
-        'service_point_phone' => booking.service_point.contact_phone_for_category(booking.service_category_id) || '',
-        'service_point_email' => booking.service_point.contact_email_for_category(booking.service_category_id) || '',
-        'service_point_city' => booking.service_point.city&.name || ''
-      })
-    end
-
-          # Услуги
-      if booking.service_category
-        variables.merge!({
-          'service_name' => booking.service_category.name || '',
-          'service_category' => booking.service_category.name || '',
-          'service_price' => booking.total_price ? "#{booking.total_price} грн" : '',
-          'service_duration' => '', # Длительность теперь настраивается в service_point_services
-          'service_description' => booking.service_category.description || ''
-        })
-      end
-
-    # Автомобиль
-    variables.merge!({
-      'car_brand' => booking.car_brand || '',
-      'car_model' => booking.car_model || '',
-      'car_year' => '', # У Booking нет поля car_year
-      'license_plate' => booking.license_plate || ''
-    })
-
-    variables
+    {
+      booking_id: "##{booking.id}",
+      booking_number: booking.id.to_s,
+      booking_date: booking.booking_date&.strftime('%d.%m.%Y'),
+      start_time: booking.start_time&.strftime('%H:%M'),
+      end_time: booking.end_time&.strftime('%H:%M'),
+      service_point_name: booking.service_point&.name,
+      service_point_address: booking.service_point&.address,
+      service_point_phone: booking.service_point&.phone,
+      city_name: booking.service_point&.city&.name,
+      client_first_name: booking.service_recipient_first_name || booking.client&.first_name,
+      client_last_name: booking.service_recipient_last_name || booking.client&.last_name,
+      client_phone: booking.service_recipient_phone || booking.client&.phone,
+      client_email: booking.service_recipient_email || booking.client&.email,
+      car_brand: booking.car_brand,
+      car_model: booking.car_model,
+      license_plate: booking.license_plate,
+      status: booking.status
+    }
+  end
+  
+  # Построение переменных для отзыва
+  def build_review_variables(review)
+    {
+      review_id: "##{review.id}",
+      review_number: review.id.to_s,
+      rating: review.rating.to_s,
+      rating_stars: "⭐" * review.rating,
+      comment: review.comment || 'Без коментаря',
+      status: review.status,
+      status_text: case review.status
+                   when 'pending' then 'На розгляді'
+                   when 'published' then 'Опубліковано'
+                   when 'rejected' then 'Відхилено'
+                   else review.status
+                   end,
+      client_first_name: review.client&.first_name,
+      client_last_name: review.client&.last_name,
+      client_phone: review.client&.phone,
+      client_email: review.client&.email,
+      service_point_name: review.service_point&.name,
+      service_point_address: review.service_point&.address,
+      service_point_phone: review.service_point&.phone,
+      city_name: review.service_point&.city&.name,
+      created_date: review.created_at&.strftime('%d.%m.%Y'),
+      created_time: review.created_at&.strftime('%H:%M'),
+      # Данные бронирования если есть
+      booking_id: review.booking ? "##{review.booking.id}" : 'Без бронювання',
+      car_brand: review.booking&.car_brand,
+      car_model: review.booking&.car_model,
+      license_plate: review.booking&.license_plate
+    }
+  end
+  
+  # Строит переменные для сервисной точки
+  def build_service_point_variables(service_point)
+    {
+      service_point_id: "##{service_point.id}",
+      service_point_name: service_point.name,
+      service_point_address: service_point.address,
+      service_point_phone: service_point.phone,
+      service_point_email: service_point.email,
+      service_point_status: service_point.status,
+      service_point_status_text: case service_point.status
+                                  when 'active' then 'Активна'
+                                  when 'inactive' then 'Неактивна'
+                                  else service_point.status
+                                  end,
+      service_point_city: service_point.city&.name,
+      service_point_created_date: service_point.created_at&.strftime('%d.%m.%Y'),
+      service_point_created_time: service_point.created_at&.strftime('%H:%M')
+    }
   end
 
   # Строит переменные для пользователя
@@ -296,6 +316,57 @@ class EmailTemplateMailer < ApplicationMailer
     variables = build_booking_variables(booking)
     send_by_template('admin_booking_cancelled', admin_email, variables)
   end
+  
+  # Админские уведомления об отзывах
+  def admin_new_review(review_id, admin_email)
+    review = Review.find_by(id: review_id)
+    return nil unless review
+    return nil unless admin_email.present?
+    variables = build_review_variables(review)
+    send_by_template('admin_new_review', admin_email, variables)
+  end
+  
+  # Уведомления клиентам об отзывах
+  def review_published(review_id, client_email)
+    review = Review.find_by(id: review_id)
+    return nil unless review
+    return nil unless client_email.present?
+    variables = build_review_variables(review)
+    send_by_template('review_published', client_email, variables)
+  end
+  
+  def review_rejected(review_id, client_email)
+    review = Review.find_by(id: review_id)
+    return nil unless review
+    return nil unless client_email.present?
+    variables = build_review_variables(review)
+    send_by_template('review_rejected', client_email, variables)
+  end
+  
+  # Админские уведомления о сервисных точках
+  def admin_service_point_created(service_point_id, admin_email)
+    service_point = ServicePoint.find_by(id: service_point_id)
+    return nil unless service_point
+    return nil unless admin_email.present?
+    variables = build_service_point_variables(service_point)
+    send_by_template('admin_service_point_created', admin_email, variables)
+  end
+  
+  def admin_service_point_changed(service_point_id, admin_email)
+    service_point = ServicePoint.find_by(id: service_point_id)
+    return nil unless service_point
+    return nil unless admin_email.present?
+    variables = build_service_point_variables(service_point)
+    send_by_template('admin_service_point_changed', admin_email, variables)
+  end
+  
+  def admin_service_point_status_changed(service_point_id, admin_email)
+    service_point = ServicePoint.find_by(id: service_point_id)
+    return nil unless service_point
+    return nil unless admin_email.present?
+    variables = build_service_point_variables(service_point)
+    send_by_template('admin_service_point_status_changed', admin_email, variables)
+  end
 
   private
 
@@ -310,4 +381,6 @@ class EmailTemplateMailer < ApplicationMailer
       'current_time' => Time.current.strftime('%H:%M')
     }
   end
+
+
 end 

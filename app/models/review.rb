@@ -22,6 +22,13 @@ class Review < ApplicationRecord
   after_save :update_service_point_rating
   after_destroy :update_service_point_rating
   
+  # Колбэки для уведомлений
+  after_create :send_review_creation_notification, unless: -> { skip_notifications }
+  after_update :send_review_status_change_notification, if: -> { saved_change_to_status? && !skip_notifications }
+  
+  # Флаг для отключения уведомлений (для тестов и массовых операций)
+  attr_accessor :skip_notifications
+  
   private
   
   def sync_is_published_with_status
@@ -30,5 +37,39 @@ class Review < ApplicationRecord
   
   def update_service_point_rating
     service_point.recalculate_metrics!
+  end
+  
+  # Уведомление о создании нового отзыва
+  def send_review_creation_notification
+    # Email уведомление администраторам
+    BookingNotificationJob.perform_later(id, 'admin_new_review', 'admin@test.com')
+    
+    # Telegram уведомление администраторам
+    BookingNotificationJob.perform_later(id, 'telegram_admin_new_review')
+    
+    Rails.logger.info "📝 Отправлены уведомления о новом отзыве ID: #{id}"
+  end
+  
+  # Уведомление об изменении статуса отзыва
+  def send_review_status_change_notification
+    case status
+    when 'published'
+      # Уведомляем клиента о публикации отзыва
+      if client&.email.present?
+        BookingNotificationJob.perform_later(id, 'review_published', client.email)
+      end
+      # Telegram уведомление клиенту
+      BookingNotificationJob.perform_later(id, 'telegram_review_published')
+      
+    when 'rejected'
+      # Уведомляем клиента об отклонении отзыва
+      if client&.email.present?
+        BookingNotificationJob.perform_later(id, 'review_rejected', client.email)
+      end
+      # Telegram уведомление клиенту
+      BookingNotificationJob.perform_later(id, 'telegram_review_rejected')
+    end
+    
+    Rails.logger.info "📝 Отправлены уведомления об изменении статуса отзыва ID: #{id} на #{status}"
   end
 end
