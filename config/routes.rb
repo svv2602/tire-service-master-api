@@ -68,6 +68,15 @@ Rails.application.routes.draw do
         end
       end
       
+      # Email шаблоны (только для админов)
+      resources :email_templates do
+        member do
+          patch :toggle_status
+          post :preview
+          post :test_send
+        end
+      end
+      
       resources :telegram_subscriptions do
         member do
           post 'toggle_status'
