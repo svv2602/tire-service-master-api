@@ -151,7 +151,7 @@ module Api
       def notification_create_params
         params.require(:notification).permit(
           :notification_type_id, :title, :message, :send_via, 
-          :priority, :category, :action_url, :expires_at
+          :priority, :category
         )
       end
       
@@ -171,9 +171,7 @@ module Api
           is_read: notification.is_read,
           sent_at: notification.sent_at,
           read_at: notification.read_at,
-          created_at: notification.created_at,
-          action_url: notification.action_url,
-          expires_at: notification.expires_at
+          created_at: notification.created_at
         }
       end
     end

@@ -74,9 +74,7 @@ class NotificationService
         title: data[:title] || notification_type.name.humanize,
         message: data[:message] || 'No message provided',
         priority: data[:priority] || 'normal',
-        category: data[:category] || 'general',
-        action_url: data[:action_url],
-        expires_at: data[:expires_at]
+        category: data[:category] || 'general'
       }
       
       # Если есть шаблон, заполняем его данными
@@ -102,8 +100,7 @@ class NotificationService
         priority: data[:priority],
         category: data[:category],
         send_via: data[:channels]&.first || 'push',
-        action_url: data[:action_url],
-        expires_at: data[:expires_at]
+
       )
     rescue => e
       Rails.logger.error "Failed to create notification: #{e.message}"
@@ -199,7 +196,7 @@ class NotificationService
           time: booking.start_time,
           service_point: booking.service_point.name
         },
-        action_url: "/client/bookings/#{booking.id}",
+
         channels: ['push', 'email']
       }.merge(data))
     end
@@ -215,7 +212,6 @@ class NotificationService
           time: booking.start_time,
           service_point: booking.service_point.name
         },
-        action_url: "/client/bookings/#{booking.id}",
         channels: ['push', 'email', 'sms']
       }.merge(data))
     end
@@ -231,7 +227,6 @@ class NotificationService
           time: booking.start_time,
           service_point: booking.service_point.name
         },
-        action_url: "/client/bookings",
         channels: ['push', 'email', 'sms']
       }.merge(data))
     end
@@ -246,7 +241,6 @@ class NotificationService
           time: booking.start_time,
           service_point: booking.service_point.name
         },
-        action_url: "/client/bookings/#{booking.id}",
         channels: ['push', 'sms']
       }.merge(data))
     end
@@ -260,7 +254,6 @@ class NotificationService
         template_data: {
           service_point: booking.service_point.name
         },
-        action_url: "/client/review/new?booking_id=#{booking.id}",
         channels: ['push', 'email']
       }.merge(data))
     end
