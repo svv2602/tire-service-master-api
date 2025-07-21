@@ -6,54 +6,61 @@ class EmailTemplateMailer < ApplicationMailer
 
   # Основной метод для отправки email по шаблону
   def send_by_template(template_type, recipient_email, variables = {})
-    # Находим активный шаблон по типу
-    template = EmailTemplate.find_by(template_type: template_type, is_active: true, language: 'uk')
+    # Находим активный шаблон
+    template = EmailTemplate.active.find_by(template_type: template_type, language: 'uk')
     
     unless template
-      Rails.logger.error "EmailTemplate не найден: template_type=#{template_type}, language=uk"
+      Rails.logger.error "📧 Шаблон не найден: #{template_type}"
       return nil
     end
 
-    # Загружаем кастомные переменные для этого шаблона
-    custom_variables = {}
-    template.custom_variables.active.each do |custom_var|
-      custom_variables[custom_var.name] = custom_var.example_value || "[#{custom_var.name}]"
-    end
+    # Рендерим шаблон с переменными
+    rendered = template.render_with_all_variables(variables)
+    subject = rendered[:subject]
+    html_body = rendered[:body]
 
-    # Объединяем системные и кастомные переменные
-    all_variables = variables.merge(custom_variables)
-    
-    # Заменяем переменные в шаблоне
-    subject = replace_variables(template.subject, all_variables)
-    body = replace_variables(template.body, all_variables)
-    
-    # Конвертируем переносы строк в HTML и добавляем HTML заголовки
-    html_body = %{
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-  <title>#{subject}</title>
-</head>
-<body>
-#{body.gsub(/\r\n|\r|\n/, '<br/>')}
-</body>
-</html>
-    }.strip.html_safe
-    
-    Rails.logger.info "📧 Отправка email по шаблону: #{template.name} → #{recipient_email}"
-    
-    # Принудительно устанавливаем кодировку для subject
+    # Принудительно устанавливаем UTF-8 кодировку для темы
     subject_utf8 = subject.force_encoding('UTF-8')
-    
-    mail(
-      to: recipient_email,
-      subject: subject_utf8,
-      body: html_body,
-      content_type: 'text/html; charset=UTF-8'
-    ) do |format|
-      format.html { render plain: html_body }
+
+    # Создаем запись в логе уведомлений
+    notification_log = NotificationLog.create!(
+      notification_type: 'email',
+      template_type: template_type,
+      template_id: template.id,
+      recipient_type: 'User', # Можно сделать более гибким
+      recipient_email: recipient_email,
+      status: 'pending',
+      metadata: {
+        variables: variables,
+        template_name: template.name,
+        subject: subject_utf8
+      }
+    )
+
+    begin
+      # Отправляем письмо
+      mail = mail(
+        to: recipient_email,
+        subject: subject_utf8,
+        body: html_body,
+        content_type: 'text/html; charset=UTF-8'
+      ) do |format|
+        format.html { render plain: html_body }
+      end
+      
+      # Отмечаем как отправленное
+      notification_log.mark_as_sent!
+      notification_log.add_metadata('mail_message_id', mail.message_id) if mail.message_id
+      
+      Rails.logger.info "📧 Email отправлен: #{template_type} на #{recipient_email} (Log ID: #{notification_log.id})"
+      
+      mail
+    rescue => e
+      # Отмечаем как неудачное
+      notification_log.mark_as_failed!(e.message)
+      
+      Rails.logger.error "📧 Ошибка отправки email: #{e.message} (Log ID: #{notification_log.id})"
+      raise e
     end
   end
 

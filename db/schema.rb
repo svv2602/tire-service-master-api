@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_21_195532) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_21_204830) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -358,6 +358,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_21_195532) do
     t.string "position"
     t.index ["partner_id"], name: "index_managers_on_partner_id"
     t.index ["user_id"], name: "index_managers_on_user_id", unique: true
+  end
+
+  create_table "notification_logs", force: :cascade do |t|
+    t.string "notification_type"
+    t.string "recipient_type"
+    t.integer "recipient_id"
+    t.string "recipient_email"
+    t.string "template_type"
+    t.integer "template_id"
+    t.string "status"
+    t.datetime "sent_at"
+    t.datetime "delivered_at"
+    t.datetime "opened_at"
+    t.datetime "clicked_at"
+    t.text "error_message"
+    t.json "metadata"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "notification_types", force: :cascade do |t|

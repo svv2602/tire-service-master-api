@@ -77,6 +77,19 @@ Rails.application.routes.draw do
         end
       end
       
+      # Статистика уведомлений (только для админов)
+      resources :notification_statistics, only: [] do
+        collection do
+          get :overview
+          get :daily
+          get :hourly
+          get :templates
+          get :recipients
+          get :failures
+          get :performance
+        end
+      end
+      
       resources :telegram_subscriptions do
         member do
           post 'toggle_status'
