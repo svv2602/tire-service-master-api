@@ -4,6 +4,16 @@ class CustomVariable < ApplicationRecord
   has_many :email_template_custom_variables, dependent: :destroy
   has_many :email_templates, through: :email_template_custom_variables
 
+  # Системные переменные (нельзя перезаписывать)
+  SYSTEM_VARIABLES = %w[
+    client_name client_email client_phone client_first_name client_last_name
+    booking_id booking_date booking_time booking_status service_name service_duration
+    service_point_name service_point_address service_point_phone service_point_email
+    car_brand car_model license_plate
+    company_name support_email support_phone website_url
+    current_date current_time
+  ].freeze
+
   # Валидации
   validates :name, presence: true, 
                    uniqueness: { case_sensitive: false },
@@ -12,6 +22,8 @@ class CustomVariable < ApplicationRecord
                      with: /\A[a-z_][a-z0-9_]*\z/, 
                      message: 'должно содержать только строчные буквы, цифры и подчеркивания, начинаться с буквы или подчеркивания'
                    }
+  
+  validate :name_not_system_variable
   
   validates :category, presence: true, 
                        inclusion: { 
@@ -95,6 +107,15 @@ class CustomVariable < ApplicationRecord
         var.example_value = var_data[:example_value]
         var.created_by = admin_user
       end
+    end
+  end
+
+  private
+
+  # Проверка, что имя переменной не конфликтует с системными
+  def name_not_system_variable
+    if SYSTEM_VARIABLES.include?(name&.downcase)
+      errors.add(:name, "#{name} является системной переменной и не может быть переопределена")
     end
   end
 end

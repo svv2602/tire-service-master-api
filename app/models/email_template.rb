@@ -8,7 +8,7 @@ class EmailTemplate < ApplicationRecord
   validates :subject, presence: true, length: { maximum: 500 }
   validates :body, presence: true
   validates :template_type, presence: true, inclusion: { 
-    in: %w[booking_confirmation booking_reminder booking_cancelled user_welcome password_reset review_request service_completed],
+    in: %w[booking_confirmation booking_reminder booking_cancelled user_welcome password_reset review_request service_completed maintenance_invitation review_thanks],
     message: "должен быть одним из допустимых типов"
   }
   validates :language, presence: true, inclusion: { in: %w[ru uk], message: "должен быть ru или uk" }
