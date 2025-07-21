@@ -28,6 +28,16 @@ Rails.application.routes.draw do
       get 'settings', to: 'settings#show'
       patch 'settings', to: 'settings#update'
       
+      # Система уведомлений
+      resources :email_templates do
+        member do
+          post 'preview'
+        end
+        collection do
+          get 'template_types'
+        end
+      end
+      
       # Telegram интеграция
       post 'telegram_webhook', to: 'telegram_webhook#webhook'
       get 'telegram_webhook', to: 'telegram_webhook#show_config'
