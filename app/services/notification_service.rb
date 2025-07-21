@@ -2,7 +2,7 @@ class NotificationService
   # Константы для типов уведомлений
   NOTIFICATION_TYPES = {
     booking_created: 'booking_created',
-    booking_confirmed: 'booking_confirmed', 
+    booking_confirmed: 'booking_confirmed',
     booking_cancelled: 'booking_cancelled',
     booking_completed: 'booking_completed',
     booking_reminder: 'booking_reminder',
@@ -17,7 +17,7 @@ class NotificationService
       # Ищем тип уведомления
       notification_type = NotificationType.find_by(name: type_name)
       return false unless notification_type&.is_active?
-      
+
       # Получаем данные для создания уведомления
       notification_data = prepare_notification_data(recipient, notification_type, data)
       
@@ -34,7 +34,7 @@ class NotificationService
       
       notification
     end
-    
+
     # Создание уведомления о бронировании
     def booking_notification(booking, type, additional_data = {})
       case type
@@ -50,7 +50,7 @@ class NotificationService
         send_booking_completed(booking, additional_data)
       end
     end
-    
+
     # Системные уведомления
     def system_notification(recipients, title, message, priority: 'normal', category: 'system')
       recipients = [recipients] unless recipients.is_a?(Array)
@@ -63,9 +63,9 @@ class NotificationService
           category: category,
           channels: ['push', 'email']
         })
-      end
     end
-    
+  end
+
     private
     
     def prepare_notification_data(recipient, notification_type, data)
@@ -150,7 +150,7 @@ class NotificationService
                        end
       
       return unless recipient_email.present?
-      
+
       # Отправляем через mailer
       NotificationMailer.general_notification(
         notification.id,
@@ -180,12 +180,12 @@ class NotificationService
     
     def fill_template(template, data)
       result = template.dup
-      data.each do |key, value|
+    data.each do |key, value|
         result.gsub!("{{#{key}}}", value.to_s)
       end
       result
     end
-    
+
     # Методы для конкретных типов уведомлений
     
     def send_booking_created(booking, data)

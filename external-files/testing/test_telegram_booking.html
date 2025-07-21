@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Telegram Бронирования</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .info { background: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .step { margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 4px solid #007bff; }
+        .step.completed { border-left-color: #28a745; background: #d4edda; }
+        .step.error { border-left-color: #dc3545; background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Тест Telegram Бронирования</h1>
+        
+        <div class="test-section info">
+            <h3>📋 Информация о тесте</h3>
+            <p>Этот тест проверяет работу системы многошагового бронирования через Telegram бота.</p>
+            <p><strong>Команды для тестирования:</strong></p>
+            <ul>
+                <li><code>/booking</code> - Начать процесс бронирования</li>
+                <li><code>/start</code> - Главное меню с кнопкой "Создать бронирование"</li>
+                <li><code>/help</code> - Список команд (включая /booking)</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Проверка данных системы</h3>
+            <button onclick="checkSystemData()">Проверить данные</button>
+            <div id="systemDataResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 Шаги процесса бронирования</h3>
+            <div class="step" id="step1">
+                <strong>Шаг 1:</strong> Выбор города 🏙️
+                <p>Ожидается: список городов с сервисными точками в inline клавиатуре</p>
+            </div>
+            <div class="step" id="step2">
+                <strong>Шаг 2:</strong> Выбор услуги 🔧
+                <p>Ожидается: список категорий услуг</p>
+            </div>
+            <div class="step" id="step3">
+                <strong>Шаг 3:</strong> Выбор сервисного центра 📍
+                <p>Ожидается: список сервисных точек в выбранном городе</p>
+            </div>
+            <div class="step" id="step4">
+                <strong>Шаг 4:</strong> Выбор даты и времени 📅
+                <p>Ожидается: календарь на 14 дней вперед, затем выбор времени</p>
+            </div>
+            <div class="step" id="step5">
+                <strong>Шаг 5:</strong> Выбор типа автомобиля 🚗
+                <p>Ожидается: список типов автомобилей</p>
+            </div>
+            <div class="step" id="step6">
+                <strong>Шаг 6:</strong> Ввод номера телефона 📱
+                <p>Ожидается: запрос номера телефона + кнопка "Отправить контакт"</p>
+            </div>
+            <div class="step" id="step7">
+                <strong>Шаг 7:</strong> Ввод номера автомобиля 🚙
+                <p>Ожидается: запрос номера автомобиля</p>
+            </div>
+            <div class="step" id="step8">
+                <strong>Шаг 8:</strong> Комментарий (опционально) 💬
+                <p>Ожидается: запрос комментария + кнопка "Пропустить"</p>
+            </div>
+            <div class="step" id="step9">
+                <strong>Подтверждение:</strong> Показ всех данных ✅
+                <p>Ожидается: сводка с кнопками "Подтвердить"/"Отменить"</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 Инструкции для тестирования</h3>
+            <ol>
+                <li>Отправьте команду <code>/booking</code> в Telegram бот</li>
+                <li>Проследите все шаги процесса бронирования</li>
+                <li>Проверьте, что inline кнопки работают</li>
+                <li>Убедитесь, что ввод текста принимается на соответствующих шагах</li>
+                <li>Проверьте финальное подтверждение</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3>🚨 Возможные проблемы</h3>
+            <ul>
+                <li><strong>Отсутствие городов:</strong> Проверьте наличие активных сервисных точек</li>
+                <li><strong>Отсутствие услуг:</strong> Проверьте наличие активных категорий услуг</li>
+                <li><strong>Ошибки в процессе:</strong> Проверьте логи Rails в консоли</li>
+                <li><strong>Не работают кнопки:</strong> Убедитесь, что ngrok работает</li>
+            </ul>
+        </div>
+
+        <div id="logOutput" class="test-section" style="display: none;">
+            <h3>📊 Результаты проверки</h3>
+            <pre id="logContent"></pre>
+        </div>
+    </div>
+
+    <script>
+        async function checkSystemData() {
+            const resultDiv = document.getElementById('systemDataResult');
+            const logDiv = document.getElementById('logOutput');
+            const logContent = document.getElementById('logContent');
+            
+            resultDiv.innerHTML = '<p>⏳ Проверяем данные системы...</p>';
+            
+            try {
+                // Проверяем города с сервисными точками
+                const citiesResponse = await fetch('http://localhost:8000/api/v1/cities');
+                const cities = await citiesResponse.json();
+                
+                // Проверяем категории услуг
+                const categoriesResponse = await fetch('http://localhost:8000/api/v1/service_categories');
+                const categories = await categoriesResponse.json();
+                
+                // Проверяем типы автомобилей
+                const carTypesResponse = await fetch('http://localhost:8000/api/v1/car_types');
+                const carTypes = await carTypesResponse.json();
+                
+                let resultHTML = '<div class="success">';
+                resultHTML += `<h4>✅ Проверка завершена</h4>`;
+                resultHTML += `<p><strong>Города:</strong> ${cities.data?.length || 0} шт.</p>`;
+                resultHTML += `<p><strong>Категории услуг:</strong> ${categories.data?.length || 0} шт.</p>`;
+                resultHTML += `<p><strong>Типы автомобилей:</strong> ${carTypes.data?.length || 0} шт.</p>`;
+                resultHTML += '</div>';
+                
+                resultDiv.innerHTML = resultHTML;
+                
+                // Показываем подробные логи
+                const logData = {
+                    timestamp: new Date().toISOString(),
+                    cities: cities,
+                    categories: categories,
+                    carTypes: carTypes
+                };
+                
+                logContent.textContent = JSON.stringify(logData, null, 2);
+                logDiv.style.display = 'block';
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><h4>❌ Ошибка</h4><p>${error.message}</p></div>`;
+                console.error('Ошибка проверки:', error);
+            }
+        }
+
+        // Автоматическая проверка при загрузке страницы
+        window.addEventListener('load', checkSystemData);
+    </script>
+</body>
+</html> 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_20_100639) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_20_114201) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -698,6 +698,56 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_20_100639) do
     t.index ["user_id"], name: "index_system_logs_on_user_id"
   end
 
+  create_table "telegram_booking_sessions", force: :cascade do |t|
+    t.string "chat_id", null: false
+    t.string "current_step", default: "city_selection", null: false
+    t.json "session_data", default: {}
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chat_id"], name: "index_telegram_booking_sessions_on_chat_id", unique: true
+    t.index ["expires_at"], name: "index_telegram_booking_sessions_on_expires_at"
+  end
+
+  create_table "telegram_notifications", force: :cascade do |t|
+    t.text "message", null: false
+    t.string "chat_id", null: false
+    t.bigint "user_id", null: false
+    t.bigint "booking_id"
+    t.string "notification_type", default: "general"
+    t.string "status", default: "pending"
+    t.datetime "sent_at"
+    t.text "error_message"
+    t.integer "retry_count", default: 0
+    t.json "telegram_response"
+    t.integer "message_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["booking_id"], name: "index_telegram_notifications_on_booking_id"
+    t.index ["chat_id"], name: "index_telegram_notifications_on_chat_id"
+    t.index ["notification_type"], name: "index_telegram_notifications_on_notification_type"
+    t.index ["sent_at"], name: "index_telegram_notifications_on_sent_at"
+    t.index ["status"], name: "index_telegram_notifications_on_status"
+    t.index ["user_id"], name: "index_telegram_notifications_on_user_id"
+  end
+
+  create_table "telegram_subscriptions", force: :cascade do |t|
+    t.string "chat_id", null: false
+    t.bigint "user_id", null: false
+    t.boolean "is_active", default: true, null: false
+    t.string "username"
+    t.string "first_name"
+    t.string "last_name"
+    t.string "language_code", default: "ru"
+    t.text "notification_preferences"
+    t.datetime "last_interaction_at"
+    t.string "status", default: "active"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chat_id"], name: "index_telegram_subscriptions_on_chat_id", unique: true
+    t.index ["user_id"], name: "index_telegram_subscriptions_on_user_id"
+  end
+
   create_table "tire_types", force: :cascade do |t|
     t.string "name", null: false
     t.text "description"
@@ -810,5 +860,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_20_100639) do
   add_foreign_key "service_posts", "service_points"
   add_foreign_key "services", "service_categories", column: "category_id"
   add_foreign_key "system_logs", "users"
+  add_foreign_key "telegram_notifications", "bookings"
+  add_foreign_key "telegram_notifications", "users"
+  add_foreign_key "telegram_subscriptions", "users"
   add_foreign_key "users", "user_roles", column: "role_id"
 end

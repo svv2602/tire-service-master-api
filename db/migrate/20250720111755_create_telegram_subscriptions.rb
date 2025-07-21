@@ -14,9 +14,6 @@ class CreateTelegramSubscriptions < ActiveRecord::Migration[8.0]
 
       t.timestamps
     end
-
     add_index :telegram_subscriptions, :chat_id, unique: true
-    add_index :telegram_subscriptions, :is_active
-    add_index :telegram_subscriptions, :status
   end
 end

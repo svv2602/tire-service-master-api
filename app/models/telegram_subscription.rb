@@ -2,85 +2,68 @@ class TelegramSubscription < ApplicationRecord
   belongs_to :user
   has_many :telegram_notifications, dependent: :destroy
 
-  validates :chat_id, presence: true, uniqueness: true
-  validates :user_id, presence: true
-  validates :is_active, inclusion: { in: [true, false] }
-  validates :language_code, presence: true, inclusion: { in: %w[ru uk en] }
-  validates :status, presence: true
-
-  scope :active, -> { where(is_active: true, status: :active) }
-  scope :blocked, -> { where(status: :blocked) }
-  scope :inactive, -> { where(is_active: false) }
-
-  # Предпочтения уведомлений (JSON) - используем атрибут типа JSON
-
-  # Статусы подписки  
+  # Статусы подписки
   enum :status, { active: 'active', blocked: 'blocked', inactive: 'inactive' }
 
+  validates :chat_id, presence: true, uniqueness: true
+  validates :status, presence: true
+  validates :is_active, inclusion: { in: [true, false] }
+
+  scope :active_subscriptions, -> { where(is_active: true, status: 'active') }
+  scope :by_language, ->(lang) { where(language_code: lang) }
+
   before_validation :set_defaults
+
+  def can_receive_notifications?
+    is_active? && active?
+  end
 
   def full_name
     [first_name, last_name].compact.join(' ')
   end
 
-  def display_name
-    full_name.present? ? full_name : username || "User #{user_id}"
+  def update_last_interaction!
+    update!(last_interaction_at: Time.current)
   end
 
-  def can_receive_notifications?
-    is_active? && status == 'active'
+  def notification_preferences_hash
+    return {} if notification_preferences.blank?
+    
+    begin
+      JSON.parse(notification_preferences) 
+    rescue JSON::ParserError
+      {}
+    end
+  end
+
+  def set_notification_preference(type, enabled)
+    prefs = notification_preferences_hash
+    prefs[type.to_s] = enabled
+    update!(notification_preferences: prefs.to_json)
   end
 
   def notification_enabled?(type)
-    return true if notification_preferences.blank?
-    notification_preferences.fetch(type.to_s, true)
-  end
-
-  def update_last_interaction!
-    update(last_interaction_at: Time.current)
-  end
-
-  def block!
-    update(status: 'blocked', is_active: false)
-  end
-
-  def unblock!
-    update(status: 'active', is_active: true)
-  end
-
-  def deactivate!
-    update(is_active: false, status: 'inactive')
-  end
-
-  def activate!
-    update(is_active: true, status: 'active')
-  end
-
-  # Статистика уведомлений
-  def notifications_count
-    telegram_notifications.count
+    prefs = notification_preferences_hash
+    prefs.fetch(type.to_s, true) # по умолчанию включено
   end
 
   def sent_notifications_count
-    telegram_notifications.where(status: 'sent').count
-  end
-
-  def failed_notifications_count
-    telegram_notifications.where(status: 'failed').count
+    telegram_notifications.sent.count
   end
 
   def success_rate
-    total = notifications_count
+    total = telegram_notifications.count
     return 0 if total.zero?
-    ((sent_notifications_count.to_f / total) * 100).round(2)
+    
+    successful = telegram_notifications.sent.count
+    (successful.to_f / total * 100).round(1)
   end
 
   private
 
   def set_defaults
-    self.language_code ||= 'ru'
-    self.status ||= 'active'
     self.is_active = true if is_active.nil?
-    self.notification_preferences ||= {}
+    self.status ||= 'active'
+    self.language_code ||= 'ru'
   end
 end 

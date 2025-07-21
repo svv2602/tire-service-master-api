@@ -15,7 +15,7 @@ class CreateTelegramNotifications < ActiveRecord::Migration[8.0]
 
       t.timestamps
     end
-
+    
     add_index :telegram_notifications, :chat_id
     add_index :telegram_notifications, :notification_type
     add_index :telegram_notifications, :status
