@@ -149,8 +149,11 @@ class Api::V1::ClientAuthController < ApplicationController
   # POST /api/v1/clients/logout
   # Выход из системы
   def logout
-    # Удаляем куки при выходе
+    # ✅ Удаляем ВСЕ куки при выходе
     cookies.delete(:refresh_token)
+    cookies.delete(:access_token)
+    
+    Rails.logger.info("ClientAuth#logout: User logged out successfully, all cookies cleared")
     render json: { message: I18n.t('auth.messages.logout_success') }, status: :ok
   end
 

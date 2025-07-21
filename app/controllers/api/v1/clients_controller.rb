@@ -236,6 +236,10 @@ module Api
             
             Rails.logger.info "🔑 Генерируем токены для пользователя ID: #{user.id}"
             
+            # ✅ Очищаем старые куки перед установкой новых
+            cookies.delete(:access_token)
+            cookies.delete(:refresh_token)
+            
             # Устанавливаем cookies
             cookies[:access_token] = {
               value: access_token,

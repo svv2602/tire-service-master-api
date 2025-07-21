@@ -46,6 +46,10 @@ module Api
         # Обновляем время последнего входа
         user.update_last_login!
 
+        # ✅ Очищаем старые куки перед установкой новых
+        cookies.delete(:refresh_token)
+        cookies.delete(:access_token)
+
         # Генерируем JWT токены
         access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
         refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
@@ -59,6 +63,16 @@ module Api
           secure: Rails.env.production?,
           same_site: :lax,
           expires: 30.days.from_now,
+          path: '/'
+        }
+
+        # ✅ Также устанавливаем access токен в куки для более стабильной авторизации
+        cookies[:access_token] = {
+          value: access_token,
+          httponly: true,
+          secure: Rails.env.production?,
+          same_site: :lax,
+          expires: 1.hour.from_now,
           path: '/'
         }
 
@@ -123,10 +137,11 @@ module Api
       # POST /api/v1/auth/logout
       # Выход из системы
       def logout
-        # Удаляем refresh токен из cookies
+        # ✅ Удаляем ВСЕ куки при выходе
         cookies.delete(:refresh_token)
+        cookies.delete(:access_token)
         
-        Rails.logger.info("Auth#logout: User logged out successfully")
+        Rails.logger.info("Auth#logout: User logged out successfully, all cookies cleared")
         render json: { message: I18n.t('auth.messages.logout_success') }, status: :ok
       end
       
