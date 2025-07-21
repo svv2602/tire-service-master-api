@@ -8,7 +8,7 @@ class EmailTemplate < ApplicationRecord
   validates :subject, presence: true, length: { maximum: 500 }
   validates :body, presence: true
   validates :template_type, presence: true, inclusion: { 
-    in: %w[booking_confirmation booking_reminder booking_cancelled user_welcome password_reset review_request service_completed maintenance_invitation review_thanks newsletter],
+    in: %w[booking_confirmation booking_reminder booking_cancelled user_welcome password_reset review_request service_completed maintenance_invitation review_thanks newsletter booking_time_changed booking_location_changed booking_client_info_changed],
     message: "должен быть одним из допустимых типов"
   }
   validates :language, presence: true, inclusion: { in: %w[ru uk], message: "должен быть ru или uk" }
@@ -60,7 +60,10 @@ class EmailTemplate < ApplicationRecord
       'user_welcome' => 'Привітання нового користувача',
       'password_reset' => 'Скидання пароля',
       'review_request' => 'Запит на відгук',
-      'service_completed' => 'Завершення послуги'
+      'service_completed' => 'Завершення послуги',
+      'booking_time_changed' => 'Зміна часу бронювання',
+      'booking_location_changed' => 'Зміна сервісної точки',
+      'booking_client_info_changed' => 'Зміна даних клієнта'
     }
   end
 

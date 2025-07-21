@@ -62,6 +62,9 @@ class Booking < ApplicationRecord
   # Коллбэки для отправки уведомлений
   after_create :send_creation_notification, unless: -> { skip_notifications }
   after_update :send_status_change_notification, if: -> { saved_change_to_status? && !skip_notifications }
+  after_update :send_time_change_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
+  after_update :send_service_point_change_notification, if: -> { saved_change_to_service_point_id? && !skip_notifications }
+  after_update :send_client_info_change_notification, if: -> { client_info_changed? && !skip_notifications }
   
   # Инициализация статуса при создании
   before_validation :initialize_status, on: :create, unless: -> { status.present? }
@@ -352,6 +355,32 @@ class Booking < ApplicationRecord
     end
   end
   
+  # Проверяем изменения в данных клиента
+  def client_info_changed?
+    saved_change_to_service_recipient_first_name? ||
+    saved_change_to_service_recipient_last_name? ||
+    saved_change_to_service_recipient_phone? ||
+    saved_change_to_service_recipient_email?
+  end
+
+  # Отправка уведомления об изменении времени/даты
+  def send_time_change_notification
+    Rails.logger.info "📅 Отправка уведомления об изменении времени для бронирования ##{id}"
+    BookingNotificationJob.perform_later(id, 'booking_time_changed')
+  end
+
+  # Отправка уведомления об изменении сервисной точки  
+  def send_service_point_change_notification
+    Rails.logger.info "📍 Отправка уведомления об изменении сервисной точки для бронирования ##{id}"
+    BookingNotificationJob.perform_later(id, 'booking_location_changed')
+  end
+
+  # Отправка уведомления об изменении данных клиента
+  def send_client_info_change_notification
+    Rails.logger.info "👤 Отправка уведомления об изменении данных клиента для бронирования ##{id}"
+    BookingNotificationJob.perform_later(id, 'booking_client_info_changed')
+  end
+
   # Автоматическая установка флага служебного бронирования
   def set_service_booking_flag
     return unless client&.user

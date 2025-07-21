@@ -36,7 +36,7 @@ class NotificationService
     end
 
     # Создание уведомления о бронировании
-    def booking_notification(booking, type, additional_data = {})
+    def self.booking_notification(booking, type, additional_data = {})
       case type
       when :created
         send_booking_created(booking, additional_data)
@@ -63,6 +63,141 @@ class NotificationService
           category: category,
           channels: ['push', 'email']
         })
+    end
+
+    # Методы для конкретных типов уведомлений
+    
+    def self.send_booking_created(booking, data)
+      send_notification(booking.client, 'booking_created', {
+        title: 'Бронювання створено',
+        message: "Ваш запис на #{booking.booking_date} о #{booking.start_time} створено",
+        category: 'booking',
+        priority: 'normal',
+        template_type: 'booking_confirmation', # Используем EmailTemplate
+        variables: build_booking_variables(booking),
+        channels: ['push', 'email']
+      }.merge(data))
+    end
+    
+    def self.send_booking_confirmed(booking, data)
+      send_notification(booking.client, 'booking_confirmed', {
+        title: 'Бронювання підтверджено',
+        message: "Ваш запис на #{booking.booking_date} о #{booking.start_time} підтверджено",
+        category: 'booking',
+        priority: 'high',
+        template_type: 'booking_confirmation', # Используем EmailTemplate
+        variables: build_booking_variables(booking),
+        channels: ['push', 'email', 'sms']
+      }.merge(data))
+    end
+    
+    def self.send_booking_cancelled(booking, data)
+      send_notification(booking.client, 'booking_cancelled', {
+        title: 'Бронювання скасовано',
+        message: "Ваш запис на #{booking.booking_date} о #{booking.start_time} скасовано",
+        category: 'booking',
+        priority: 'high',
+        template_type: 'booking_cancelled', # Используем EmailTemplate
+        variables: build_booking_variables(booking),
+        channels: ['push', 'email', 'sms']
+      }.merge(data))
+    end
+    
+    def self.send_booking_reminder(booking, data)
+      send_notification(booking.client, 'booking_reminder', {
+        title: 'Нагадування про запис',
+        message: "Нагадуємо про ваш запис завтра о #{booking.start_time}",
+        category: 'reminder',
+        priority: 'high',
+        template_type: 'booking_reminder', # Используем EmailTemplate
+        variables: build_booking_variables(booking),
+        channels: ['push', 'email', 'sms']
+      }.merge(data))
+    end
+    
+    def self.send_booking_completed(booking, data)
+      send_notification(booking.client, 'booking_completed', {
+        title: 'Обслуговування завершено',
+        message: 'Дякуємо за візит! Будь ласка, оцініть наш сервіс',
+        category: 'booking',
+        priority: 'normal',
+        template_type: 'service_completed', # Используем EmailTemplate
+        variables: build_booking_variables(booking),
+        channels: ['push', 'email']
+      }.merge(data))
+    end
+
+    # Создание уведомления о бронировании
+    def self.booking_notification(booking, type, additional_data = {})
+      case type
+      when :created
+        send_booking_created(booking, additional_data)
+      when :confirmed
+        send_booking_confirmed(booking, additional_data)
+      when :cancelled
+        send_booking_cancelled(booking, additional_data)
+      when :reminder
+        send_booking_reminder(booking, additional_data)
+      when :completed
+        send_booking_completed(booking, additional_data)
+      end
+    end
+
+    # Строит переменные для бронирования (используется в EmailTemplate)
+    def self.build_booking_variables(booking)
+      variables = {
+        # Системные переменные
+        'company_name' => 'Tire Service Master',
+        'support_email' => ENV.fetch('SUPPORT_EMAIL', 'support@tireservice.ua'),
+        'support_phone' => ENV.fetch('SUPPORT_PHONE', '+38 (044) 111-22-33'),
+        'website_url' => ENV.fetch('FRONTEND_URL', 'https://tireservice.ua'),
+        'current_date' => Date.current.strftime('%d.%m.%Y'),
+        'current_time' => Time.current.strftime('%H:%M')
+      }
+
+      # Клиент
+      variables.merge!({
+        'client_name' => "#{booking.service_recipient_first_name} #{booking.service_recipient_last_name}".strip,
+        'client_email' => booking.service_recipient_email || booking.client&.email || '',
+        'client_phone' => booking.service_recipient_phone || booking.client&.phone || '',
+        'client_first_name' => booking.service_recipient_first_name || booking.client&.first_name || '',
+        'client_last_name' => booking.service_recipient_last_name || booking.client&.last_name || ''
+      })
+
+      # Бронирование
+      variables.merge!({
+        'booking_id' => "##{booking.id}",
+        'booking_date' => booking.booking_date&.strftime('%d.%m.%Y') || '',
+        'booking_time' => booking.start_time&.strftime('%H:%M') || '',
+        'booking_status' => booking.status&.humanize || ''
+      })
+
+      # Сервисная точка
+      if booking.service_point
+        variables.merge!({
+          'service_point_name' => booking.service_point.name || '',
+          'service_point_address' => booking.service_point.address || '',
+          'service_point_phone' => booking.service_point.contact_phone_for_category(booking.service_category_id) || '',
+          'service_point_city' => booking.service_point.city&.name || ''
+        })
+      end
+
+      # Услуги
+      if booking.service_category
+        variables.merge!({
+          'service_name' => booking.service_category.name || '',
+          'service_category' => booking.service_category.name || ''
+        })
+      end
+
+      # Автомобиль
+      variables.merge!({
+        'car_brand' => booking.car_brand || '',
+        'car_model' => booking.car_model || '',
+        'license_plate' => booking.license_plate || ''
+      })
+
+      variables
     end
   end
 
@@ -148,13 +283,23 @@ class NotificationService
       
       return unless recipient_email.present?
 
-      # Отправляем через mailer
-      NotificationMailer.general_notification(
-        notification.id,
-        recipient_email
-      ).deliver_later
+      # Используем новую систему EmailTemplate если доступна
+      if data[:template_type].present?
+        EmailTemplateMailer.send_by_template(
+          data[:template_type],
+          recipient_email,
+          data[:variables] || {}
+        ).deliver_later
+        Rails.logger.info "Email отправлен через EmailTemplate: #{data[:template_type]} → #{recipient_email}"
+      else
+        # Fallback на старую систему
+        NotificationMailer.general_notification(
+          notification.id,
+          recipient_email
+        ).deliver_later
+        Rails.logger.info "Email отправлен через NotificationMailer → #{recipient_email}"
+      end
       
-      Rails.logger.info "Email notification sent to #{recipient_email}"
     rescue => e
       Rails.logger.error "Failed to send email notification: #{e.message}"
     end
@@ -183,79 +328,6 @@ class NotificationService
       result
     end
 
-    # Методы для конкретных типов уведомлений
-    
-    def send_booking_created(booking, data)
-      send_notification(booking.client, 'booking_created', {
-        title: 'Бронирование создано',
-        message: "Ваша запись на #{booking.booking_date} в #{booking.start_time} создана",
-        category: 'booking',
-        priority: 'normal',
-        template_data: {
-          date: booking.booking_date,
-          time: booking.start_time,
-          service_point: booking.service_point.name
-        },
 
-        channels: ['push', 'email']
-      }.merge(data))
-    end
-    
-    def send_booking_confirmed(booking, data)
-      send_notification(booking.client, 'booking_confirmed', {
-        title: 'Бронирование подтверждено',
-        message: "Ваша запись на #{booking.booking_date} в #{booking.start_time} подтверждена",
-        category: 'booking',
-        priority: 'high',
-        template_data: {
-          date: booking.booking_date,
-          time: booking.start_time,
-          service_point: booking.service_point.name
-        },
-        channels: ['push', 'email', 'sms']
-      }.merge(data))
-    end
-    
-    def send_booking_cancelled(booking, data)
-      send_notification(booking.client, 'booking_canceled', {
-        title: 'Бронирование отменено',
-        message: "Ваша запись на #{booking.booking_date} в #{booking.start_time} отменена",
-        category: 'booking',
-        priority: 'high',
-        template_data: {
-          date: booking.booking_date,
-          time: booking.start_time,
-          service_point: booking.service_point.name
-        },
-        channels: ['push', 'email', 'sms']
-      }.merge(data))
-    end
-    
-    def send_booking_reminder(booking, data)
-      send_notification(booking.client, 'booking_reminder', {
-        title: 'Напоминание о записи',
-        message: "Напоминаем о вашей записи завтра в #{booking.start_time}",
-        category: 'reminder',
-        priority: 'high',
-        template_data: {
-          time: booking.start_time,
-          service_point: booking.service_point.name
-        },
-        channels: ['push', 'sms']
-      }.merge(data))
-    end
-    
-    def send_booking_completed(booking, data)
-      send_notification(booking.client, 'booking_completed', {
-        title: 'Обслуживание завершено',
-        message: 'Спасибо за посещение! Пожалуйста, оцените наш сервис',
-        category: 'booking',
-        priority: 'normal',
-        template_data: {
-          service_point: booking.service_point.name
-        },
-        channels: ['push', 'email']
-      }.merge(data))
-    end
   end
 end 

@@ -39,6 +39,13 @@ Rails.application.routes.draw do
           get 'template_types'
         end
       end
+      
+      # Тестирование email
+      namespace :email_test do
+        post 'send_template'
+        post 'simple'
+        get 'smtp_config'
+      end
 
       resources :custom_variables do
         collection do

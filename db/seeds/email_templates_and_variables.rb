@@ -377,6 +377,120 @@ email_templates_data = [
 Команда {company_name}
     }.strip,
     is_active: true
+  },
+
+  # ===== НОВЫЕ ШАБЛОНЫ ДЛЯ РАСШИРЕННЫХ СОБЫТИЙ =====
+
+  # 8. Изменение времени бронирования
+  {
+    name: 'Зміна часу бронювання',
+    template_type: 'booking_time_changed',
+    subject: 'Зміна часу вашого бронювання - {service_point_name}',
+    body: %{
+Вітаємо, {client_name}!
+
+Час вашого бронювання було змінено.
+
+📅 ОНОВЛЕНІ ДАНІ:
+• Нова дата: {booking_date}
+• Новий час: {booking_time}
+• Номер бронювання: {booking_id}
+
+🏢 СЕРВІСНА ТОЧКА:
+{service_point_name}
+📍 Адреса: {service_point_address}
+📞 Телефон: {service_point_phone}
+
+🚗 АВТОМОБІЛЬ:
+{car_brand} {car_model}
+Номер: {license_plate}
+
+ℹ️ Якщо ви не запитували зміну часу, зверніться до нашої служби підтримки.
+
+З повагою,
+Команда {company_name}
+📧 {support_email}
+📞 {support_phone}
+    }.strip,
+    is_active: true
+  },
+
+  # 9. Изменение сервисной точки
+  {
+    name: 'Зміна сервісної точки',
+    template_type: 'booking_location_changed',
+    subject: 'Зміна місця обслуговування - {booking_id}',
+    body: %{
+Вітаємо, {client_name}!
+
+Місце вашого обслуговування було змінено.
+
+🏢 НОВА СЕРВІСНА ТОЧКА:
+{service_point_name}
+📍 Адреса: {service_point_address}
+📞 Телефон: {service_point_phone}
+🌐 Місто: {service_point_city}
+
+📅 ДАТА ТА ЧАС:
+• Дата: {booking_date}
+• Час: {booking_time}
+• Номер бронювання: {booking_id}
+
+🚗 АВТОМОБІЛЬ:
+{car_brand} {car_model}
+Номер: {license_plate}
+
+🗺️ ЯК ДІСТАТИСЯ:
+Рекомендуємо заздалегідь ознайомитися з розташуванням нової точки на карті.
+
+ℹ️ Якщо у вас є питання щодо зміни локації, зверніться до нашої служби підтримки.
+
+З повагою,
+Команда {company_name}
+📧 {support_email}
+📞 {support_phone}
+    }.strip,
+    is_active: true
+  },
+
+  # 10. Изменение данных клиента
+  {
+    name: 'Зміна даних клієнта',
+    template_type: 'booking_client_info_changed',
+    subject: 'Оновлення даних вашого бронювання - {booking_id}',
+    body: %{
+Вітаємо, {client_name}!
+
+Дані вашого бронювання було оновлено.
+
+📋 БРОНЮВАННЯ:
+• Номер: {booking_id}
+• Дата: {booking_date}
+• Час: {booking_time}
+
+🏢 СЕРВІСНА ТОЧКА:
+{service_point_name}
+📍 Адреса: {service_point_address}
+
+👤 ОНОВЛЕНІ КОНТАКТНІ ДАНІ:
+• Ім'я: {client_first_name} {client_last_name}
+• Телефон: {client_phone}
+• Email: {client_email}
+
+🚗 АВТОМОБІЛЬ:
+{car_brand} {car_model}
+Номер: {license_plate}
+
+✅ Ваше бронювання залишається активним з оновленими даними.
+
+ℹ️ Якщо ви не запитували зміну даних, негайно зверніться до нашої служби підтримки.
+
+З повагою,
+Команда {company_name}
+📧 {support_email}
+📞 {support_phone}
+    }.strip,
+    is_active: true
   }
 ]
 
