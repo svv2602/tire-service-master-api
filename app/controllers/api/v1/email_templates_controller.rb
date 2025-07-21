@@ -3,7 +3,7 @@ module Api
     class EmailTemplatesController < ApiController
       before_action :authenticate_request
       before_action :authorize_admin!
-      before_action :set_email_template, only: [:show, :update, :destroy, :preview]
+              before_action :set_email_template, only: [:show, :update, :destroy, :preview, :add_custom_variable, :remove_custom_variable]
 
       # GET /api/v1/email_templates
       def index
@@ -91,13 +91,48 @@ module Api
       def preview
         variable_values = params[:variables] || {}
         
-        rendered = @email_template.render_with_variables(variable_values)
+        rendered = @email_template.render_with_all_variables(variable_values)
         
         render json: {
           subject: rendered[:subject],
           body: rendered[:body],
-          variables: @email_template.variables_array
+          variables: @email_template.all_variables,
+          custom_variables_by_category: @email_template.custom_variables_by_category.transform_values do |vars|
+            vars.map { |v| { name: v.name, example_value: v.example_value, description: v.description } }
+          end
         }
+      end
+
+      # POST /api/v1/email_templates/:id/add_custom_variable
+      def add_custom_variable
+        variable_id = params[:custom_variable_id]
+        
+        if @email_template.add_custom_variable(variable_id)
+          render json: { 
+            message: 'Переменная успешно добавлена',
+            template: EmailTemplateSerializer.new(@email_template).as_json
+          }
+        else
+          render json: { 
+            error: 'Не удалось добавить переменную' 
+          }, status: :unprocessable_entity
+        end
+      end
+
+      # DELETE /api/v1/email_templates/:id/remove_custom_variable/:custom_variable_id
+      def remove_custom_variable
+        variable_id = params[:custom_variable_id]
+        
+        if @email_template.remove_custom_variable(variable_id)
+          render json: { 
+            message: 'Переменная успешно удалена',
+            template: EmailTemplateSerializer.new(@email_template).as_json
+          }
+        else
+          render json: { 
+            error: 'Не удалось удалить переменную' 
+          }, status: :unprocessable_entity
+        end
       end
 
       # GET /api/v1/email_templates/template_types

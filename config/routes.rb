@@ -32,9 +32,18 @@ Rails.application.routes.draw do
       resources :email_templates do
         member do
           post 'preview'
+          post 'add_custom_variable'
+          delete 'remove_custom_variable/:custom_variable_id', action: 'remove_custom_variable'
         end
         collection do
           get 'template_types'
+        end
+      end
+
+      resources :custom_variables do
+        collection do
+          get 'categories'
+          get 'by_category'
         end
       end
       

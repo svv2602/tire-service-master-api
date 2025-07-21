@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_21_103458) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_21_115436) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -298,6 +298,32 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_21_103458) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_clients_on_user_id", unique: true
+  end
+
+  create_table "custom_variables", force: :cascade do |t|
+    t.string "name", limit: 100, null: false
+    t.text "description"
+    t.string "example_value", limit: 255
+    t.string "category", limit: 50, null: false
+    t.boolean "is_active", default: true, null: false
+    t.bigint "created_by_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category", "is_active"], name: "index_custom_variables_on_category_and_is_active"
+    t.index ["category"], name: "index_custom_variables_on_category"
+    t.index ["created_by_id"], name: "index_custom_variables_on_created_by_id"
+    t.index ["is_active"], name: "index_custom_variables_on_is_active"
+    t.index ["name"], name: "index_custom_variables_on_name", unique: true
+  end
+
+  create_table "email_template_custom_variables", force: :cascade do |t|
+    t.bigint "email_template_id", null: false
+    t.bigint "custom_variable_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["custom_variable_id"], name: "index_email_template_custom_variables_on_custom_variable_id"
+    t.index ["email_template_id", "custom_variable_id"], name: "index_template_custom_vars_unique", unique: true
+    t.index ["email_template_id"], name: "index_email_template_custom_variables_on_email_template_id"
   end
 
   create_table "email_templates", force: :cascade do |t|
@@ -852,6 +878,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_21_103458) do
   add_foreign_key "client_favorite_points", "clients"
   add_foreign_key "client_favorite_points", "service_points"
   add_foreign_key "clients", "users"
+  add_foreign_key "custom_variables", "users", column: "created_by_id"
+  add_foreign_key "email_template_custom_variables", "custom_variables"
+  add_foreign_key "email_template_custom_variables", "email_templates"
   add_foreign_key "manager_service_points", "managers"
   add_foreign_key "manager_service_points", "service_points"
   add_foreign_key "managers", "partners"
