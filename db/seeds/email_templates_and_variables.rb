@@ -100,7 +100,7 @@ end
 puts "📧 Создание email шаблонов..."
 
 email_templates_data = [
-  # 1. Подтверждение бронирования
+  # 1. Подтверждение бронирования (существующий тип)
   {
     name: 'Підтвердження бронювання',
     template_type: 'booking_confirmation',
@@ -137,7 +137,7 @@ email_templates_data = [
     is_active: true
   },
 
-  # 2. Напоминание о записи
+  # 2. Напоминание о записи (существующий тип)
   {
     name: 'Нагадування про запис',
     template_type: 'booking_reminder', 
@@ -168,7 +168,38 @@ email_templates_data = [
     is_active: true
   },
 
-  # 3. Завершение обслуживания
+  # 3. Отмена бронирования (существующий тип)
+  {
+    name: 'Скасування бронювання',
+    template_type: 'booking_cancelled',
+    subject: 'Бронювання скасовано - {booking_id}',
+    body: %{
+{client_name}, повідомляємо про скасування.
+
+❌ СКАСОВАНЕ БРОНЮВАННЯ:
+• Номер: {booking_id}
+• Дата: {booking_date}
+• Час: {booking_time}
+• Послуга: {service_name}
+• Сервісна точка: {service_point_name}
+
+Ви можете створити нове бронювання на нашому сайті {website_url} або зателефонувати нам.
+
+{current_promotion}
+
+📞 Контакти для нового запису:
+• {service_point_phone} - {service_point_name}
+• {support_phone} - загальна підтримка
+
+{emergency_contact}
+
+Дякуємо за розуміння!
+Команда {company_name}
+    }.strip,
+    is_active: true
+  },
+
+  # 4. Завершение обслуживания (существующий тип)
   {
     name: 'Завершення обслуговування',
     template_type: 'service_completed',
@@ -203,107 +234,147 @@ email_templates_data = [
     is_active: true
   },
 
-  # 4. Отмена бронирования
+  # 5. Запрос отзыва (существующий тип)
   {
-    name: 'Скасування бронювання',
-    template_type: 'booking_cancelled',
-    subject: 'Бронювання скасовано - {booking_id}',
-    body: %{
-{client_name}, повідомляємо про скасування.
-
-❌ СКАСОВАНЕ БРОНЮВАННЯ:
-• Номер: {booking_id}
-• Дата: {booking_date}
-• Час: {booking_time}
-• Послуга: {service_name}
-• Сервісна точка: {service_point_name}
-
-Ви можете створити нове бронювання на нашому сайті {website_url} або зателефонувати нам.
-
-{current_promotion}
-
-📞 Контакти для нового запису:
-• {service_point_phone} - {service_point_name}
-• {support_phone} - загальна підтримка
-
-{emergency_contact}
-
-Дякуємо за розуміння!
-Команда {company_name}
-    }.strip,
-    is_active: true
-  },
-
-  # 5. Приглашение на техосмотр
-  {
-    name: 'Запрошення на техогляд',
-    template_type: 'maintenance_invitation',
-    subject: 'Час для техогляду вашого {car_brand} {car_model}',
+    name: 'Запит відгуку',
+    template_type: 'review_request',
+    subject: 'Оцініть якість нашого сервісу',
     body: %{
 Вітаємо, {client_name}!
 
-Рекомендуємо пройти плановий техогляд вашого автомобіля {car_brand} {car_model}.
+Сподіваємось, ви залишились задоволені якістю обслуговування в {service_point_name}.
 
-🔧 РЕКОМЕНДОВАНІ ПОСЛУГИ:
-• Перевірка стану шин
-• Балансування коліс  
-• Діагностика підвіски
-• Заміна масла
+⭐ ПОДІЛІТЬСЯ ВРАЖЕННЯМИ:
+Ваш відгук допоможе нам покращити сервіс і допомогти іншим клієнтам.
 
-{seasonal_recommendation}
+📝 Залишити відгук можна:
+• На нашому сайті: {website_url}
+• Телефонувати: {support_phone}
 
-{weather_warning}
-
-📅 ЗАПИСАТИСЯ МОЖНА:
-• Онлайн: {website_url}
-• Телефон: {support_phone}
-
-🏢 НАШІ СЕРВІСНІ ТОЧКИ:
-Оберіть найближчу до вас локацію на нашому сайті.
+🔧 ДЕТАЛІ ВІЗИТУ:
+• Дата: {booking_date}
+• Послуга: {service_name}
+• Автомобіль: {car_brand} {car_model}
 
 {current_promotion}
 
 {loyalty_bonus}
 
-{additional_services}
-
-З турботою про вашу безпеку,
+Дякуємо за довіру!
 Команда {company_name}
 📧 {support_email}
     }.strip,
     is_active: true
   },
 
-  # 6. Благодарность за отзыв
+  # 6. Приветствие пользователя (существующий тип)
   {
-    name: 'Подяка за відгук',
-    template_type: 'review_thanks',
-    subject: 'Дякуємо за ваш відгук!',
+    name: 'Вітання нового користувача',
+    template_type: 'user_welcome',
+    subject: 'Ласкаво просимо до {company_name}!',
     body: %{
-{client_name}, дякуємо за відгук!
+Вітаємо, {client_name}!
 
-Ваша думка дуже важлива для нас і допомагає покращувати якість обслуговування.
+Дякуємо за реєстрацію в системі {company_name}!
 
-⭐ Ви оцінили наш сервіс після обслуговування:
-• Дата візиту: {booking_date}
-• Послуга: {service_name}
-• Сервісна точка: {service_point_name}
+🎉 ВИ ТЕПЕР МАЄТЕ ДОСТУП ДО:
+• Онлайн бронювання послуг
+• Історії ваших візитів
+• Персональних знижок і акцій
+• Нагадувань про техогляд
 
-{loyalty_bonus}
+🏢 НАШІ ПОСЛУГИ:
+• Шиномонтаж та балансування
+• Діагностика автомобіля
+• Заміна масла та фільтрів
+• Ремонт підвіски
 
 {current_promotion}
 
-Будемо раді бачити вас знову!
-
-{weekend_hours}
+📱 КОРИСНІ ПОСИЛАННЯ:
+• Сайт: {website_url}
+• Підтримка: {support_email}
+• Телефон: {support_phone}
 
 {additional_services}
 
 З повагою,
 Команда {company_name}
-📧 {support_email}
-📞 {support_phone}
+    }.strip,
+    is_active: true
+  },
+
+  # 7. Сброс пароля (существующий тип)
+  {
+    name: 'Скидання пароля',
+    template_type: 'password_reset',
+    subject: 'Скидання пароля - {company_name}',
+    body: %{
+Вітаємо, {client_name}!
+
+Ви запросили скидання пароля для вашого облікового запису.
+
+🔐 ДЛЯ СКИДАННЯ ПАРОЛЯ:
+Перейдіть за посиланням нижче та створіть новий пароль.
+
+⚠️ БЕЗПЕКА:
+• Посилання дійсне протягом 24 годин
+• Якщо ви не запитували скидання, проігноруйте цей лист
+• Не передавайте це посилання іншим особам
+
+📞 ПОТРІБНА ДОПОМОГА?
+Зв'яжіться з нашою службою підтримки:
+• Email: {support_email}
+• Телефон: {support_phone}
+
+{emergency_contact}
+
+З повагою,
+Команда {company_name}
 🌐 {website_url}
+    }.strip,
+    is_active: true
+  },
+
+  # 8. Рассылка (новый тип)
+  {
+    name: 'Інформаційна розсилка',
+    template_type: 'newsletter',
+    subject: 'Новини та акції від {company_name}',
+    body: %{
+Вітаємо, {client_name}!
+
+📢 НОВИНИ ТА АКЦІЇ ЦЬОГО МІСЯЦЯ:
+
+{current_promotion}
+
+🔧 КОРИСНІ ПОРАДИ:
+{seasonal_recommendation}
+
+{weather_warning}
+
+🏆 ПЕРЕВАГИ ДЛЯ ПОСТІЙНИХ КЛІЄНТІВ:
+{loyalty_bonus}
+
+🆕 НОВІ ПОСЛУГИ:
+{additional_services}
+
+📋 РЕКОМЕНДАЦІЇ ПО ТЕХОГЛЯДУ:
+Не забувайте про регулярне обслуговування вашого автомобіля.
+
+{warranty_info}
+
+📞 ЗВ'ЯЗОК З НАМИ:
+• Сайт: {website_url}
+• Email: {support_email}
+• Телефон: {support_phone}
+
+{weekend_hours}
+
+{emergency_contact}
+
+Дякуємо, що обираєте нас!
+Команда {company_name}
     }.strip,
     is_active: true
   }
@@ -329,18 +400,24 @@ email_templates_data.each_with_index do |template_data, index|
   when 'booking_reminder'  
     # К напоминанию - погода и сезонные рекомендации
     custom_vars = CustomVariable.where(name: ['weather_warning', 'seasonal_recommendation', 'emergency_contact'])
-  when 'service_completed'
-    # К завершению - гарантия и бонусы
-    custom_vars = CustomVariable.where(name: ['warranty_info', 'loyalty_bonus', 'current_promotion', 'weekend_hours'])
   when 'booking_cancelled'
     # К отмене - акции и контакты
     custom_vars = CustomVariable.where(name: ['current_promotion', 'emergency_contact'])
-  when 'maintenance_invitation'
-    # К приглашению - сезонные советы и погода
-    custom_vars = CustomVariable.where(name: ['seasonal_recommendation', 'weather_warning', 'current_promotion', 'loyalty_bonus', 'additional_services'])
-  when 'review_thanks'
-    # К благодарности - бонусы и акции  
-    custom_vars = CustomVariable.where(name: ['loyalty_bonus', 'current_promotion', 'weekend_hours', 'additional_services'])
+  when 'service_completed'
+    # К завершению - гарантия и бонусы
+    custom_vars = CustomVariable.where(name: ['warranty_info', 'loyalty_bonus', 'current_promotion', 'weekend_hours'])
+  when 'review_request'
+    # К запросу отзыва - акции и бонусы
+    custom_vars = CustomVariable.where(name: ['current_promotion', 'loyalty_bonus'])
+  when 'user_welcome'
+    # К приветствию - акции и дополнительные услуги
+    custom_vars = CustomVariable.where(name: ['current_promotion', 'additional_services'])
+  when 'password_reset'
+    # К сбросу пароля - экстренные контакты
+    custom_vars = CustomVariable.where(name: ['emergency_contact'])
+  when 'newsletter'
+    # К рассылке - все переменные для максимальной гибкости
+    custom_vars = CustomVariable.all
   else
     custom_vars = CustomVariable.none
   end
