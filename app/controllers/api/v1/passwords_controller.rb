@@ -44,7 +44,8 @@ module Api
             # Отправляем email
             begin
               Rails.logger.info("Attempting to send password reset email to: #{user.email}")
-              PasswordResetMailer.reset_instructions(user, reset_token).deliver_now
+              # Используем EmailTemplateMailer вместо PasswordResetMailer для единообразия
+              EmailTemplateMailer.password_reset(user.id, reset_token).deliver_now
               Rails.logger.info("Password reset email sent successfully to: #{user.email}")
               render json: { message: I18n.t('auth.messages.password_reset_sent_email') }
             rescue => e
