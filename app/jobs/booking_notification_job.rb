@@ -121,6 +121,52 @@ class BookingNotificationJob < ApplicationJob
 
   private
 
+  # Получение иконки для Push уведомления по типу
+  def get_push_icon_for_notification_type(notification_type)
+    case notification_type
+    when 'booking_confirmation'
+      '/icons/booking-confirmed.png'
+    when 'booking_cancelled'
+      '/icons/booking-cancelled.png'
+    when 'booking_reminder'
+      '/icons/booking-reminder.png'
+    when 'service_completed'
+      '/icons/service-completed.png'
+    when 'review_request'
+      '/icons/review-request.png'
+    else
+      '/icon-192x192.png'
+    end
+  end
+
+  # Получение действий для Push уведомления
+  def get_push_actions_for_notification_type(notification_type, booking)
+    case notification_type
+    when 'booking_confirmation'
+      [
+        { action: 'view', title: 'Переглянути', icon: '/icons/view.png' },
+        { action: 'reschedule', title: 'Перенести', icon: '/icons/reschedule.png' }
+      ]
+    when 'booking_reminder'
+      [
+        { action: 'view', title: 'Деталі', icon: '/icons/view.png' },
+        { action: 'directions', title: 'Маршрут', icon: '/icons/directions.png' }
+      ]
+    when 'service_completed'
+      [
+        { action: 'review', title: 'Залишити відгук', icon: '/icons/review.png' },
+        { action: 'view', title: 'Переглянути', icon: '/icons/view.png' }
+      ]
+    when 'review_request'
+      [
+        { action: 'review', title: 'Залишити відгук', icon: '/icons/review.png' },
+        { action: 'dismiss', title: 'Пізніше', icon: '/icons/dismiss.png' }
+      ]
+    else
+      []
+    end
+  end
+
   # Отправка Telegram уведомления
   def send_telegram_notification(booking_id, notification_type)
     booking = Booking.find_by(id: booking_id)
@@ -154,6 +200,45 @@ class BookingNotificationJob < ApplicationJob
     end
   rescue => e
     Rails.logger.error "❌ Ошибка отправки Telegram уведомления: #{e.message}"
+  end
+
+  # Отправка Push уведомления
+  def send_push_notification(booking_id, notification_type)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking
+
+    Rails.logger.info "🔔 Отправка Push уведомления: #{notification_type} для бронирования ##{booking_id}"
+
+    # Ищем пользователя по email или телефону
+    user = find_user_for_booking(booking)
+    return unless user&.push_subscriptions&.any? { |sub| sub.can_receive_notifications? }
+
+    # Создаем сообщение на основе типа уведомления
+    message_data = build_push_message(booking, notification_type)
+    return unless message_data
+
+    # Отправляем через PushService
+    push_service = PushService.new
+    success = push_service.send_notification(
+      user,
+      message_data[:title],
+      message_data[:body],
+      {
+        type: notification_type,
+        booking_id: booking.id,
+        url: "/my-bookings",
+        icon: get_push_icon_for_notification_type(notification_type),
+        actions: get_push_actions_for_notification_type(notification_type, booking)
+      }
+    )
+
+    if success
+      Rails.logger.info "✅ Push уведомление отправлено пользователю #{user.id}"
+    else
+      Rails.logger.error "❌ Не удалось отправить Push уведомление пользователю #{user.id}"
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Push уведомления: #{e.message}"
   end
 
   # Отправка Telegram уведомления об отзыве
@@ -260,6 +345,27 @@ class BookingNotificationJob < ApplicationJob
     end
   end
 
+  # Построение Push уведомления
+  def build_push_message(booking, notification_type)
+    # Используем PushService для форматирования с шаблонами из БД
+    push_service = PushService.new
+    push_service.format_booking_notification(booking, notification_type, 'uk')
+  end
+
+  # Построение Push уведомления об отзыве
+  def build_push_review_message(review, notification_type)
+    # Используем PushService для форматирования с шаблонами из БД
+    push_service = PushService.new
+    
+    # Для отзывов используем бронирование как контекст
+    if review.booking
+      push_service.format_booking_notification(review.booking, notification_type, 'uk')
+    else
+      # Fallback для отзывов без бронирования
+      build_push_review_fallback_message(review, notification_type)
+    end
+  end
+
   # Построение сообщения для Telegram о сервисной точке
   def build_telegram_service_point_message(service_point, notification_type)
     case notification_type
@@ -290,6 +396,32 @@ class BookingNotificationJob < ApplicationJob
       "Будь ласка, зверніться до служби підтримки для уточнення деталей."
     else
       nil
+    end
+  end
+
+  # Fallback для Push уведомлений об отзывах без бронирования
+  def build_push_review_fallback_message(review, notification_type)
+    case notification_type
+    when 'admin_new_review'
+      {
+        title: 'Новий відгук!',
+        body: "Оцінка: #{review.rating}/5 від #{review.client&.user&.full_name || 'Анонім'}"
+      }
+    when 'review_published'
+      {
+        title: 'Відгук опубліковано!',
+        body: 'Дякуємо за відгук про наш сервіс!'
+      }
+    when 'review_rejected'
+      {
+        title: 'Відгук не пройшов модерацію',
+        body: 'Зверніться до служби підтримки для уточнення деталей'
+      }
+    else
+      {
+        title: 'Tire Service',
+        body: 'Оновлення відгуку'
+      }
     end
   end
 end 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_22_112937) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_22_123711) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -520,6 +520,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_112937) do
     t.index ["start_date", "end_date"], name: "idx_promotions_date_range"
   end
 
+  create_table "push_subscriptions", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "endpoint", null: false
+    t.text "p256dh_key", null: false
+    t.text "auth_key", null: false
+    t.text "user_agent"
+    t.boolean "is_active", default: true, null: false
+    t.datetime "last_used_at"
+    t.integer "notifications_sent", default: 0
+    t.integer "notifications_failed", default: 0
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["endpoint"], name: "index_push_subscriptions_on_endpoint", unique: true
+    t.index ["is_active"], name: "index_push_subscriptions_on_is_active"
+    t.index ["user_id", "is_active"], name: "index_push_subscriptions_on_user_id_and_is_active"
+    t.index ["user_id"], name: "index_push_subscriptions_on_user_id"
+  end
+
   create_table "regions", force: :cascade do |t|
     t.string "name", null: false
     t.string "code"
@@ -933,6 +951,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_112937) do
   add_foreign_key "price_lists", "service_points"
   add_foreign_key "promotions", "partners"
   add_foreign_key "promotions", "service_points"
+  add_foreign_key "push_subscriptions", "users"
   add_foreign_key "reviews", "bookings"
   add_foreign_key "reviews", "clients"
   add_foreign_key "reviews", "service_points"

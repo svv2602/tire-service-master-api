@@ -4,19 +4,16 @@ class EmailTemplate < ApplicationRecord
   has_many :custom_variables, through: :email_template_custom_variables
 
   # Валидации
-  validates :name, presence: true
-  validates :body, presence: true
-  validates :language, presence: true, inclusion: { in: %w[uk ru en] }
+  validates :name, presence: true, length: { maximum: 255 }
   validates :template_type, presence: true
+  validates :language, presence: true, inclusion: { in: %w[uk ru en] }
   validates :channel_type, presence: true, inclusion: { in: %w[email telegram push] }
-  validates :template_type, uniqueness: { 
-    scope: [:language, :channel_type], 
-    message: 'Шаблон этого типа для данного языка и канала уже существует' 
-  }
-
-  # Валидации специфичные для каналов
-  validates :subject, presence: true, if: -> { email_channel? }
-  validates :subject, absence: true, if: -> { telegram_channel? || push_channel? }
+  validates :body, presence: true
+  validates :template_type, uniqueness: { scope: [:language, :channel_type] }
+  
+  # Условная валидация subject в зависимости от канала
+  validates :subject, presence: true, if: -> { email_channel? || push_channel? }
+  validates :subject, absence: true, if: -> { telegram_channel? }
 
   # Скоупы
   scope :active, -> { where(is_active: true) }

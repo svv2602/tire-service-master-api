@@ -18,8 +18,10 @@ priority_seeds = [
   'schedule_generation.rb',  # Создаем шаблоны расписания
   '04_service_point_photos.rb', # Добавляем фотографии сервисных точек
   '05_reviews.rb',           # Создаем отзывы
-  'email_templates_and_variables.rb', # Создаем email шаблоны и кастомные переменные
+  'email_templates.rb',      # Создаем шаблоны email уведомлений
   'telegram_templates.rb',   # Создаем Telegram шаблоны уведомлений
+  'push_templates.rb',       # Создаем Push шаблоны уведомлений
+  'email_templates_and_variables.rb', # Создаем email шаблоны и кастомные переменные
   'articles_multilang.rb',   # Создаем многоязычные статьи
   'page_content.rb'          # Создаем контент страниц
 ]

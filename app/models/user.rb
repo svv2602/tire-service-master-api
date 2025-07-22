@@ -25,6 +25,9 @@ class User < ApplicationRecord
   has_one :telegram_subscription, dependent: :destroy
   has_many :telegram_notifications, dependent: :destroy
   
+  # Push уведомления
+  has_many :push_subscriptions, dependent: :destroy
+  
   # Валидации
   validates :email, uniqueness: { case_sensitive: false, allow_blank: true }, format: { with: URI::MailTo::EMAIL_REGEXP, allow_blank: true }
   validates :phone, uniqueness: { case_sensitive: false, allow_blank: true }, format: { with: /\A\+?[0-9]{10,15}\z/, allow_blank: true }

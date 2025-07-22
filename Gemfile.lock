@@ -156,6 +156,7 @@ GEM
       i18n (>= 1.8.11, < 2)
     globalid (1.2.1)
       activesupport (>= 6.1)
+    hkdf (0.3.0)
     httparty (0.23.1)
       csv
       mini_mime (>= 1.0.0)
@@ -372,6 +373,9 @@ GEM
     unicode-emoji (4.0.4)
     uri (1.0.3)
     useragent (0.16.11)
+    webpush (1.1.0)
+      hkdf (~> 0.2)
+      jwt (~> 2.0)
     websocket-driver (0.7.7)
       base64
       websocket-extensions (>= 0.1.0)
@@ -426,6 +430,7 @@ DEPENDENCIES
   sidekiq (~> 7.1)
   spring
   tzinfo-data
+  webpush (~> 1.1)
 
 RUBY VERSION
    ruby 3.3.7p123

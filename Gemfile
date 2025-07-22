@@ -91,3 +91,6 @@ gem "base64", "~> 0.2.0"
 
 # HTTP клиент для Telegram API
 gem "httparty", "~> 0.21"
+
+# Web Push уведомления
+gem "webpush", "~> 1.1"
