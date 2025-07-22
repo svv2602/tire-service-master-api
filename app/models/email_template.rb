@@ -48,28 +48,15 @@ class EmailTemplate < ApplicationRecord
 
   def self.template_types
     {
-      # Уведомления клиентам
+      # Основные события системы (реально используемые)
       'booking_confirmation' => 'Подтверждение бронирования',
-      'booking_reminder' => 'Напоминание о бронировании',
-      'booking_cancellation' => 'Отмена бронирования',
-      'booking_time_changed' => 'Изменение времени бронирования',
-      'booking_location_changed' => 'Изменение места обслуживания',
-      'booking_client_info_changed' => 'Изменение данных клиента',
-      
-      # Уведомления администраторам
-      'admin_new_booking' => 'Новое бронирование (админ)',
-      'admin_booking_changed' => 'Изменение бронирования (админ)',
-      'admin_booking_cancelled' => 'Отмена бронирования (админ)',
-      
-      # Уведомления об отзывах
-      'admin_new_review' => 'Новый отзыв (админ)',
-      'review_published' => 'Отзыв опубликован',
-      'review_rejected' => 'Отзыв отклонен',
-      
-      # Уведомления о сервисных точках
-      'admin_service_point_created' => 'Новая сервисная точка (админ)',
-      'admin_service_point_changed' => 'Изменение сервисной точки (админ)',
-      'admin_service_point_status_changed' => 'Изменение статуса сервисной точки (админ)'
+      'booking_cancelled' => 'Отмена бронирования', 
+      'booking_reminder' => 'Напоминание о записи',
+      'service_completed' => 'Завершение обслуживания',
+      'review_request' => 'Запрос отзыва',
+      'user_welcome' => 'Приветствие нового пользователя',
+      'password_reset' => 'Сброс пароля',
+      'newsletter' => 'Информационная рассылка'
     }
   end
 
