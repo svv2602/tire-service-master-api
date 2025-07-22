@@ -189,8 +189,7 @@ class Api::V1::TelegramSettingsController < ApplicationController
   def telegram_settings_params
     params.require(:telegram_settings).permit(
       :bot_token, :bot_username, :webhook_url, :admin_chat_id, 
-      :enabled, :test_mode, :auto_subscription,
-      :welcome_message, :help_message, :error_message
+      :enabled, :test_mode, :auto_subscription
     )
   end
 
@@ -204,9 +203,6 @@ class Api::V1::TelegramSettingsController < ApplicationController
       enabled: settings.enabled,
       test_mode: settings.test_mode,
       auto_subscription: settings.auto_subscription,
-      welcome_message: settings.welcome_message,
-      help_message: settings.help_message,
-      error_message: settings.error_message,
       system_status: settings.system_status,
       status_color: settings.status_color,
       status_text: settings.status_text,

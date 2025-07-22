@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_22_123711) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_22_125825) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -821,9 +821,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_123711) do
     t.boolean "enabled", default: false, null: false
     t.boolean "test_mode", default: false, null: false
     t.boolean "auto_subscription", default: true, null: false
-    t.text "welcome_message"
-    t.text "help_message"
-    t.text "error_message"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "bot_username"

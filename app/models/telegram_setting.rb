@@ -15,7 +15,6 @@ class TelegramSetting < ApplicationRecord
     message: "должен содержать только цифры (может начинаться с -)",
     allow_blank: true
   }
-  validates :welcome_message, :help_message, :error_message, presence: true
   
   # Callbacks
   after_update :update_telegram_webhook, if: :saved_change_to_webhook_url?
@@ -25,10 +24,7 @@ class TelegramSetting < ApplicationRecord
     first || create!(
       enabled: false,
       test_mode: false,
-      auto_subscription: true,
-      welcome_message: 'Ласкаво просимо до системи сповіщень шиномонтажу! 🚗\n\nТепер ви будете отримувати сповіщення про ваші записи.',
-      help_message: 'Доступні команди:\n/start - Почати роботу з ботом\n/help - Показати це повідомлення\n/status - Статус підписки\n/unsubscribe - Скасувати підписку',
-      error_message: 'Вибачте, сталася помилка. Спробуйте пізніше або зверніться до підтримки.'
+      auto_subscription: true
     )
   end
   
@@ -96,7 +92,7 @@ class TelegramSetting < ApplicationRecord
   
   # Обновление webhook в Telegram API
   def update_telegram_webhook
-    return unless bot_token.present? && webhook_url.present?
+    return unless enabled? && webhook_url.present?
     
     begin
       telegram_service = TelegramService.new
