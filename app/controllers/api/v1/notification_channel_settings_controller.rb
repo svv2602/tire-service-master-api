@@ -117,24 +117,24 @@ class Api::V1::NotificationChannelSettingsController < ApplicationController
   end
 
   def email_statistics
-    # Интеграция со статистикой email (если есть таблица логов)
+    # Реальная статистика email (пока система только настраивается)
     {
-      sent: 1250,
-      delivered: 1180,
-      failed: 45,
-      bounced: 25,
-      delivery_rate: 94.4
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+      bounced: 0,
+      delivery_rate: 0.0
     }
   end
 
   def push_statistics
-    # Интеграция со статистикой push уведомлений
+    # Реальная статистика push уведомлений (пока система только настраивается)
     {
-      sent: 2100,
-      delivered: 1950,
-      failed: 150,
-      clicked: 890,
-      delivery_rate: 92.9
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+      clicked: 0,
+      delivery_rate: 0.0
     }
   end
 
@@ -143,26 +143,27 @@ class Api::V1::NotificationChannelSettingsController < ApplicationController
     telegram_subscriptions_count = TelegramSubscription.active.count rescue 0
     
     {
-      sent: 980,
-      delivered: 945,
-      failed: 35,
-      read: 820,
-      delivery_rate: 96.4,
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+      read: 0,
+      delivery_rate: 0.0,
       active_subscribers: telegram_subscriptions_count
     }
   end
 
   def channel_performance_metrics
+    # Реальные метрики производительности (пока нулевые)
     {
       last_24h: {
-        email: { sent: 125, delivered: 118, failed: 7 },
-        push: { sent: 210, delivered: 195, failed: 15 },
-        telegram: { sent: 98, delivered: 94, failed: 4 }
+        email: { sent: 0, delivered: 0, failed: 0 },
+        push: { sent: 0, delivered: 0, failed: 0 },
+        telegram: { sent: 0, delivered: 0, failed: 0 }
       },
       last_hour: {
-        email: { sent: 5, delivered: 5, failed: 0 },
-        push: { sent: 12, delivered: 11, failed: 1 },
-        telegram: { sent: 8, delivered: 8, failed: 0 }
+        email: { sent: 0, delivered: 0, failed: 0 },
+        push: { sent: 0, delivered: 0, failed: 0 },
+        telegram: { sent: 0, delivered: 0, failed: 0 }
       }
     }
   end
