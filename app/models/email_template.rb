@@ -97,6 +97,42 @@ class EmailTemplate < ApplicationRecord
     }
   end
 
+  # Типы шаблонов по каналам
+  def self.template_types_for_channel(channel_type)
+    case channel_type.to_s
+    when 'email'
+      {
+        'booking_confirmation' => 'Подтверждение бронирования',
+        'booking_cancelled' => 'Отмена бронирования', 
+        'booking_reminder' => 'Напоминание о записи',
+        'service_completed' => 'Завершение обслуживания',
+        'review_request' => 'Запрос отзыва',
+        'user_welcome' => 'Приветствие нового пользователя',
+        'password_reset' => 'Сброс пароля',
+        'newsletter' => 'Информационная рассылка'
+      }
+    when 'telegram'
+      {
+        'booking_confirmation' => 'Подтверждение бронирования',
+        'booking_cancelled' => 'Отмена бронирования',
+        'booking_reminder' => 'Напоминание о записи', 
+        'service_completed' => 'Завершение обслуживания',
+        'review_request' => 'Запрос отзыва',
+        'newsletter' => 'Информационная рассылка'
+      }
+    when 'push'
+      {
+        'booking_confirmation' => 'Подтверждение бронирования',
+        'booking_cancelled' => 'Отмена бронирования',
+        'booking_reminder' => 'Напоминание о записи',
+        'service_completed' => 'Завершение обслуживания',
+        'review_request' => 'Запрос отзыва'
+      }
+    else
+      template_types
+    end
+  end
+
   def template_type_name
     self.class.template_types[template_type] || template_type.humanize
   end

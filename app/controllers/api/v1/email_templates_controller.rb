@@ -218,13 +218,15 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
 
   # GET /api/v1/email_templates/template_types
   def template_types
-    types_array = EmailTemplate.template_types.map do |key, label|
+    channel_type = params[:channel_type] || 'email'
+    types_array = EmailTemplate.template_types_for_channel(channel_type).map do |key, label|
       { value: key, label: label }
     end
     
     render json: {
       data: types_array,
-      available_languages: %w[uk ru en]
+      available_languages: %w[uk ru en],
+      channel_type: channel_type
     }
   end
 
