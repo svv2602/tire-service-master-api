@@ -19,6 +19,7 @@ priority_seeds = [
   '04_service_point_photos.rb', # Добавляем фотографии сервисных точек
   '05_reviews.rb',           # Создаем отзывы
   'email_templates_and_variables.rb', # Создаем email шаблоны и кастомные переменные
+  'telegram_templates.rb',   # Создаем Telegram шаблоны уведомлений
   'articles_multilang.rb',   # Создаем многоязычные статьи
   'page_content.rb'          # Создаем контент страниц
 ]

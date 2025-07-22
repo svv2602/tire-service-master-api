@@ -10,6 +10,7 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
     # Фильтрация
     @email_templates = @email_templates.by_type(params[:template_type]) if params[:template_type].present?
     @email_templates = @email_templates.by_language(params[:language]) if params[:language].present?
+    @email_templates = @email_templates.by_channel(params[:channel_type]) if params[:channel_type].present?
     @email_templates = @email_templates.active if params[:active] == 'true'
     @email_templates = @email_templates.where(is_active: false) if params[:active] == 'false'
     
@@ -44,7 +45,8 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
       active: EmailTemplate.active.count,
       inactive: EmailTemplate.where(is_active: false).count,
       by_language: EmailTemplate.group(:language).count,
-      by_type: EmailTemplate.group(:template_type).count
+      by_type: EmailTemplate.group(:template_type).count,
+      by_channel: EmailTemplate.group(:channel_type).count
     }
     
     render json: {
@@ -57,7 +59,8 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
       },
       stats: stats,
       available_types: EmailTemplate.template_types,
-      available_languages: %w[uk ru en]
+      available_languages: %w[uk ru en],
+      available_channels: EmailTemplate.available_channels
     }
   end
 
@@ -235,7 +238,7 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
 
   def email_template_params
     params.require(:email_template).permit(
-      :name, :subject, :body, :template_type, :language, :is_active, :variables
+      :name, :subject, :body, :template_type, :language, :channel_type, :is_active, :variables
     )
   end
 
@@ -247,6 +250,8 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
       template_type: template.template_type,
       template_type_name: template.template_type_name,
       language: template.language,
+      channel_type: template.channel_type,
+      channel_name: template.channel_name,
       is_active: template.is_active,
       status_text: template.status_text,
       variables_array: template.variables_array,

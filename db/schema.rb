@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_22_105134) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_22_112937) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -337,6 +337,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_105134) do
     t.text "description"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "channel_type", default: "email", null: false
+    t.index ["channel_type"], name: "index_email_templates_on_channel_type"
+    t.index ["template_type", "language", "channel_type"], name: "index_email_templates_on_type_language_channel", unique: true
+    t.check_constraint "channel_type::text = ANY (ARRAY['email'::character varying, 'telegram'::character varying, 'push'::character varying]::text[])", name: "check_channel_type"
   end
 
   create_table "manager_service_points", force: :cascade do |t|

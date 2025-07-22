@@ -5,16 +5,40 @@ class EmailTemplate < ApplicationRecord
 
   # Валидации
   validates :name, presence: true
-  validates :subject, presence: true
   validates :body, presence: true
   validates :language, presence: true, inclusion: { in: %w[uk ru en] }
   validates :template_type, presence: true
-  validates :template_type, uniqueness: { scope: :language, message: 'Шаблон этого типа для данного языка уже существует' }
+  validates :channel_type, presence: true, inclusion: { in: %w[email telegram push] }
+  validates :template_type, uniqueness: { 
+    scope: [:language, :channel_type], 
+    message: 'Шаблон этого типа для данного языка и канала уже существует' 
+  }
+
+  # Валидации специфичные для каналов
+  validates :subject, presence: true, if: -> { email_channel? }
+  validates :subject, absence: true, if: -> { telegram_channel? || push_channel? }
 
   # Скоупы
   scope :active, -> { where(is_active: true) }
   scope :by_type, ->(type) { where(template_type: type) }
   scope :by_language, ->(lang) { where(language: lang) }
+  scope :by_channel, ->(channel) { where(channel_type: channel) }
+  scope :email_templates, -> { where(channel_type: 'email') }
+  scope :telegram_templates, -> { where(channel_type: 'telegram') }
+  scope :push_templates, -> { where(channel_type: 'push') }
+
+  # Методы проверки типа канала
+  def email_channel?
+    channel_type == 'email'
+  end
+
+  def telegram_channel?
+    channel_type == 'telegram'
+  end
+
+  def push_channel?
+    channel_type == 'push'
+  end
 
   # Методы
   def variables_array
@@ -29,21 +53,34 @@ class EmailTemplate < ApplicationRecord
   end
 
   def render_with_variables(variable_values = {})
-    rendered_subject = subject.dup
+    rendered_subject = email_channel? ? subject.dup : nil
     rendered_body = body.dup
 
     variables_array.each do |var|
       placeholder = "{#{var}}"
       value = variable_values[var.to_s] || variable_values[var.to_sym] || placeholder
       
-      rendered_subject.gsub!(placeholder, value.to_s)
+      rendered_subject&.gsub!(placeholder, value.to_s)
       rendered_body.gsub!(placeholder, value.to_s)
     end
 
-    {
-      subject: rendered_subject,
-      body: rendered_body
-    }
+    result = { body: rendered_body }
+    result[:subject] = rendered_subject if rendered_subject
+    result
+  end
+
+  # Обновленный метод для работы с каналами
+  def render_for_channel(variable_values = {})
+    case channel_type
+    when 'email'
+      render_email_template(variable_values)
+    when 'telegram'
+      render_telegram_template(variable_values)
+    when 'push'
+      render_push_template(variable_values)
+    else
+      render_with_variables(variable_values)
+    end
   end
 
   def self.template_types
@@ -113,13 +150,13 @@ class EmailTemplate < ApplicationRecord
   end
 
   def render_with_all_variables(variable_values = {})
-    rendered_subject = subject.dup
+    rendered_subject = email_channel? ? subject.dup : nil
     rendered_body = body.dup
 
     # Рендерим ВСЕ переданные переменные (основная логика)
     variable_values.each do |key, value|
       placeholder = "{#{key}}"
-      rendered_subject.gsub!(placeholder, value.to_s)
+      rendered_subject&.gsub!(placeholder, value.to_s)
       rendered_body.gsub!(placeholder, value.to_s)
     end
 
@@ -128,25 +165,91 @@ class EmailTemplate < ApplicationRecord
       placeholder = "{#{var}}"
       value = variable_values[var.to_s] || variable_values[var.to_sym] || placeholder
       
-      rendered_subject.gsub!(placeholder, value.to_s)
+      rendered_subject&.gsub!(placeholder, value.to_s)
       rendered_body.gsub!(placeholder, value.to_s)
     end
 
-    # Рендерим кастомные переменные
-    custom_variables.active.each do |custom_var|
-      placeholder = custom_var.variable_placeholder
-      value = variable_values[custom_var.name.to_s] || 
-              variable_values[custom_var.name.to_sym] || 
-              custom_var.example_value || 
-              placeholder
-      
-      rendered_subject.gsub!(placeholder, value.to_s)
-      rendered_body.gsub!(placeholder, value.to_s)
-    end
+    result = { body: rendered_body }
+    result[:subject] = rendered_subject if rendered_subject
+    result
+  end
 
+  # Методы рендеринга для разных каналов
+  def render_email_template(variable_values = {})
+    rendered = render_with_all_variables(variable_values)
     {
-      subject: rendered_subject,
-      body: rendered_body
+      subject: rendered[:subject],
+      body: rendered[:body],
+      content_type: 'text/html'
     }
+  end
+
+  def render_telegram_template(variable_values = {})
+    rendered = render_with_all_variables(variable_values)
+    {
+      message: rendered[:body],
+      parse_mode: 'HTML', # или 'Markdown'
+      disable_web_page_preview: true
+    }
+  end
+
+  def render_push_template(variable_values = {})
+    rendered = render_with_all_variables(variable_values)
+    {
+      title: name, # Используем название шаблона как заголовок
+      body: rendered[:body],
+      icon: get_push_icon_for_template_type,
+      badge: get_push_badge_for_template_type,
+      data: variable_values.slice(:booking_id, :review_id, :service_point_id) # Дополнительные данные
+    }
+  end
+
+  # Методы для получения иконок и бэджей для push уведомлений
+  def get_push_icon_for_template_type
+    case template_type
+    when /booking/ then '/icons/booking.png'
+    when /review/ then '/icons/review.png'
+    when /service/ then '/icons/service.png'
+    when /password/ then '/icons/security.png'
+    when /welcome/ then '/icons/welcome.png'
+    else '/icons/notification.png'
+    end
+  end
+
+  def get_push_badge_for_template_type
+    case template_type
+    when /booking/ then 'booking'
+    when /review/ then 'review'
+    when /service/ then 'service'
+    else 'general'
+    end
+  end
+
+  # Статический метод для получения доступных каналов
+  def self.available_channels
+    {
+      'email' => 'Email',
+      'telegram' => 'Telegram',
+      'push' => 'Push уведомления'
+    }
+  end
+
+  # Метод для получения названия канала
+  def channel_name
+    self.class.available_channels[channel_type] || channel_type.humanize
+  end
+
+  # Проверка совместимости шаблона с каналом
+  def compatible_with_channel?(channel)
+    case channel
+    when 'email'
+      subject.present? && body.present?
+    when 'telegram'
+      body.present? && body.length <= 4096 # Лимит Telegram
+    when 'push'
+      body.present? && body.length <= 160 # Лимит push уведомлений
+    else
+      false
+    end
   end
 end 
