@@ -221,47 +221,42 @@ class BookingNotificationJob < ApplicationJob
 
   # Поиск пользователя для бронирования
   def find_user_for_booking(booking)
-    # Сначала ищем по email
-    user = User.find_by(email: booking.service_recipient_email) if booking.service_recipient_email.present?
-    
-    # Если не найден, ищем по телефону
-    user ||= User.find_by(phone: booking.service_recipient_phone) if booking.service_recipient_phone.present?
-    
-    # Если есть связанный клиент, берем его пользователя
-    user ||= booking.client&.user if booking.client
+    # Сначала пытаемся найти по клиенту
+    return booking.client.user if booking.client&.user
 
-    user
+    # Затем по email получателя услуги
+    if booking.service_recipient_email.present?
+      user = User.find_by(email: booking.service_recipient_email)
+      return user if user
+    end
+
+    # Затем по телефону получателя услуги
+    if booking.service_recipient_phone.present?
+      user = User.find_by(phone: booking.service_recipient_phone)
+      return user if user
+    end
+
+    nil
   end
 
   # Построение сообщения для Telegram
   def build_telegram_message(booking, notification_type)
-    case notification_type
-    when 'booking_confirmation'
-      build_booking_confirmation_message(booking)
-    when 'booking_changed'
-      build_booking_changed_message(booking)
-    when 'booking_cancelled'
-      build_booking_cancelled_message(booking)
-    when 'booking_time_changed'
-      build_booking_time_changed_message(booking)
-    when 'booking_location_changed'
-      build_booking_location_changed_message(booking)
-    else
-      nil
-    end
+    # Используем TelegramService для форматирования с шаблонами из БД
+    telegram_service = TelegramService.new
+    telegram_service.format_booking_notification(booking, notification_type, 'uk')
   end
 
   # Построение сообщения для Telegram об отзыве
   def build_telegram_review_message(review, notification_type)
-    case notification_type
-    when 'admin_new_review'
-      build_admin_new_review_message(review)
-    when 'review_published'
-      build_review_published_message(review)
-    when 'review_rejected'
-      build_review_rejected_message(review)
+    # Используем TelegramService для форматирования с шаблонами из БД
+    telegram_service = TelegramService.new
+    
+    # Для отзывов используем бронирование как контекст
+    if review.booking
+      telegram_service.format_booking_notification(review.booking, notification_type, 'uk')
     else
-      nil
+      # Fallback для отзывов без бронирования
+      build_review_fallback_message(review, notification_type)
     end
   end
 
@@ -279,196 +274,22 @@ class BookingNotificationJob < ApplicationJob
     end
   end
 
-  # Шаблоны сообщений для Telegram
-  def build_booking_confirmation_message(booking)
-    %{
-✅ <b>Ваш запис підтверджено!</b>
-
-📋 <b>Деталі бронювання:</b>
-• Номер: ##{booking.id}
-• Дата: #{booking.booking_date&.strftime('%d.%m.%Y')}
-• Час: #{booking.start_time&.strftime('%H:%M')}
-
-🏢 <b>Сервісна точка:</b>
-#{booking.service_point&.name}
-📍 #{booking.service_point&.address}
-🌐 #{booking.service_point&.city&.name}
-
-🚗 <b>Автомобіль:</b>
-#{booking.car_brand} #{booking.car_model}
-🔢 Номер: #{booking.license_plate}
-
-Очікуємо вас! 🚗✨
-    }.strip
+  # Fallback для отзывов без бронирования
+  def build_review_fallback_message(review, notification_type)
+    case notification_type
+    when 'admin_new_review'
+      "⭐ <b>Новий відгук!</b>\n\n" \
+      "Оцінка: #{review.rating}/5\n" \
+      "Коментар: #{review.comment}\n" \
+      "Від: #{review.client&.user&.full_name || 'Анонім'}"
+    when 'review_published'
+      "✅ <b>Ваш відгук опубліковано!</b>\n\n" \
+      "Дякуємо за відгук про наш сервіс!"
+    when 'review_rejected'
+      "❌ <b>Ваш відгук не пройшов модерацію</b>\n\n" \
+      "Будь ласка, зверніться до служби підтримки для уточнення деталей."
+    else
+      nil
+    end
   end
-
-  def build_booking_changed_message(booking)
-    %{
-🔄 <b>Ваше бронювання змінено</b>
-
-📋 <b>Оновлені деталі:</b>
-• Номер: ##{booking.id}
-• Дата: #{booking.booking_date&.strftime('%d.%m.%Y')}
-• Час: #{booking.start_time&.strftime('%H:%M')}
-
-🏢 <b>Сервісна точка:</b>
-#{booking.service_point&.name}
-📍 #{booking.service_point&.address}
-
-До зустрічі! 👋
-    }.strip
-  end
-
-  def build_booking_cancelled_message(booking)
-    %{
-❌ <b>Ваше бронювання скасовано</b>
-
-📋 <b>Деталі:</b>
-• Номер: ##{booking.id}
-• Дата: #{booking.booking_date&.strftime('%d.%m.%Y')}
-• Час: #{booking.start_time&.strftime('%H:%M')}
-
-Якщо у вас є питання, зверніться до підтримки.
-
-Дякуємо за розуміння! 🙏
-    }.strip
-  end
-
-  def build_booking_time_changed_message(booking)
-    %{
-⏰ <b>Змінено час вашого бронювання</b>
-
-📋 <b>Нові деталі:</b>
-• Номер: ##{booking.id}
-• Дата: #{booking.booking_date&.strftime('%d.%m.%Y')}
-• Новий час: #{booking.start_time&.strftime('%H:%M')}
-
-🏢 #{booking.service_point&.name}
-📍 #{booking.service_point&.address}
-
-Очікуємо вас у новий час! ⏰
-    }.strip
-  end
-
-  def build_booking_location_changed_message(booking)
-    %{
-📍 <b>Змінено місце обслуговування</b>
-
-📋 <b>Деталі:</b>
-• Номер: ##{booking.id}
-• Дата: #{booking.booking_date&.strftime('%d.%m.%Y')}
-• Час: #{booking.start_time&.strftime('%H:%M')}
-
-🏢 <b>Нова сервісна точка:</b>
-#{booking.service_point&.name}
-📍 #{booking.service_point&.address}
-🌐 #{booking.service_point&.city&.name}
-
-Очікуємо вас за новою адресою! 🗺️
-    }.strip
-  end
-
-  def build_admin_new_review_message(review)
-    %{
-📝 <b>Новий відгук!</b>
-
-📋 <b>Деталі відгуку:</b>
-• Номер: ##{review.id}
-• Оцінка: ⭐ #{review.rating}/5
-• Статус: #{review.status}
-#{review.comment.present? ? "• Коментар: #{review.comment}" : "• Без коментаря"}
-
-👤 <b>Клієнт:</b>
-#{review.client.first_name} #{review.client.last_name}
-📧 #{review.client.email}
-
-🏢 <b>Сервісна точка:</b>
-#{review.service_point.name}
-📍 #{review.service_point.address}
-
-Потрібна модерація! 🔍
-     }.strip
-   end
-
-   def build_review_published_message(review)
-     %{
-✅ <b>Ваш відгук опубліковано!</b>
-
-📋 <b>Деталі відгуку:</b>
-• Номер: ##{review.id}
-• Оцінка: ⭐ #{review.rating}/5
-#{review.comment.present? ? "• Коментар: #{review.comment}" : "• Без коментаря"}
-
-🏢 <b>Сервісна точка:</b>
-#{review.service_point.name}
-📍 #{review.service_point.address}
-
-Дякуємо за відгук! 🙏
-     }.strip
-   end
-
-   def build_review_rejected_message(review)
-     %{
-❌ <b>Ваш відгук відхилено</b>
-
-📋 <b>Деталі відгуку:</b>
-• Номер: ##{review.id}
-• Оцінка: ⭐ #{review.rating}/5
-#{review.comment.present? ? "• Коментар: #{review.comment}" : "• Без коментаря"}
-
-🏢 <b>Сервісна точка:</b>
-#{review.service_point.name}
-
-📞 З питань зверніться до підтримки
-Дякуємо за розуміння! 🙏
-     }.strip
-   end
-
-   def build_admin_service_point_created_message(service_point)
-     %{
-✅ <b>Нова сервісна точка створена!</b>
-
-📋 <b>Деталі сервісної точки:</b>
-• Назва: #{service_point.name}
-• Адреса: #{service_point.address}
-• Місто: #{service_point.city&.name}
-
-🌐 <b>Контакти:</b>
-📞 #{service_point.contact_phone}
-
-Дякуємо за додавання сервісної точки! 🙏
-     }.strip
-   end
-
-   def build_admin_service_point_changed_message(service_point)
-     %{
-🔄 <b>Сервісна точка оновлена</b>
-
-📋 <b>Оновлені деталі:</b>
-• Назва: #{service_point.name}
-• Адреса: #{service_point.address}
-• Місто: #{service_point.city&.name}
-
-🌐 <b>Контакти:</b>
-📞 #{service_point.contact_phone}
-
-Дякуємо за оновлення сервісної точки! 🙏
-     }.strip
-   end
-
-   def build_admin_service_point_status_changed_message(service_point)
-     %{
-⚙️ <b>Статус сервісної точки змінено</b>
-
-🏢 <b>Деталі:</b>
-• Назва: #{service_point.name}
-• Статус: #{service_point.work_status}
-• Активна: #{service_point.is_active? ? 'Так' : 'Ні'}
-
-🌐 <b>Контакти:</b>
-📞 #{service_point.contact_phone}
-
-Дякуємо за зміну статусу сервісної точки! 🙏
-     }.strip
-   end
 end 

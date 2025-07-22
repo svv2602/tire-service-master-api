@@ -504,25 +504,93 @@ class TelegramService
     show_booking_confirmation(chat_id, session)
   end
 
-  # Форматирование уведомления о бронировании
-  def format_booking_notification(booking, type)
+  # Форматирование уведомления о бронировании с использованием шаблонов из БД
+  def format_booking_notification(booking, type, language = 'uk')
+    # Пытаемся найти шаблон в БД для Telegram канала
+    template = EmailTemplate.where(
+      template_type: type,
+      language: language,
+      channel_type: 'telegram',
+      is_active: true
+    ).first
+
+    if template
+      # Используем шаблон из БД
+      Rails.logger.info "📧 TelegramService: Используем шаблон из БД: #{template.name}"
+      
+      # Подготавливаем переменные для шаблона
+      variables = prepare_booking_variables(booking)
+      
+      # Рендерим шаблон с переменными
+      rendered = template.render_with_variables(variables)
+      return rendered[:body] # Для Telegram не нужен subject
+    else
+      # Fallback на жестко закодированные шаблоны
+      Rails.logger.warn "⚠️ TelegramService: Шаблон не найден в БД (#{type}, #{language}), используем fallback"
+      format_booking_notification_fallback(booking, type)
+    end
+  end
+
+  # Подготовка переменных для шаблонов бронирований
+  def prepare_booking_variables(booking)
+    # Получаем название сервиса - используем разные подходы в зависимости от доступных данных
+    service_name = if booking.respond_to?(:service_point_service) && booking.service_point_service&.service
+                     booking.service_point_service.service.name
+                   elsif booking.respond_to?(:service_category) && booking.service_category
+                     booking.service_category.name
+                   else
+                     'Послуга шиномонтажу'
+                   end
+    
+    point_name = booking.service_point&.name || 'Сервісна точка'
+    point_address = booking.service_point&.address || 'Адреса не вказана'
+    city_name = booking.service_point&.city&.name || 'Місто не вказано'
+    date = booking.start_time&.strftime('%d.%m.%Y') || booking.booking_date&.strftime('%d.%m.%Y') || 'Не вказано'
+    time = booking.start_time&.strftime('%H:%M') || 'Не вказано'
+    client_name = booking.client&.user&.full_name || booking.service_recipient_first_name || 'Клієнт'
+    client_phone = booking.client&.user&.phone || booking.service_recipient_phone || 'Не вказано'
+    
+    {
+      'booking_id' => booking.id.to_s,
+      'booking_number' => "##{booking.id}",
+      'booking_date' => date,
+      'start_time' => time,
+      'end_time' => booking.end_time&.strftime('%H:%M') || '',
+      'service_name' => service_name,
+      'service_point_name' => point_name,
+      'service_point_address' => point_address,
+      'city_name' => city_name,
+      'client_first_name' => booking.service_recipient_first_name || '',
+      'client_last_name' => booking.service_recipient_last_name || '',
+      'client_phone' => client_phone,
+      'client_email' => booking.service_recipient_email || '',
+      'car_brand' => booking.car_brand || 'Не вказана',
+      'car_model' => booking.car_model || 'Не вказана',
+      'license_plate' => booking.license_plate || 'Не вказано',
+      'status' => booking.status || 'pending',
+      'notes' => booking.notes || ''
+    }
+  end
+
+  # Fallback метод с жестко закодированными шаблонами (для совместимости)
+  def format_booking_notification_fallback(booking, type)
     service_name = booking.service_point_service&.service&.name || 'Невідома послуга'
     point_name = booking.service_point&.name || 'Невідома точка'
     date = booking.start_time&.strftime('%d.%m.%Y о %H:%M') || 'Не вказано'
 
     case type
-    when 'booking_created'
+    when 'booking_confirmation'
       "🎉 <b>Нове бронювання створено!</b>\n\n" \
       "🔧 <b>Послуга:</b> #{service_name}\n" \
       "📍 <b>Сервісна точка:</b> #{point_name}\n" \
       "📅 <b>Дата та час:</b> #{date}\n\n" \
       "Ми зв'яжемося з вами для підтвердження."
-    when 'booking_confirmed'
-      "✅ <b>Бронювання підтверджено!</b>\n\n" \
+    when 'booking_cancelled'
+      "❌ <b>Бронювання скасовано</b>\n\n" \
       "🔧 <b>Послуга:</b> #{service_name}\n" \
       "📍 <b>Сервісна точка:</b> #{point_name}\n" \
       "📅 <b>Дата та час:</b> #{date}\n\n" \
-      "Очікуємо на вас у призначений час!"
+      "Ви можете створити нове бронювання на сайті."
     when 'booking_reminder'
       "⏰ <b>Нагадування про візит</b>\n\n" \
       "Завтра у вас заплановано:\n" \
@@ -530,18 +598,18 @@ class TelegramService
       "📍 <b>Сервісна точка:</b> #{point_name}\n" \
       "📅 <b>Час:</b> #{date}\n\n" \
       "Не забудьте прийти вчасно!"
-    when 'booking_cancelled'
-      "❌ <b>Бронювання скасовано</b>\n\n" \
-      "🔧 <b>Послуга:</b> #{service_name}\n" \
-      "📍 <b>Сервісна точка:</b> #{point_name}\n" \
-      "📅 <b>Дата та час:</b> #{date}\n\n" \
-      "Ви можете створити нове бронювання на сайті."
-    when 'booking_completed'
+    when 'service_completed'
       "✅ <b>Послуга виконана!</b>\n\n" \
       "🔧 <b>Послуга:</b> #{service_name}\n" \
       "📍 <b>Сервісна точка:</b> #{point_name}\n" \
       "📅 <b>Дата:</b> #{date}\n\n" \
       "Дякуємо за вибір Tire Service! 🚗"
+    when 'review_request'
+      "⭐ <b>Оцініть наш сервіс!</b>\n\n" \
+      "🔧 <b>Послуга:</b> #{service_name}\n" \
+      "📍 <b>Сервісна точка:</b> #{point_name}\n" \
+      "📅 <b>Дата:</b> #{date}\n\n" \
+      "Будемо вдячні за ваш відгук на сайті!"
     else
       "📋 <b>Оновлення бронювання</b>\n\n" \
       "🔧 <b>Послуга:</b> #{service_name}\n" \
