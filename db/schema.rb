@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_22_211450) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_22_213412) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -391,6 +391,21 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_211450) do
     t.string "position"
     t.index ["partner_id"], name: "index_managers_on_partner_id"
     t.index ["user_id"], name: "index_managers_on_user_id", unique: true
+  end
+
+  create_table "notification_channel_settings", force: :cascade do |t|
+    t.string "channel_type", null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "priority", default: 1, null: false
+    t.integer "retry_attempts", default: 3, null: false
+    t.integer "retry_delay", default: 15, null: false
+    t.integer "daily_limit", default: 1000, null: false
+    t.integer "rate_limit_per_minute", default: 60, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["channel_type"], name: "index_notification_channel_settings_on_channel_type", unique: true
+    t.index ["enabled"], name: "index_notification_channel_settings_on_enabled"
+    t.index ["priority"], name: "index_notification_channel_settings_on_priority"
   end
 
   create_table "notification_logs", force: :cascade do |t|

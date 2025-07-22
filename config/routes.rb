@@ -93,6 +93,14 @@ Rails.application.routes.draw do
         end
       end
       
+      # Управление настройками каналов уведомлений
+      resources :notification_channel_settings, only: [:index, :show, :update] do
+        collection do
+          post :bulk_update
+          get :statistics
+        end
+      end
+      
       # Push подписки пользователей
       resources :push_subscriptions do
         member do
