@@ -472,9 +472,12 @@ class Booking < ApplicationRecord
     # Можно настроить через ENV или базу данных
     admin_list = ENV['ADMIN_NOTIFICATION_EMAILS']&.split(',') || ['admin@tireservice.ua']
     
-    # Добавляем email из базы данных если есть модель Administrator
+    # Добавляем email администраторов из базы данных через связь с User
     if defined?(Administrator)
-      db_admin_emails = Administrator.where(receive_notifications: true).pluck(:email)
+      db_admin_emails = User.joins(:administrator)
+                           .where(is_active: true, email_verified: true)
+                           .where.not(email: nil)
+                           .pluck(:email)
       admin_list.concat(db_admin_emails)
     end
     
