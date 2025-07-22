@@ -187,10 +187,19 @@ class Api::V1::TelegramSettingsController < ApplicationController
   end
 
   def telegram_settings_params
-    params.require(:telegram_settings).permit(
+    permitted_params = params.require(:telegram_settings).permit(
       :bot_token, :bot_username, :webhook_url, :admin_chat_id, 
       :enabled, :test_mode, :auto_subscription
     )
+    
+    # Преобразуем пустые строки в nil для полей, которые могут быть пустыми
+    [:bot_token, :webhook_url, :admin_chat_id].each do |field|
+      if permitted_params[field].present? && permitted_params[field].strip.empty?
+        permitted_params[field] = nil
+      end
+    end
+    
+    permitted_params
   end
 
   def format_settings(settings)
