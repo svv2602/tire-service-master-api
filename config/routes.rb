@@ -70,6 +70,26 @@ Rails.application.routes.draw do
         end
       end
       
+      # Управление настройками Push уведомлений
+      resource :push_settings, only: [:show, :update] do
+        member do
+          post :test_notification
+          get :subscriptions
+        end
+      end
+      
+      # Push подписки пользователей
+      resources :push_subscriptions do
+        member do
+          post :activate
+          post :deactivate
+          post :test_notification
+        end
+        collection do
+          delete :destroy_by_endpoint
+        end
+      end
+      
       # Статистика уведомлений (только для админов)
       resources :notification_statistics, only: [] do
         collection do
