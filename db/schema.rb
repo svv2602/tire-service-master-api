@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_22_204810) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_22_211450) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -330,6 +330,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_204810) do
     t.boolean "test_mode", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "openssl_verify_mode", default: "none"
   end
 
   create_table "email_template_custom_variables", force: :cascade do |t|

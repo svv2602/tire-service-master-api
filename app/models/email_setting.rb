@@ -20,6 +20,10 @@ class EmailSetting < ApplicationRecord
     in: %w[plain login cram_md5], 
     message: "должен быть одним из: plain, login, cram_md5"
   }, allow_blank: true
+  validates :openssl_verify_mode, inclusion: { 
+    in: %w[none peer], 
+    message: "должен быть 'none' или 'peer'"
+  }, allow_blank: true
 
   # Singleton pattern - только одна запись настроек
   def self.current
@@ -30,7 +34,8 @@ class EmailSetting < ApplicationRecord
       smtp_starttls_auto: true,
       smtp_tls: false,
       test_mode: false,
-      from_name: 'Tire Service'
+      from_name: 'Tire Service',
+      openssl_verify_mode: 'none'
     )
   end
 
@@ -54,7 +59,7 @@ class EmailSetting < ApplicationRecord
 
   # Получение настроек для ActionMailer
   def to_actionmailer_config
-    {
+    config = {
       address: smtp_host,
       port: smtp_port,
       user_name: smtp_username,
@@ -62,7 +67,19 @@ class EmailSetting < ApplicationRecord
       authentication: smtp_authentication.presence&.to_sym,
       enable_starttls_auto: smtp_starttls_auto,
       tls: smtp_tls
-    }.compact
+    }
+    
+    # Добавляем openssl_verify_mode для решения проблем с SSL
+    if openssl_verify_mode.present?
+      case openssl_verify_mode
+      when 'none'
+        config[:openssl_verify_mode] = OpenSSL::SSL::VERIFY_NONE
+      when 'peer'
+        config[:openssl_verify_mode] = OpenSSL::SSL::VERIFY_PEER
+      end
+    end
+    
+    config.compact
   end
 
   # Эффективные настройки (БД или ENV)

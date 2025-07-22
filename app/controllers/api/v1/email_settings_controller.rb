@@ -83,7 +83,8 @@ class Api::V1::EmailSettingsController < ApplicationController
   def email_settings_params
     permitted_params = params.require(:email_settings).permit(
       :smtp_host, :smtp_port, :smtp_username, :smtp_password, :smtp_authentication,
-      :smtp_starttls_auto, :smtp_tls, :from_email, :from_name, :enabled, :test_mode
+      :smtp_starttls_auto, :smtp_tls, :from_email, :from_name, :enabled, :test_mode,
+      :openssl_verify_mode
     )
     
     # Преобразуем пустые строки в nil для полей, которые могут быть пустыми
@@ -106,6 +107,7 @@ class Api::V1::EmailSettingsController < ApplicationController
       smtp_authentication: settings.smtp_authentication,
       smtp_starttls_auto: settings.smtp_starttls_auto,
       smtp_tls: settings.smtp_tls,
+      openssl_verify_mode: settings.openssl_verify_mode,
       from_email: settings.from_email,
       from_name: settings.from_name,
       enabled: settings.enabled,
