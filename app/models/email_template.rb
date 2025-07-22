@@ -129,7 +129,14 @@ class EmailTemplate < ApplicationRecord
     rendered_subject = subject.dup
     rendered_body = body.dup
 
-    # Рендерим стандартные переменные
+    # Рендерим ВСЕ переданные переменные (основная логика)
+    variable_values.each do |key, value|
+      placeholder = "{#{key}}"
+      rendered_subject.gsub!(placeholder, value.to_s)
+      rendered_body.gsub!(placeholder, value.to_s)
+    end
+
+    # Рендерим стандартные переменные (для обратной совместимости)
     variables_array.each do |var|
       placeholder = "{#{var}}"
       value = variable_values[var.to_s] || variable_values[var.to_sym] || placeholder

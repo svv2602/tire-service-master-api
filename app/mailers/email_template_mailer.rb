@@ -5,9 +5,10 @@ class EmailTemplateMailer < ApplicationMailer
           content_type: 'text/html'
 
   # Основной метод для отправки email по шаблону
-  def send_by_template(template_type, recipient_email, variables = {})
-    # Находим активный шаблон
-    template = EmailTemplate.active.find_by(template_type: template_type, language: 'uk')
+  def send_by_template(template_type, recipient_email, variables = {}, language = 'uk')
+    # Находим активный шаблон для указанного языка, если не найден - пробуем украинский
+    template = EmailTemplate.active.find_by(template_type: template_type, language: language)
+    template ||= EmailTemplate.active.find_by(template_type: template_type, language: 'uk')
     
     unless template
       Rails.logger.error "📧 Шаблон не найден: #{template_type}"
@@ -134,17 +135,17 @@ class EmailTemplateMailer < ApplicationMailer
   end
 
   # Сброс пароля
-  def password_reset(user_id, reset_token)
+  def password_reset(user_id, reset_token, language = 'ru')
     user = User.find_by(id: user_id)
     return nil unless user&.email.present?
 
     variables = build_user_variables(user)
     variables.merge!({
       'reset_token' => reset_token,
-      'reset_url' => "#{ENV.fetch('FRONTEND_URL', 'http://localhost:3008')}/auth/reset-password?token=#{reset_token}"
+      'reset_url' => "#{ENV.fetch('FRONTEND_URL', 'http://localhost:3008')}/reset-password?token=#{reset_token}"
     })
     
-    send_by_template('password_reset', user.email, variables)
+    send_by_template('password_reset', user.email, variables, language)
   end
 
   # Информационная рассылка
@@ -383,9 +384,16 @@ class EmailTemplateMailer < ApplicationMailer
       'company_name' => 'Tire Service Master',
       'support_email' => ENV.fetch('SUPPORT_EMAIL', 'support@tireservice.ua'),
       'support_phone' => ENV.fetch('SUPPORT_PHONE', '+38 (044) 111-22-33'),
-      'website_url' => ENV.fetch('FRONTEND_URL', 'https://tireservice.ua'),
+      'website_url' => ENV.fetch('FRONTEND_URL', 'http://localhost:3008'),
       'current_date' => Date.current.strftime('%d.%m.%Y'),
-      'current_time' => Time.current.strftime('%H:%M')
+      'current_time' => Time.current.strftime('%H:%M'),
+      'emergency_contact' => 'В экстренных случаях звоните: +38 (044) 111-22-33',
+      'current_promotion' => '🎯 Специальное предложение: скидка 10% на все услуги!',
+      'additional_services' => 'Дополнительные услуги: диагностика, ремонт подвески, замена масла',
+      'seasonal_recommendation' => 'Рекомендация: проверьте давление в шинах перед поездкой',
+      'weather_warning' => 'Внимание: возможны изменения в расписании из-за погодных условий',
+      'loyalty_bonus' => '💎 Бонус постоянного клиента: +50 баллов на счет',
+      'newsletter_content' => 'Новости компании и полезные советы по уходу за автомобилем'
     }
   end
 

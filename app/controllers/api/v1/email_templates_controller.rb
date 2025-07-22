@@ -66,7 +66,7 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
     authorize @email_template
     
     render json: {
-      email_template: serialize_template(@email_template, detailed: true),
+      data: serialize_template(@email_template, detailed: true),
       available_variables: get_available_variables(@email_template.template_type),
       usage_stats: get_usage_stats(@email_template)
     }
