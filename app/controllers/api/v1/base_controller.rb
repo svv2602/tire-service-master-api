@@ -38,10 +38,18 @@ module Api
           @current_user = User.find(decoded['user_id'])
         rescue ActiveRecord::RecordNotFound => e
           render json: { error: 'Пользователь не найден' }, status: :unauthorized
-        rescue JWT::DecodeError => e
-          render json: { error: 'Неверный токен' }, status: :unauthorized
+        rescue Auth::TokenExpiredError => e
+          render json: { error: 'Токен истек' }, status: :unauthorized
         rescue Auth::TokenInvalidError => e
           render json: { error: 'Неверный токен' }, status: :unauthorized
+        rescue JWT::DecodeError => e
+          render json: { error: 'Неверный токен' }, status: :unauthorized
+        end
+      end
+
+      def ensure_admin!
+        unless current_user&.admin?
+          render json: { error: 'Доступ запрещен' }, status: :forbidden
         end
       end
     end

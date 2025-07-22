@@ -9,7 +9,7 @@ class EmailTemplate < ApplicationRecord
   validates :body, presence: true
   validates :language, presence: true, inclusion: { in: %w[uk ru en] }
   validates :template_type, presence: true
-  validates :template_type, uniqueness: { scope: :language }, message: 'Шаблон этого типа для данного языка уже существует'
+  validates :template_type, uniqueness: { scope: :language, message: 'Шаблон этого типа для данного языка уже существует' }
 
   # Скоупы
   scope :active, -> { where(is_active: true) }

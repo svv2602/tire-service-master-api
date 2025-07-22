@@ -1,5 +1,5 @@
 class Api::V1::EmailTemplatesController < Api::V1::BaseController
-  before_action :authenticate_request!
+  before_action :authenticate_request
   before_action :ensure_admin!
   before_action :set_email_template, only: [:show, :update, :destroy, :toggle_status, :preview]
 
@@ -28,11 +28,15 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
     @email_templates = @email_templates.order("#{sort_by} #{sort_order}")
     
     # Пагинация
-    page = params[:page] || 1
+    page = [params[:page].to_i, 1].max
     per_page = [params[:per_page].to_i, 100].min
     per_page = 20 if per_page <= 0
     
-    @email_templates = @email_templates.page(page).per(per_page)
+    total_count = @email_templates.count
+    @email_templates = @email_templates.limit(per_page).offset((page - 1) * per_page)
+    
+    # Вычисляем общее количество страниц
+    total_pages = (total_count.to_f / per_page).ceil
     
     # Статистика
     stats = {
@@ -46,9 +50,9 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
     render json: {
       email_templates: @email_templates.map { |template| serialize_template(template) },
       pagination: {
-        current_page: @email_templates.current_page,
-        total_pages: @email_templates.total_pages,
-        total_count: @email_templates.total_count,
+        current_page: page,
+        total_pages: total_pages,
+        total_count: total_count,
         per_page: per_page
       },
       stats: stats,
@@ -207,6 +211,14 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
         error: e.message
       }, status: :unprocessable_entity
     end
+  end
+
+  # GET /api/v1/email_templates/template_types
+  def template_types
+    render json: {
+      template_types: EmailTemplate.template_types,
+      available_languages: %w[uk ru en]
+    }
   end
 
   private

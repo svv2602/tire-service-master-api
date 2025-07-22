@@ -31,7 +31,9 @@ Rails.application.routes.draw do
       # Система уведомлений
       resources :email_templates do
         member do
-          post 'preview'
+          patch :toggle_status
+          post :preview
+          post :test_send
           post 'add_custom_variable'
           delete 'remove_custom_variable/:custom_variable_id', action: 'remove_custom_variable'
         end
@@ -65,15 +67,6 @@ Rails.application.routes.draw do
           post :test_message
           post :set_webhook
           get :webhook_info
-        end
-      end
-      
-      # Email шаблоны (только для админов)
-      resources :email_templates do
-        member do
-          patch :toggle_status
-          post :preview
-          post :test_send
         end
       end
       
