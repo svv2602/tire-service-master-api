@@ -43,6 +43,16 @@ class TestMailer < ApplicationMailer
     )
   end
 
+  def smtp_test_email(to_email, from_email, from_name)
+    @timestamp = Time.current.strftime('%d.%m.%Y %H:%M:%S')
+    
+    mail(
+      to: to_email,
+      from: "#{from_name} <#{from_email}>",
+      subject: '🧪 Тестовое письмо - Tire Service'
+    )
+  end
+
   private
 
   # Заменяет переменные в тексте

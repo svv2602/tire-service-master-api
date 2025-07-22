@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Тестовое письмо - Tire Service</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    .container {
+      background-color: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      color: #0088cc;
+      border-bottom: 2px solid #0088cc;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .content {
+      margin-bottom: 30px;
+    }
+    .footer {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      border-top: 1px solid #eee;
+      padding-top: 20px;
+    }
+    .success-icon {
+      font-size: 48px;
+      color: #4CAF50;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚗 Tire Service</h1>
+      <h2>Тестовое письмо</h2>
+    </div>
+    
+    <div class="success-icon">✅</div>
+    
+    <div class="content">
+      <h3>Поздравляем!</h3>
+      <p>Ваши настройки SMTP работают корректно. Это тестовое письмо было успешно отправлено через ваш почтовый сервер.</p>
+      
+      <h4>Детали отправки:</h4>
+      <ul>
+        <li><strong>Время отправки:</strong> <%= @timestamp %></li>
+        <li><strong>Статус:</strong> Успешно доставлено</li>
+        <li><strong>Система:</strong> Tire Service Admin Panel</li>
+      </ul>
+      
+      <p>Теперь вы можете использовать почтовые уведомления для ваших клиентов:</p>
+      <ul>
+        <li>📧 Подтверждения бронирований</li>
+        <li>📅 Напоминания о записях</li>
+        <li>🔔 Системные уведомления</li>
+        <li>📝 Новости и акции</li>
+      </ul>
+    </div>
+    
+    <div class="footer">
+      <p>С уважением,<br>Команда Tire Service</p>
+      <p><small>Это автоматическое тестовое письмо из админской панели</small></p>
+    </div>
+  </div>
+</body>
+</html> 

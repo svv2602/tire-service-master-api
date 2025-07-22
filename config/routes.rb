@@ -78,6 +78,21 @@ Rails.application.routes.draw do
         end
       end
       
+      # Управление настройками Email
+      resource :email_settings, only: [:show, :update] do
+        member do
+          post :test_email
+        end
+      end
+      
+      # Управление настройками Google OAuth
+      resource :google_oauth_settings, only: [:show, :update] do
+        member do
+          post :test_connection
+          get :authorization_url
+        end
+      end
+      
       # Push подписки пользователей
       resources :push_subscriptions do
         member do

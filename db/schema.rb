@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_22_145135) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_22_204810) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -316,6 +316,22 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_145135) do
     t.index ["name"], name: "index_custom_variables_on_name", unique: true
   end
 
+  create_table "email_settings", force: :cascade do |t|
+    t.string "smtp_host"
+    t.integer "smtp_port", default: 587
+    t.string "smtp_username"
+    t.string "smtp_password"
+    t.string "smtp_authentication", default: "plain"
+    t.boolean "smtp_starttls_auto", default: true, null: false
+    t.boolean "smtp_tls", default: false, null: false
+    t.string "from_email"
+    t.string "from_name"
+    t.boolean "enabled", default: false, null: false
+    t.boolean "test_mode", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "email_template_custom_variables", force: :cascade do |t|
     t.bigint "email_template_id", null: false
     t.bigint "custom_variable_id", null: false
@@ -341,6 +357,18 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_145135) do
     t.index ["channel_type"], name: "index_email_templates_on_channel_type"
     t.index ["template_type", "language", "channel_type"], name: "index_email_templates_on_type_language_channel", unique: true
     t.check_constraint "channel_type::text = ANY (ARRAY['email'::character varying, 'telegram'::character varying, 'push'::character varying]::text[])", name: "check_channel_type"
+  end
+
+  create_table "google_oauth_settings", force: :cascade do |t|
+    t.string "client_id"
+    t.string "client_secret"
+    t.string "redirect_uri"
+    t.boolean "enabled", default: false, null: false
+    t.boolean "allow_registration", default: true, null: false
+    t.boolean "auto_verify_email", default: true, null: false
+    t.text "scopes_list", default: "email,profile"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "manager_service_points", force: :cascade do |t|
