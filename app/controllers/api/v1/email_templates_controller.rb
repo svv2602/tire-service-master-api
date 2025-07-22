@@ -48,7 +48,7 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
     }
     
     render json: {
-      email_templates: @email_templates.map { |template| serialize_template(template) },
+      data: @email_templates.map { |template| serialize_template(template) },
       pagination: {
         current_page: page,
         total_pages: total_pages,
@@ -215,8 +215,12 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
 
   # GET /api/v1/email_templates/template_types
   def template_types
+    types_array = EmailTemplate.template_types.map do |key, label|
+      { value: key, label: label }
+    end
+    
     render json: {
-      template_types: EmailTemplate.template_types,
+      data: types_array,
       available_languages: %w[uk ru en]
     }
   end
@@ -245,6 +249,7 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
       language: template.language,
       is_active: template.is_active,
       status_text: template.status_text,
+      variables_array: template.variables_array,
       created_at: template.created_at,
       updated_at: template.updated_at
     }

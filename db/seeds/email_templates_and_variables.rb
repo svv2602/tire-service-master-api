@@ -495,16 +495,17 @@ email_templates_data = [
 ]
 
 email_templates_data.each_with_index do |template_data, index|
-  template = EmailTemplate.create!(
-    name: template_data[:name],
+  template = EmailTemplate.find_or_create_by!(
     template_type: template_data[:template_type],
-    subject: template_data[:subject],
-    body: template_data[:body],
-    is_active: template_data[:is_active],
     language: 'uk'  # Украинский язык
-  )
+  ) do |t|
+    t.name = template_data[:name]
+    t.subject = template_data[:subject]
+    t.body = template_data[:body]
+    t.is_active = template_data[:is_active]
+  end
   
-  puts "✅ Створений email шаблон: #{template.name} (ID: #{template.id})"
+  puts "✅ Створений/оновлений email шаблон: #{template.name} (ID: #{template.id})"
   
   # Привязываем кастомные переменные к шаблонам
   case template.template_type
