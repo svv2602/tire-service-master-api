@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_22_125825) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_22_145135) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -518,6 +518,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_125825) do
     t.index ["partner_id"], name: "index_promotions_on_partner_id"
     t.index ["service_point_id"], name: "index_promotions_on_service_point_id"
     t.index ["start_date", "end_date"], name: "idx_promotions_date_range"
+  end
+
+  create_table "push_settings", force: :cascade do |t|
+    t.string "vapid_public_key"
+    t.string "vapid_private_key"
+    t.string "firebase_api_key"
+    t.string "firebase_project_id"
+    t.string "firebase_app_id"
+    t.boolean "enabled", default: false, null: false
+    t.boolean "test_mode", default: false, null: false
+    t.integer "daily_limit", default: 1000, null: false
+    t.integer "rate_limit", default: 100, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "push_subscriptions", force: :cascade do |t|
