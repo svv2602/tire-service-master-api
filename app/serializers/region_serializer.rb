@@ -1,5 +1,5 @@
 class RegionSerializer < ActiveModel::Serializer
-  attributes :id, :name, :name_ru, :name_uk, :code, :is_active, :cities_count
+  attributes :id, :name, :name_ru, :name_uk, :code, :is_active, :cities_count, :created_at, :updated_at
   
   def cities_count
     object.cities.count
