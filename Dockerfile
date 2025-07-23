@@ -11,7 +11,8 @@ RUN apk update && apk add --no-cache \
     git \
     nodejs \
     npm \
-    yaml-dev
+    yaml-dev \
+    bash
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
@@ -21,8 +22,7 @@ COPY Gemfile Gemfile.lock ./
 
 # Устанавливаем bundler и gems
 RUN gem install bundler:2.5.23 && \
-    bundle config set --local deployment 'true' && \
-    bundle config set --local without 'development test' && \
+    bundle config set --local path 'vendor/bundle' && \
     bundle install --jobs $(nproc) --retry 3
 
 # Копируем исходный код приложения
