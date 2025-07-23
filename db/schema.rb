@@ -357,7 +357,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_23_064232) do
     t.string "channel_type", default: "email", null: false
     t.index ["channel_type"], name: "index_email_templates_on_channel_type"
     t.index ["template_type", "language", "channel_type"], name: "index_email_templates_on_type_language_channel", unique: true
-    t.check_constraint "channel_type::text = ANY (ARRAY['email'::character varying, 'telegram'::character varying, 'push'::character varying]::text[])", name: "check_channel_type"
+    t.check_constraint "channel_type::text = ANY (ARRAY['email'::character varying::text, 'telegram'::character varying::text, 'push'::character varying::text])", name: "check_channel_type"
   end
 
   create_table "google_oauth_settings", force: :cascade do |t|
