@@ -56,6 +56,9 @@ end
 
 # Примечание: schedule_generation.rb уже загружен в приоритетных сидах
 
+# Загрузка SEO метатегов
+load Rails.root.join('db', 'seeds', 'seo_metatags.rb')
+
 # Затем выполняем остальные сидеры
 Dir[File.join(Rails.root, 'db', 'seeds', '*.rb')].sort.each do |seed|
   seed_name = File.basename(seed)

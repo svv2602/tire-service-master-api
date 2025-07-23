@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_22_213412) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_23_064232) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -690,6 +690,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_22_213412) do
     t.index ["service_point_id", "start_date", "end_date"], name: "idx_seasonal_schedules_period"
     t.index ["service_point_id"], name: "index_seasonal_schedules_on_service_point_id"
     t.check_constraint "end_date >= start_date", name: "check_seasonal_schedules_date_range"
+  end
+
+  create_table "seo_metatags", force: :cascade do |t|
+    t.string "page_type", null: false
+    t.text "title", null: false
+    t.text "description", null: false
+    t.text "keywords"
+    t.string "image_url"
+    t.string "canonical_url"
+    t.boolean "no_index", default: false, null: false
+    t.string "language", default: "uk", null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_seo_metatags_on_active"
+    t.index ["language"], name: "index_seo_metatags_on_language"
+    t.index ["page_type", "language"], name: "index_seo_metatags_on_page_type_and_language", unique: true
+    t.index ["page_type"], name: "index_seo_metatags_on_page_type"
   end
 
   create_table "service_categories", force: :cascade do |t|

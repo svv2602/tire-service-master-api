@@ -492,6 +492,18 @@ Rails.application.routes.draw do
       resources :user_roles, only: [:index, :show]
 
       resources :operators, only: [:update, :destroy]
+
+      # Управление шаблонами уведомлений
+      resources :notification_templates, only: [:index, :show, :create, :update, :destroy]
+      
+      # SEO метатеги
+      resources :seo_metatags do
+        collection do
+          post :create_defaults
+          get :analytics
+          get 'for_page/:page_type', action: :for_page, as: :for_page
+        end
+      end
     end
   end
 end

@@ -1,0 +1,165 @@
+class SeoMetatag < ApplicationRecord
+  # Валидации
+  validates :page_type, presence: true, uniqueness: { scope: :language }
+  validates :title, presence: true, length: { minimum: 20, maximum: 80 }
+  validates :description, presence: true, length: { minimum: 80, maximum: 200 }
+  validates :language, presence: true, inclusion: { in: %w[uk ru] }
+
+  # Скоупы
+  scope :active, -> { where(active: true) }
+  scope :by_language, ->(lang) { where(language: lang) }
+  scope :by_page_type, ->(type) { where(page_type: type) }
+
+  # Доступные типы страниц
+  PAGE_TYPES = %w[
+    home services search booking calculator knowledge-base 
+    article service-point profile admin login register
+  ].freeze
+
+  validates :page_type, inclusion: { in: PAGE_TYPES }
+
+  # Методы для работы с ключевыми словами
+  def keywords_array
+    return [] if keywords.blank?
+    keywords.split(',').map(&:strip).reject(&:blank?)
+  end
+
+  def keywords_array=(array)
+    self.keywords = array.is_a?(Array) ? array.join(', ') : array.to_s
+  end
+
+  # Проверка оптимальности SEO
+  def seo_status
+    issues = []
+    
+    issues << 'title_short' if title.length < 30
+    issues << 'title_long' if title.length > 60
+    issues << 'description_short' if description.length < 120
+    issues << 'description_long' if description.length > 160
+    issues << 'few_keywords' if keywords_array.length < 3
+    issues << 'many_keywords' if keywords_array.length > 15
+
+    return 'good' if issues.empty?
+    return 'error' if issues.any? { |issue| %w[title_short title_long description_short description_long].include?(issue) }
+    'warning'
+  end
+
+  def seo_issues
+    issues = []
+    
+    issues << 'Заголовок слишком короткий' if title.length < 30
+    issues << 'Заголовок слишком длинный' if title.length > 60
+    issues << 'Описание слишком короткое' if description.length < 120
+    issues << 'Описание слишком длинное' if description.length > 160
+    issues << 'Недостаточно ключевых слов' if keywords_array.length < 3
+    issues << 'Слишком много ключевых слов' if keywords_array.length > 15
+
+    issues
+  end
+
+  # Класс-методы
+  def self.for_page(page_type, language = 'uk')
+    active.by_page_type(page_type).by_language(language).first
+  end
+
+  def self.create_defaults!
+    PAGE_TYPES.each do |page_type|
+      %w[uk ru].each do |lang|
+        next if exists?(page_type: page_type, language: lang)
+
+        create!(
+          page_type: page_type,
+          language: lang,
+          title: default_title(page_type, lang),
+          description: default_description(page_type, lang),
+          keywords: default_keywords(page_type, lang).join(', '),
+          image_url: '/image/tire-service-og.jpg',
+          no_index: %w[admin profile login register].include?(page_type)
+        )
+      end
+    end
+  end
+
+  private
+
+  def self.default_title(page_type, language)
+    titles = {
+      'uk' => {
+        'home' => 'Твоя Шина - Професійний шиномонтаж в Україні',
+        'services' => 'Послуги шиномонтажу - Твоя Шина',
+        'search' => 'Пошук сервісних центрів - Твоя Шина',
+        'booking' => 'Онлайн запис на шиномонтаж - Твоя Шина',
+        'calculator' => 'Калькулятор шин - підбір розміру - Твоя Шина',
+        'knowledge-base' => 'База знань про шини та диски - Твоя Шина',
+        'article' => 'Стаття - Твоя Шина',
+        'service-point' => 'Сервісний центр - Твоя Шина',
+        'profile' => 'Особистий кабінет - Твоя Шина',
+        'admin' => 'Адміністративна панель - Твоя Шина',
+        'login' => 'Вхід в систему - Твоя Шина',
+        'register' => 'Реєстрація - Твоя Шина'
+      },
+      'ru' => {
+        'home' => 'Твоя Шина - Профессиональный шиномонтаж в Украине',
+        'services' => 'Услуги шиномонтажа - Твоя Шина',
+        'search' => 'Поиск сервисных центров - Твоя Шина',
+        'booking' => 'Онлайн запись на шиномонтаж - Твоя Шина',
+        'calculator' => 'Калькулятор шин - подбор размера - Твоя Шина',
+        'knowledge-base' => 'База знаний о шинах и дисках - Твоя Шина',
+        'article' => 'Статья - Твоя Шина',
+        'service-point' => 'Сервисный центр - Твоя Шина',
+        'profile' => 'Личный кабинет - Твоя Шина',
+        'admin' => 'Административная панель - Твоя Шина',
+        'login' => 'Вход в систему - Твоя Шина',
+        'register' => 'Регистрация - Твоя Шина'
+      }
+    }
+
+    titles.dig(language, page_type) || "#{page_type.humanize} - Твоя Шина"
+  end
+
+  def self.default_description(page_type, language)
+    descriptions = {
+      'uk' => {
+        'home' => 'Професійний шиномонтаж в Україні. Заміна шин, балансування коліс, ремонт дисків. Онлайн запис, швидке обслуговування, гарантія якості.',
+        'services' => 'Повний спектр послуг шиномонтажу: заміна шин, балансування, ремонт дисків, зберігання коліс. Професійне обладнання та досвідчені майстри.',
+        'search' => 'Знайдіть найближчий сервісний центр шиномонтажу. Пошук за містом, послугами, рейтингом. Онлайн запис та відгуки клієнтів.',
+        'booking' => 'Зручний онлайн запис на шиномонтаж. Оберіть час, послугу та сервісний центр. Миттєве підтвердження запису та нагадування.',
+        'calculator' => 'Безкоштовний калькулятор підбору шин. Визначте оптимальний розмір шин для вашого автомобіля за маркою та моделлю.',
+        'knowledge-base' => 'Корисні статті про шини, диски, експлуатацію та догляд. Поради експертів, інструкції та рекомендації для автовласників.'
+      },
+      'ru' => {
+        'home' => 'Профессиональный шиномонтаж в Украине. Замена шин, балансировка колес, ремонт дисков. Онлайн запись, быстрое обслуживание, гарантия качества.',
+        'services' => 'Полный спектр услуг шиномонтажа: замена шин, балансировка, ремонт дисков, хранение колес. Профессиональное оборудование и опытные мастера.',
+        'search' => 'Найдите ближайший сервисный центр шиномонтажа. Поиск по городу, услугам, рейтингу. Онлайн запись и отзывы клиентов.',
+        'booking' => 'Удобная онлайн запись на шиномонтаж. Выберите время, услугу и сервисный центр. Мгновенное подтверждение записи и напоминания.',
+        'calculator' => 'Бесплатный калькулятор подбора шин. Определите оптимальный размер шин для вашего автомобиля по марке и модели.',
+        'knowledge-base' => 'Полезные статьи о шинах, дисках, эксплуатации и уходе. Советы экспертов, инструкции и рекомендации для автовладельцев.'
+      }
+    }
+
+    descriptions.dig(language, page_type) || "#{page_type.humanize} страница сайта Твоя Шина - профессиональный шиномонтаж в Украине."
+  end
+
+  def self.default_keywords(page_type, language)
+    keywords_map = {
+      'uk' => {
+        'home' => ['шиномонтаж', 'заміна шин', 'балансування коліс', 'ремонт дисків', 'шиномонтаж україна'],
+        'services' => ['послуги шиномонтажу', 'заміна шин', 'балансування', 'ремонт дисків', 'зберігання коліс'],
+        'search' => ['пошук шиномонтажу', 'сервісні центри', 'шиномонтаж поблизу', 'відгуки клієнтів'],
+        'booking' => ['онлайн запис', 'запис на шиномонтаж', 'бронювання послуг', 'швидкий запис'],
+        'calculator' => ['калькулятор шин', 'підбір шин', 'розмір шин', 'шини за маркою авто'],
+        'knowledge-base' => ['база знань', 'статті про шини', 'поради експертів', 'догляд за шинами']
+      },
+      'ru' => {
+        'home' => ['шиномонтаж', 'замена шин', 'балансировка колес', 'ремонт дисков', 'шиномонтаж украина'],
+        'services' => ['услуги шиномонтажа', 'замена шин', 'балансировка', 'ремонт дисков', 'хранение колес'],
+        'search' => ['поиск шиномонтажа', 'сервисные центры', 'шиномонтаж рядом', 'отзывы клиентов'],
+        'booking' => ['онлайн запись', 'запись на шиномонтаж', 'бронирование услуг', 'быстрая запись'],
+        'calculator' => ['калькулятор шин', 'подбор шин', 'размер шин', 'шины по марке авто'],
+        'knowledge-base' => ['база знаний', 'статьи о шинах', 'советы экспертов', 'уход за шинами']
+      }
+    }
+
+    keywords_map.dig(language, page_type) || ['шиномонтаж', 'автосервис', 'украина']
+  end
+end 
