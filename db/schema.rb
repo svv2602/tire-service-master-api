@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_24_062814) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_24_075537) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -356,7 +356,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_24_062814) do
     t.datetime "updated_at", null: false
     t.string "channel_type", default: "email", null: false
     t.index ["channel_type"], name: "index_email_templates_on_channel_type"
-    t.index ["template_type", "language", "channel_type"], name: "index_email_templates_on_type_language_channel", unique: true
+    t.index ["template_type", "language", "channel_type"], name: "index_email_templates_newsletter_only", where: "((template_type)::text = 'newsletter'::text)"
+    t.index ["template_type", "language", "channel_type"], name: "index_email_templates_on_type_language_channel_excl_newsletter", unique: true, where: "((template_type)::text <> 'newsletter'::text)"
     t.check_constraint "channel_type::text = ANY (ARRAY['email'::character varying::text, 'telegram'::character varying::text, 'push'::character varying::text])", name: "check_channel_type"
   end
 

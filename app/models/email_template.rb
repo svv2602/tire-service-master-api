@@ -9,7 +9,7 @@ class EmailTemplate < ApplicationRecord
   validates :language, presence: true, inclusion: { in: %w[uk ru en] }
   validates :channel_type, presence: true, inclusion: { in: %w[email telegram push] }
   validates :body, presence: true
-  validates :template_type, uniqueness: { scope: [:language, :channel_type] }
+  validates :template_type, uniqueness: { scope: [:language, :channel_type] }, unless: -> { template_type == 'newsletter' }
   
   # Условная валидация subject в зависимости от канала
   validates :subject, presence: true, if: -> { email_channel? || push_channel? }

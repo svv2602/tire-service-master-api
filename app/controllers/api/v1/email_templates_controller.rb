@@ -240,7 +240,7 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
 
   def email_template_params
     params.require(:email_template).permit(
-      :name, :subject, :body, :template_type, :language, :channel_type, :is_active, :variables
+      :name, :subject, :body, :template_type, :language, :channel_type, :is_active, :variables, :description
     )
   end
 
