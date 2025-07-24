@@ -146,8 +146,29 @@ module Api
         token = params[:token]
         provider_user_id = params[:provider_user_id]
         email = params[:email]
+        
+        # ✅ ИСПРАВЛЕНИЕ: Обеспечиваем корректную UTF-8 кодировку для имен
         first_name = params[:first_name]
         last_name = params[:last_name]
+        
+        # Принудительно устанавливаем UTF-8 кодировку и проверяем валидность
+        if first_name.present?
+          first_name = first_name.to_s.force_encoding('UTF-8')
+          unless first_name.valid_encoding?
+            Rails.logger.warn "⚠️ Некорректная кодировка first_name, пытаемся исправить"
+            first_name = first_name.encode('UTF-8', invalid: :replace, undef: :replace, replace: '?')
+          end
+        end
+        
+        if last_name.present?
+          last_name = last_name.to_s.force_encoding('UTF-8')
+          unless last_name.valid_encoding?
+            Rails.logger.warn "⚠️ Некорректная кодировка last_name, пытаемся исправить"
+            last_name = last_name.encode('UTF-8', invalid: :replace, undef: :replace, replace: '?')
+          end
+        end
+        
+        Rails.logger.info "🔧 После обработки UTF-8: first_name='#{first_name}', last_name='#{last_name}'"
         
         # Проверяем обязательные поля
         unless provider.present? && token.present? && provider_user_id.present? && email.present?
@@ -211,7 +232,7 @@ module Api
               )
               
               user.save!
-              Rails.logger.info "✅ Создан новый пользователь ID: #{user.id}"
+              Rails.logger.info "✅ Создан новый пользователь ID: #{user.id} с именем '#{user.first_name} #{user.last_name}'"
               
               # Создаем профиль клиента (может быть создан автоматически через callback)
               unless user.client
@@ -262,14 +283,15 @@ module Api
             Rails.logger.info "🍪 Cookies установлены"
             
             # 5. Возвращаем ответ в формате, ожидаемом фронтендом
+            # ✅ ИСПРАВЛЕНИЕ: Убеждаемся, что JSON ответ содержит корректную UTF-8
             response_data = {
               auth_token: access_token,
               token: access_token, # Дублируем для совместимости
               user: {
                 id: user.id,
                 email: user.email,
-                first_name: user.first_name,
-                last_name: user.last_name,
+                first_name: user.first_name.to_s.force_encoding('UTF-8'),
+                last_name: user.last_name.to_s.force_encoding('UTF-8'),
                 phone: user.phone,
                 email_verified: user.email_verified,
                 phone_verified: user.phone_verified,
@@ -282,7 +304,11 @@ module Api
               message: I18n.t('auth.messages.social_auth_success', default: 'Авторизация прошла успешно')
             }
             
-            Rails.logger.info "✅ Social auth успешна для пользователя ID: #{user.id}"
+            Rails.logger.info "✅ Social auth успешна для пользователя ID: #{user.id}, имя: '#{response_data[:user][:first_name]} #{response_data[:user][:last_name]}'"
+            
+            # Устанавливаем правильные заголовки для UTF-8
+            response.headers['Content-Type'] = 'application/json; charset=utf-8'
+            
             render json: response_data, status: :ok
           end
           
