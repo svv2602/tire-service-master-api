@@ -156,19 +156,30 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
     # Получаем тестовые данные для предварительного просмотра
     test_variables = get_test_variables(@email_template.template_type)
     
-    # Объединяем с переданными переменными
-    variables = test_variables.merge(params[:variables] || {})
+    # Объединяем с переданными переменными (конвертируем params в hash)
+    passed_variables = params[:variables].present? ? params[:variables].to_unsafe_h : {}
+    variables = test_variables.merge(passed_variables)
     
     # Рендерим шаблон
     rendered = @email_template.render_with_all_variables(variables)
     
+    # Формируем ответ в зависимости от типа канала
+    preview_data = {
+      body: rendered[:body],
+      variables_used: variables,
+      available_variables: get_available_variables(@email_template.template_type)
+    }
+    
+    # Добавляем subject только для email и push каналов, где он есть
+    if @email_template.email_channel? || (@email_template.push_channel? && @email_template.subject.present?)
+      preview_data[:subject] = rendered[:subject] || @email_template.subject
+    elsif @email_template.push_channel?
+      # Для push используем название шаблона как заголовок
+      preview_data[:subject] = @email_template.name
+    end
+    
     render json: {
-      preview: {
-        subject: rendered[:subject],
-        body: rendered[:body],
-        variables_used: variables,
-        available_variables: get_available_variables(@email_template.template_type)
-      }
+      preview: preview_data
     }
   end
 
@@ -324,7 +335,27 @@ class Api::V1::EmailTemplatesController < Api::V1::BaseController
         car_brand: 'Toyota',
         car_model: 'Camry',
         license_plate: 'AA1234BB',
-        status: 'confirmed'
+        status: 'confirmed',
+        service_name: 'Заміна шин',
+        service_category: 'Шиномонтаж',
+        service_price: '1200 грн',
+        service_duration: '60 хвилин'
+      })
+    when /service_completed/
+      base_vars.merge({
+        booking_id: '#123',
+        booking_number: '123',
+        booking_date: Date.current.strftime('%d.%m.%Y'),
+        start_time: '10:00',
+        end_time: '11:00',
+        car_brand: 'Toyota',
+        car_model: 'Camry',
+        license_plate: 'AA1234BB',
+        status: 'completed',
+        service_name: 'Заміна шин',
+        service_category: 'Шиномонтаж',
+        service_price: '1200 грн',
+        service_duration: '60 хвилин'
       })
     when /review/
       base_vars.merge({
