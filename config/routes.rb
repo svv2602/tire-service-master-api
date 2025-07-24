@@ -66,6 +66,7 @@ Rails.application.routes.draw do
           post :test_connection
           post :test_message
           post :set_webhook
+          post :force_webhook_update
           get :webhook_info
         end
       end

@@ -88,11 +88,43 @@ class TelegramSetting < ApplicationRecord
     end
   end
   
+  # ✅ НОВЫЙ МЕТОД: Принудительное обновление webhook (обход защиты)
+  def force_update_webhook!
+    return unless enabled? && webhook_url.present?
+    
+    Rails.logger.info "🔧 Принудительное обновление webhook: #{webhook_url}"
+    
+    begin
+      telegram_service = TelegramService.new
+      response = telegram_service.set_webhook(webhook_url)
+      
+      if response[:ok]
+        Rails.logger.info "✅ Webhook принудительно обновлен: #{webhook_url}"
+        update_column(:webhook_last_updated_at, Time.current)
+        { success: true, message: 'Webhook успешно обновлен' }
+      else
+        error_msg = "Ошибка обновления webhook: #{response[:description]}"
+        Rails.logger.error "❌ #{error_msg}"
+        { success: false, message: error_msg, details: response }
+      end
+    rescue => e
+      error_msg = "Исключение при обновлении webhook: #{e.message}"
+      Rails.logger.error "❌ #{error_msg}"
+      { success: false, message: error_msg, error: e }
+    end
+  end
+
   private
-  
+
   # Обновление webhook в Telegram API
   def update_telegram_webhook
     return unless enabled? && webhook_url.present?
+    
+    # ✅ ОПТИМИЗАЦИЯ: Защита от частых обновлений (rate limiting)
+    if webhook_recently_updated?
+      Rails.logger.info "⏳ Webhook обновление пропущено - недавно обновлялся (#{webhook_last_updated_at})"
+      return
+    end
     
     begin
       telegram_service = TelegramService.new
@@ -100,11 +132,23 @@ class TelegramSetting < ApplicationRecord
       
       if response[:ok]
         Rails.logger.info "✅ Webhook обновлен: #{webhook_url}"
+        # Сохраняем время последнего успешного обновления
+        update_column(:webhook_last_updated_at, Time.current)
       else
         Rails.logger.error "❌ Ошибка обновления webhook: #{response[:description]}"
+        Rails.logger.error "❌ Код ошибки: #{response[:error_code]}" if response[:error_code]
+        Rails.logger.error "❌ Полный ответ: #{response.inspect}"
       end
     rescue => e
       Rails.logger.error "❌ Исключение при обновлении webhook: #{e.message}"
+      Rails.logger.error "❌ Backtrace: #{e.backtrace.first(5).join('\n')}"
     end
+  end
+
+  private
+
+  # ✅ ЗАЩИТА: Проверка частоты обновлений (1 минута)
+  def webhook_recently_updated?
+    webhook_last_updated_at.present? && webhook_last_updated_at > 1.minute.ago
   end
 end

@@ -129,6 +129,8 @@ class TelegramService
       Rails.logger.info "✅ Webhook успешно установлен"
     else
       Rails.logger.error "❌ Ошибка установки webhook: #{result[:description]}"
+      Rails.logger.error "❌ Код ошибки: #{result[:error_code]}" if result[:error_code]
+      Rails.logger.error "❌ Полный ответ: #{result.inspect}"
     end
     
     result

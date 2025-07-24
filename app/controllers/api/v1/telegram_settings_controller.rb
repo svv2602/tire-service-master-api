@@ -180,6 +180,27 @@ class Api::V1::TelegramSettingsController < ApplicationController
     end
   end
 
+  # POST /api/v1/telegram_settings/force_webhook_update
+  def force_webhook_update
+    authorize TelegramSetting, :update?
+    
+    result = @telegram_settings.force_update_webhook!
+    
+    if result[:success]
+      render json: {
+        success: true,
+        message: result[:message],
+        webhook_url: @telegram_settings.webhook_url,
+        updated_at: @telegram_settings.webhook_last_updated_at
+      }
+    else
+      render json: {
+        success: false,
+        message: result[:message]
+      }, status: :unprocessable_entity
+    end
+  end
+
   private
 
   def set_telegram_settings
@@ -208,6 +229,7 @@ class Api::V1::TelegramSettingsController < ApplicationController
       bot_token: settings.bot_token.present? ? "#{settings.bot_token[0..10]}..." : nil,
       bot_username: settings.bot_username,
       webhook_url: settings.webhook_url,
+      webhook_last_updated_at: settings.webhook_last_updated_at,
       admin_chat_id: settings.admin_chat_id,
       enabled: settings.enabled,
       test_mode: settings.test_mode,
