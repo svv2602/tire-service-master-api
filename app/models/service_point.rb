@@ -26,10 +26,15 @@ class ServicePoint < ApplicationRecord
   # Добавляем связь с постами обслуживания
   has_many :service_posts, dependent: :destroy
   
+  # Добавляем связь с настройками категорий
+  has_many :service_point_category_settings, dependent: :destroy
+  has_many :configured_categories, through: :service_point_category_settings, source: :service_category
+  
   # Принимаем вложенные атрибуты
   accepts_nested_attributes_for :photos, allow_destroy: true
   accepts_nested_attributes_for :service_point_services, allow_destroy: true
   accepts_nested_attributes_for :service_posts, allow_destroy: true
+  accepts_nested_attributes_for :service_point_category_settings, allow_destroy: true
   
   # Callback для перенумерации постов после сохранения
   after_save :renumber_service_posts
@@ -65,7 +70,6 @@ class ServicePoint < ApplicationRecord
   validates :name, presence: true
   validates :address, presence: true
   validates :work_status, presence: true, inclusion: { in: work_statuses.keys }
-  validates :auto_confirmation, inclusion: { in: [true, false] }
   
   # Валидации для локализованных полей
   validates :name_ru, presence: true, length: { minimum: 2 }
@@ -87,8 +91,6 @@ class ServicePoint < ApplicationRecord
   scope :inactive, -> { where(is_active: false) }                 # неактивные точки
   scope :working, -> { where(is_active: true, work_status: 'working') }  # работающие точки
   scope :available_for_booking, -> { active.where(work_status: ['working']) } # доступны для бронирования
-  scope :with_auto_confirmation, -> { where(auto_confirmation: true) }    # точки с автоподтверждением
-  scope :with_manual_confirmation, -> { where(auto_confirmation: false) } # точки с ручным подтверждением
   scope :by_city, ->(city_id) { where(city_id: city_id) }
   scope :by_partner, ->(partner_id) { where(partner_id: partner_id) }
   scope :with_amenities, ->(amenity_ids) { 
@@ -420,36 +422,56 @@ class ServicePoint < ApplicationRecord
   
   public
   
-  # ==================== МЕТОДЫ ДЛЯ АВТОПОДТВЕРЖДЕНИЯ БРОНИРОВАНИЙ ====================
+  # ==================== МЕТОДЫ ДЛЯ АВТОПОДТВЕРЖДЕНИЯ БРОНИРОВАНИЙ ПО КАТЕГОРИЯМ ====================
   
-  # Проверяет, включено ли автоподтверждение бронирований для этой точки
-  def auto_confirmation_enabled?
-    auto_confirmation == true
+  # Проверяет, включено ли автоподтверждение для конкретной категории услуг
+  # @param category_id [Integer] ID категории услуг
+  # @return [Boolean] true если автоподтверждение включено
+  def auto_confirmation_enabled_for_category?(category_id)
+    ServicePointCategorySetting.auto_confirmation_for(id, category_id)
   end
   
-  # Проверяет, требуется ли ручное подтверждение бронирований для этой точки
-  def manual_confirmation_required?
-    auto_confirmation == false
+  # Проверяет, требуется ли ручное подтверждение для конкретной категории
+  # @param category_id [Integer] ID категории услуг
+  # @return [Boolean] true если требуется ручное подтверждение
+  def manual_confirmation_required_for_category?(category_id)
+    !auto_confirmation_enabled_for_category?(category_id)
   end
   
-  # Включает автоподтверждение бронирований
-  def enable_auto_confirmation!
-    update!(auto_confirmation: true)
+  # Включает автоподтверждение для категории
+  # @param category_id [Integer] ID категории услуг
+  def enable_auto_confirmation_for_category!(category_id)
+    ServicePointCategorySetting.set_auto_confirmation(id, category_id, true)
   end
   
-  # Отключает автоподтверждение бронирований (переводит в ручной режим)
-  def enable_manual_confirmation!
-    update!(auto_confirmation: false)
+  # Отключает автоподтверждение для категории (переводит в ручной режим)
+  # @param category_id [Integer] ID категории услуг
+  def enable_manual_confirmation_for_category!(category_id)
+    ServicePointCategorySetting.set_auto_confirmation(id, category_id, false)
   end
   
-  # Определяет статус для нового бронирования в зависимости от настроек точки
+  # Определяет статус для нового бронирования в зависимости от настроек категории
   # @param is_admin_booking [Boolean] true если бронирование создается администратором/партнером
+  # @param category_id [Integer] ID категории услуг для бронирования
   # @return [String] статус бронирования
-  def booking_status_for_new_booking(is_admin_booking: false)
+  def booking_status_for_new_booking(is_admin_booking: false, category_id: nil)
     # Если бронирование создает не клиент (админ/партнер) - сразу подтвержденное
     return 'confirmed' if is_admin_booking
     
-    # Для клиентских бронирований проверяем настройки точки
-    auto_confirmation_enabled? ? 'confirmed' : 'pending'
+    # Если категория не указана, по умолчанию требуем ручное подтверждение
+    return 'pending' unless category_id
+    
+    # Для клиентских бронирований проверяем настройки категории
+    auto_confirmation_enabled_for_category?(category_id) ? 'confirmed' : 'pending'
+  end
+  
+  # Получает все настройки автоподтверждения для данной точки
+  # @return [Hash] хэш вида { category_id => auto_confirmation_enabled }
+  def category_auto_confirmation_settings
+    settings = {}
+    service_point_category_settings.includes(:service_category).each do |setting|
+      settings[setting.service_category_id] = setting.auto_confirmation
+    end
+    settings
   end
 end

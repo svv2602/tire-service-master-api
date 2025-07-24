@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_24_022018) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_24_062814) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -734,6 +734,18 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_24_022018) do
     t.index ["service_point_id"], name: "index_service_point_amenities_on_service_point_id"
   end
 
+  create_table "service_point_category_settings", force: :cascade do |t|
+    t.bigint "service_point_id", null: false
+    t.bigint "service_category_id", null: false
+    t.boolean "auto_confirmation", default: false, null: false, comment: "Автоматическое подтверждение бронирований для данной категории услуг"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["auto_confirmation"], name: "index_service_point_category_settings_on_auto_confirmation"
+    t.index ["service_category_id"], name: "index_service_point_category_settings_on_service_category_id"
+    t.index ["service_point_id", "service_category_id"], name: "index_sp_category_settings_unique", unique: true
+    t.index ["service_point_id"], name: "index_service_point_category_settings_on_service_point_id"
+  end
+
   create_table "service_point_photos", force: :cascade do |t|
     t.bigint "service_point_id", null: false
     t.integer "sort_order", default: 0
@@ -795,8 +807,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_24_022018) do
     t.text "description_uk", null: false
     t.string "address_ru", null: false
     t.string "address_uk", null: false
-    t.boolean "auto_confirmation", default: false, null: false, comment: "Автоматическое подтверждение бронирований (true) или ручное (false)"
-    t.index ["auto_confirmation"], name: "index_service_points_on_auto_confirmation"
     t.index ["category_contacts"], name: "index_service_points_on_category_contacts", using: :gin
     t.index ["city_id"], name: "index_service_points_on_city_id"
     t.index ["is_active", "work_status"], name: "index_service_points_on_is_active_and_work_status"
@@ -1038,6 +1048,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_24_022018) do
   add_foreign_key "seasonal_schedules", "service_points"
   add_foreign_key "service_point_amenities", "amenities"
   add_foreign_key "service_point_amenities", "service_points"
+  add_foreign_key "service_point_category_settings", "service_categories"
+  add_foreign_key "service_point_category_settings", "service_points"
   add_foreign_key "service_point_photos", "service_points"
   add_foreign_key "service_point_services", "service_points"
   add_foreign_key "service_point_services", "services"

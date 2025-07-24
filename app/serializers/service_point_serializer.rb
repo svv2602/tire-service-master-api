@@ -3,7 +3,7 @@ class ServicePointSerializer < ActiveModel::Serializer
              :is_active, :work_status, :status_display, :post_count, :default_slot_duration, 
              :rating, :total_clients_served, :average_rating, :cancellation_rate, :created_at, :updated_at,
              :posts_count, :service_posts_summary, :service_posts, :services, :working_hours,
-             :partner_id, :city_id, :auto_confirmation,
+             :partner_id, :city_id, :category_confirmation_settings,
              # Локализованные поля
              :name_ru, :name_uk, :description_ru, :description_uk, :address_ru, :address_uk,
              :localized_name, :localized_description, :localized_address
@@ -114,5 +114,10 @@ class ServicePointSerializer < ActiveModel::Serializer
   def localized_address
     locale = instance_options[:locale] || 'ru'
     object.localized_address(locale)
+  end
+  
+  # Настройки автоподтверждения по категориям
+  def category_confirmation_settings
+    object.category_auto_confirmation_settings
   end
 end

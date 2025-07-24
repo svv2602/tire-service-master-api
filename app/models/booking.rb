@@ -510,7 +510,7 @@ class Booking < ApplicationRecord
     is_admin_booking = client&.user&.admin? || client&.user&.partner?
     
     Rails.logger.info "Тип бронирования: #{is_admin_booking ? 'админское/партнерское' : 'клиентское'}"
-    Rails.logger.info "Настройки точки auto_confirmation: #{service_point.auto_confirmation}"
+    Rails.logger.info "Категория услуг ID: #{service_category_id}"
     
     should_confirm = false
     
@@ -518,12 +518,12 @@ class Booking < ApplicationRecord
       # Админские/партнерские бронирования всегда подтверждаются автоматически
       should_confirm = true
       Rails.logger.info "Подтверждаем: админское/партнерское бронирование"
-    elsif service_point.auto_confirmation?
-      # Клиентские бронирования подтверждаются только если у точки включено автоподтверждение
+    elsif service_category_id && service_point.auto_confirmation_enabled_for_category?(service_category_id)
+      # Клиентские бронирования подтверждаются только если для категории включено автоподтверждение
       should_confirm = true
-      Rails.logger.info "Подтверждаем: у точки включено автоподтверждение"
+      Rails.logger.info "Подтверждаем: для категории #{service_category_id} включено автоподтверждение"
     else
-      Rails.logger.info "Не подтверждаем: клиентское бронирование, автоподтверждение выключено"
+      Rails.logger.info "Не подтверждаем: клиентское бронирование, автоподтверждение для категории #{service_category_id} выключено"
     end
     
     if should_confirm
