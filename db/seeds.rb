@@ -19,6 +19,7 @@ priority_seeds = [
   '04_service_point_photos.rb', # Добавляем фотографии сервисных точек
   '05_reviews.rb',           # Создаем отзывы
   'notification_settings.rb', # Создаем настройки системы уведомлений
+  'custom_variables.rb',     # Создаем кастомные переменные для email шаблонов
   'essential_email_templates.rb', # Создаем основные шаблоны email уведомлений
   'telegram_templates.rb',   # Создаем Telegram шаблоны уведомлений
   'push_templates.rb',       # Создаем Push шаблоны уведомлений
@@ -40,9 +41,8 @@ excluded_seeds = [
   'fix_test_data.rb',        # Удален (тестовые данные больше не нужны)
   'test_booking_statuses.rb', # Удален (тестовые статусы бронирований больше не нужны)
   'email_templates.rb',      # Файл не существует (используется essential_email_templates.rb)
-  'extended_email_templates.rb', # Создает лишние шаблоны (уже есть в email_templates_and_variables.rb)
-  'complete_email_templates.rb', # Содержит destroy_all и пересоздает все шаблоны
-  'email_templates_and_variables.rb' # Дублирует шаблоны из essential_email_templates.rb
+  'extended_email_templates.rb', # Создает лишние шаблоны
+  'complete_email_templates.rb' # Содержит destroy_all и пересоздает все шаблоны
 ]
 
 # Сначала выполняем приоритетные сидеры в заданном порядке
