@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Тест кнопки Auto ngrok - Tire Service</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        
+        .test-section {
+            background: #f8f9fa;
+            border-left: 4px solid #0088cc;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        
+        .test-section h3 {
+            color: #0088cc;
+            margin-top: 0;
+        }
+        
+        .form-group {
+            margin: 15px 0;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        input[type="text"]:focus {
+            border-color: #0088cc;
+            outline: none;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: #0088cc;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #006699;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #cce7ff;
+            color: #004085;
+            border: 1px solid #b3d7ff;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin: 15px 0;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0088cc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Тест кнопки Auto ngrok</h1>
+        
+        <div class="test-section">
+            <h3>📡 Проверка ngrok API</h3>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="checkNgrokAPI()">
+                    Проверить ngrok API
+                </button>
+                <span id="ngrokStatus"></span>
+            </div>
+            <div id="ngrokLog" class="log hidden"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🎯 Симуляция кнопки Auto ngrok</h3>
+            <div class="form-group">
+                <label for="webhookUrl">Webhook URL:</label>
+                <input type="text" id="webhookUrl" placeholder="Будет заполнено автоматически...">
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="simulateAutoNgrok()" id="autoNgrokBtn">
+                    Auto ngrok
+                </button>
+                <button class="btn-success" onclick="testWebhookUrl()" id="testWebhookBtn" disabled>
+                    Тест webhook
+                </button>
+            </div>
+            <div id="autoNgrokStatus"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📋 Логи операций</h3>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="clearLogs()">Очистить логи</button>
+            </div>
+            <div id="operationLog" class="log">Готов к тестированию...\n</div>
+        </div>
+    </div>
+
+    <script>
+        let operationLog = document.getElementById('operationLog');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            operationLog.textContent += `[${timestamp}] ${message}\n`;
+            operationLog.scrollTop = operationLog.scrollHeight;
+        }
+        
+        function clearLogs() {
+            operationLog.textContent = 'Логи очищены...\n';
+        }
+        
+        function setStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+        
+        async function checkNgrokAPI() {
+            log('🔍 Проверка доступности ngrok API...');
+            const ngrokLog = document.getElementById('ngrokLog');
+            ngrokLog.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('http://localhost:4040/api/tunnels');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ ngrok API доступен');
+                    
+                    ngrokLog.textContent = JSON.stringify(data, null, 2);
+                    
+                    const tunnelsCount = data.tunnels?.length || 0;
+                    const httpsTunnel = data.tunnels?.find(tunnel => 
+                        tunnel.proto === 'https' && tunnel.config?.addr?.includes('8000')
+                    );
+                    
+                    if (httpsTunnel) {
+                        log(`✅ Найден HTTPS туннель для порта 8000: ${httpsTunnel.public_url}`);
+                        setStatus('ngrokStatus', `✅ ngrok активен (${tunnelsCount} туннелей)`, 'success');
+                    } else {
+                        log('⚠️ HTTPS туннель для порта 8000 не найден');
+                        setStatus('ngrokStatus', '⚠️ Нет туннеля для порта 8000', 'error');
+                    }
+                } else {
+                    log(`❌ Ошибка HTTP: ${response.status}`);
+                    setStatus('ngrokStatus', `❌ HTTP ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Ошибка подключения: ${error.message}`);
+                setStatus('ngrokStatus', '❌ ngrok недоступен', 'error');
+                ngrokLog.textContent = `Ошибка: ${error.message}`;
+            }
+        }
+        
+        async function simulateAutoNgrok() {
+            const btn = document.getElementById('autoNgrokBtn');
+            const webhookInput = document.getElementById('webhookUrl');
+            const testBtn = document.getElementById('testWebhookBtn');
+            
+            // Показываем состояние загрузки
+            btn.innerHTML = '<span class="loading"></span> Получение...';
+            btn.disabled = true;
+            
+            log('🚀 Запуск симуляции кнопки Auto ngrok...');
+            
+            try {
+                // Точно такая же логика как в TelegramIntegrationPage.tsx
+                const response = await fetch('http://localhost:4040/api/tunnels');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('📡 Получены данные от ngrok API');
+                    
+                    const httpsTunnel = data.tunnels?.find((tunnel) => 
+                        tunnel.proto === 'https' && tunnel.config?.addr?.includes('8000')
+                    );
+                    
+                    if (httpsTunnel) {
+                        const ngrokUrl = httpsTunnel.public_url;
+                        const webhookUrl = `${ngrokUrl}/api/v1/telegram_webhook`;
+                        
+                        // Заполняем поле (симуляция setSettings)
+                        webhookInput.value = webhookUrl;
+                        
+                        log(`✅ Webhook URL сгенерирован: ${webhookUrl}`);
+                        setStatus('autoNgrokStatus', `✅ URL сгенерирован: ${webhookUrl}`, 'success');
+                        
+                        testBtn.disabled = false;
+                    } else {
+                        log('❌ Не найден HTTPS туннель ngrok для порта 8000');
+                        setStatus('autoNgrokStatus', 'Не найден HTTPS туннель ngrok для порта 8000.\nУбедитесь, что ngrok запущен: ngrok http 8000', 'error');
+                    }
+                } else {
+                    log(`❌ Ошибка HTTP при получении туннелей: ${response.status}`);
+                    setStatus('autoNgrokStatus', 'Не удалось подключиться к ngrok API.\nУбедитесь, что ngrok запущен и доступен на http://localhost:4040', 'error');
+                }
+            } catch (error) {
+                log(`❌ Исключение: ${error.message}`);
+                setStatus('autoNgrokStatus', 'Ошибка подключения к ngrok.\nУбедитесь, что ngrok запущен: ngrok http 8000', 'error');
+            } finally {
+                // Восстанавливаем кнопку
+                btn.innerHTML = 'Auto ngrok';
+                btn.disabled = false;
+            }
+        }
+        
+        async function testWebhookUrl() {
+            const webhookUrl = document.getElementById('webhookUrl').value;
+            
+            if (!webhookUrl) {
+                log('❌ Webhook URL не задан');
+                return;
+            }
+            
+            log(`🧪 Тестирование webhook URL: ${webhookUrl}`);
+            
+            try {
+                // Простая проверка доступности
+                const response = await fetch(webhookUrl, {
+                    method: 'GET',
+                    mode: 'no-cors' // Избегаем CORS проблем
+                });
+                
+                log('✅ Webhook URL доступен (или CORS заблокирован, что нормально)');
+                setStatus('autoNgrokStatus', '✅ Webhook URL протестирован', 'info');
+            } catch (error) {
+                log(`⚠️ Ошибка тестирования: ${error.message}`);
+                setStatus('autoNgrokStatus', '⚠️ Не удалось протестировать URL (возможно, CORS)', 'info');
+            }
+        }
+        
+        // Автоматическая проверка ngrok при загрузке страницы
+        window.addEventListener('load', () => {
+            log('🚀 Страница загружена, проверяем ngrok...');
+            checkNgrokAPI();
+        });
+    </script>
+</body>
+</html> 

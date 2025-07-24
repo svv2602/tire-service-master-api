@@ -201,6 +201,59 @@ class Api::V1::TelegramSettingsController < ApplicationController
     end
   end
 
+  # POST /api/v1/telegram_settings/generate_ngrok_webhook
+  def generate_ngrok_webhook
+    authorize TelegramSetting, :update?
+    
+    begin
+      require 'net/http'
+      require 'json'
+      
+      # Запрос к ngrok API
+      uri = URI('http://localhost:4040/api/tunnels')
+      response = Net::HTTP.get_response(uri)
+      
+      if response.code == '200'
+        data = JSON.parse(response.body)
+        
+        # Поиск HTTPS туннеля для порта 8000
+        https_tunnel = data['tunnels']&.find do |tunnel|
+          tunnel['proto'] == 'https' && tunnel['config']['addr'].include?('8000')
+        end
+        
+        if https_tunnel
+          ngrok_url = https_tunnel['public_url']
+          webhook_url = "#{ngrok_url}/api/v1/telegram_webhook"
+          
+          Rails.logger.info "✅ Сгенерирован webhook URL: #{webhook_url}"
+          
+          render json: {
+            success: true,
+            webhook_url: webhook_url,
+            ngrok_url: ngrok_url,
+            message: 'Webhook URL успешно сгенерирован'
+          }
+        else
+          render json: {
+            success: false,
+            message: 'Не найден HTTPS туннель ngrok для порта 8000. Убедитесь, что ngrok запущен: ngrok http 8000'
+          }, status: :unprocessable_entity
+        end
+      else
+        render json: {
+          success: false,
+          message: 'Не удалось подключиться к ngrok API. Убедитесь, что ngrok запущен и доступен на http://localhost:4040'
+        }, status: :unprocessable_entity
+      end
+    rescue => e
+      Rails.logger.error "❌ Ошибка генерации ngrok webhook: #{e.message}"
+      render json: {
+        success: false,
+        message: 'Ошибка подключения к ngrok. Убедитесь, что ngrok запущен: ngrok http 8000'
+      }, status: :unprocessable_entity
+    end
+  end
+
   private
 
   def set_telegram_settings

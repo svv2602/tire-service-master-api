@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 Тест авторизации фронтенда - Tire Service</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        
+        .test-section {
+            background: #f8f9fa;
+            border-left: 4px solid #0088cc;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        
+        .test-section h3 {
+            color: #0088cc;
+            margin-top: 0;
+        }
+        
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        
+        .btn-primary {
+            background: #0088cc;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #006699;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #cce7ff;
+            color: #004085;
+            border: 1px solid #b3d7ff;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin: 15px 0;
+        }
+        
+        .form-group {
+            margin: 15px 0;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        input[type="text"]:focus, input[type="password"]:focus {
+            border-color: #0088cc;
+            outline: none;
+        }
+        
+        .webhook-display {
+            background: #e8f5e8;
+            border: 2px solid #28a745;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Тест авторизации и загрузки настроек Telegram</h1>
+        
+        <div class="test-section">
+            <h3>🔑 Авторизация</h3>
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="text" id="email" value="admin@test.com" placeholder="admin@test.com">
+            </div>
+            <div class="form-group">
+                <label for="password">Пароль:</label>
+                <input type="password" id="password" value="admin123" placeholder="admin123">
+            </div>
+            <button class="btn-primary" onclick="login()">Войти</button>
+            <button class="btn-warning" onclick="checkAuthStatus()">Проверить авторизацию</button>
+            <div id="authStatus"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📡 Загрузка настроек Telegram</h3>
+            <button class="btn-success" onclick="loadTelegramSettings()">Загрузить настройки</button>
+            <button class="btn-primary" onclick="testAutoNgrok()">Тест Auto ngrok</button>
+            <div id="settingsStatus"></div>
+            <div id="webhookDisplay"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📋 Детальные логи</h3>
+            <button class="btn-warning" onclick="clearLogs()">Очистить логи</button>
+            <div id="detailLog" class="log">Готов к тестированию...\n</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let detailLog = document.getElementById('detailLog');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            detailLog.textContent += `[${timestamp}] ${message}\n`;
+            detailLog.scrollTop = detailLog.scrollHeight;
+        }
+        
+        function clearLogs() {
+            detailLog.textContent = 'Логи очищены...\n';
+        }
+        
+        function setStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+        
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            log(`🔑 Попытка входа: ${email}`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include', // Важно для cookies
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ Вход успешен: ${data.user?.email || 'Пользователь'}`);
+                    setStatus('authStatus', `✅ Авторизован как: ${data.user?.email}`, 'success');
+                } else {
+                    log(`❌ Ошибка входа: ${data.error || 'Неизвестная ошибка'}`);
+                    setStatus('authStatus', `❌ Ошибка: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Исключение при входе: ${error.message}`);
+                setStatus('authStatus', `❌ Ошибка подключения: ${error.message}`, 'error');
+            }
+        }
+        
+        async function checkAuthStatus() {
+            log('🔍 Проверка статуса авторизации...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Авторизован: ${data.email} (${data.role})`);
+                    setStatus('authStatus', `✅ Активная сессия: ${data.email} (${data.role})`, 'success');
+                } else {
+                    log(`❌ Не авторизован: HTTP ${response.status}`);
+                    setStatus('authStatus', '❌ Не авторизован', 'error');
+                }
+            } catch (error) {
+                log(`❌ Ошибка проверки авторизации: ${error.message}`);
+                setStatus('authStatus', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+        
+        async function loadTelegramSettings() {
+            log('📡 Загрузка настроек Telegram...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/telegram_settings`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const settings = data.telegram_settings;
+                    
+                    log('✅ Настройки Telegram загружены');
+                    log(`📋 Webhook URL: '${settings.webhook_url}'`);
+                    log(`🤖 Bot token: ${settings.bot_token ? '✅ Есть' : '❌ Нет'}`);
+                    log(`🔧 Enabled: ${settings.enabled}`);
+                    
+                    setStatus('settingsStatus', '✅ Настройки загружены успешно', 'success');
+                    
+                    // Отображаем webhook URL
+                    const webhookDisplay = document.getElementById('webhookDisplay');
+                    if (settings.webhook_url) {
+                        webhookDisplay.innerHTML = `<div class="webhook-display">
+                            <strong>Текущий Webhook URL:</strong><br>
+                            ${settings.webhook_url}
+                        </div>`;
+                    } else {
+                        webhookDisplay.innerHTML = `<div class="status error">
+                            ⚠️ Webhook URL пустой или null
+                        </div>`;
+                    }
+                    
+                } else {
+                    const data = await response.json();
+                    log(`❌ Ошибка загрузки: HTTP ${response.status} - ${data.error || 'Неизвестная ошибка'}`);
+                    setStatus('settingsStatus', `❌ Ошибка: ${data.error || 'HTTP ' + response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Исключение при загрузке: ${error.message}`);
+                setStatus('settingsStatus', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testAutoNgrok() {
+            log('🧪 Тестирование функции Auto ngrok...');
+            
+            try {
+                // Проверяем ngrok API
+                const ngrokResponse = await fetch('http://localhost:4040/api/tunnels');
+                
+                if (ngrokResponse.ok) {
+                    const ngrokData = await ngrokResponse.json();
+                    const httpsTunnel = ngrokData.tunnels?.find(tunnel => 
+                        tunnel.proto === 'https' && tunnel.config?.addr?.includes('8000')
+                    );
+                    
+                    if (httpsTunnel) {
+                        const webhookUrl = `${httpsTunnel.public_url}/api/v1/telegram_webhook`;
+                        log(`✅ Сгенерирован webhook URL: ${webhookUrl}`);
+                        
+                        // Отображаем сгенерированный URL
+                        const webhookDisplay = document.getElementById('webhookDisplay');
+                        webhookDisplay.innerHTML = `<div class="webhook-display">
+                            <strong>Сгенерированный Webhook URL:</strong><br>
+                            ${webhookUrl}<br><br>
+                            <small>🔧 Этот URL должен автоматически заполниться в поле на реальной странице</small>
+                        </div>`;
+                        
+                        setStatus('settingsStatus', '✅ Auto ngrok работает корректно', 'success');
+                    } else {
+                        log('❌ HTTPS туннель для порта 8000 не найден');
+                        setStatus('settingsStatus', '❌ Нет подходящего ngrok туннеля', 'error');
+                    }
+                } else {
+                    log('❌ ngrok API недоступен');
+                    setStatus('settingsStatus', '❌ ngrok не запущен', 'error');
+                }
+            } catch (error) {
+                log(`❌ Ошибка тестирования Auto ngrok: ${error.message}`);
+                setStatus('settingsStatus', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+        
+        // Автоматическая проверка при загрузке
+        window.addEventListener('load', () => {
+            log('🚀 Страница загружена');
+            checkAuthStatus();
+        });
+    </script>
+</body>
+</html> 
