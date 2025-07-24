@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест API подтверждения бронирований</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ddd; padding: 15px; margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тест функциональности подтверждения бронирований</h1>
+
+    <div class="test-section">
+        <h2>1. Проверка настроек сервисной точки</h2>
+        <button onclick="checkServicePointSettings()">Проверить настройки точки ID=1</button>
+        <div id="servicePointResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Авторизация администратора</h2>
+        <button onclick="loginAdmin()">Войти как админ</button>
+        <div id="authResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Создание бронирования клиентом (без авторизации)</h2>
+        <button onclick="createClientBooking()">Создать клиентское бронирование</button>
+        <div id="clientBookingResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Создание бронирования администратором</h2>
+        <button onclick="createAdminBooking()">Создать админское бронирование</button>
+        <div id="adminBookingResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Обновление настроек автоподтверждения</h2>
+        <button onclick="enableAutoConfirmation()">Включить автоподтверждение</button>
+        <button onclick="disableAutoConfirmation()">Отключить автоподтверждение</button>
+        <div id="settingsResult"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let authToken = null;
+
+        // Вспомогательная функция для API запросов
+        async function apiCall(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers
+                });
+
+                const data = await response.json();
+                return { status: response.status, data, ok: response.ok };
+            } catch (error) {
+                return { status: 0, data: { error: error.message }, ok: false };
+            }
+        }
+
+        // 1. Проверка настроек сервисной точки
+        async function checkServicePointSettings() {
+            const result = document.getElementById('servicePointResult');
+            result.innerHTML = '<div class="info">Проверяем настройки...</div>';
+
+            const response = await apiCall('/service_points/1');
+            
+            if (response.ok) {
+                const servicePoint = response.data;
+                result.innerHTML = `
+                    <div class="success">✅ Сервисная точка загружена</div>
+                    <pre>${JSON.stringify({
+                        id: servicePoint.id,
+                        name: servicePoint.name,
+                        auto_confirmation: servicePoint.auto_confirmation
+                    }, null, 2)}</pre>
+                `;
+            } else {
+                result.innerHTML = `<div class="error">❌ Ошибка: ${JSON.stringify(response.data)}</div>`;
+            }
+        }
+
+        // 2. Авторизация администратора
+        async function loginAdmin() {
+            const result = document.getElementById('authResult');
+            result.innerHTML = '<div class="info">Авторизация...</div>';
+
+            const response = await apiCall('/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'admin@test.com',
+                    password: 'admin123'
+                })
+            });
+
+            if (response.ok) {
+                authToken = response.data.token;
+                result.innerHTML = `
+                    <div class="success">✅ Авторизация успешна</div>
+                    <pre>Токен: ${authToken.substring(0, 20)}...</pre>
+                `;
+            } else {
+                result.innerHTML = `<div class="error">❌ Ошибка авторизации: ${JSON.stringify(response.data)}</div>`;
+            }
+        }
+
+        // 3. Создание клиентского бронирования
+        async function createClientBooking() {
+            const result = document.getElementById('clientBookingResult');
+            result.innerHTML = '<div class="info">Создаем клиентское бронирование...</div>';
+
+            const bookingData = {
+                booking: {
+                    service_point_id: 1,
+                    service_category_id: 1,
+                    booking_date: "2025-07-26",
+                    start_time: "10:00",
+                    notes: "Тест клиентского бронирования",
+                    license_plate: "CLIENT123",
+                    car_brand: "Toyota",
+                    car_model: "Camry",
+                    car_type_id: 1,
+                    service_recipient_first_name: "Клиент",
+                    service_recipient_last_name: "Тестовый",
+                    service_recipient_phone: "+380501111111",
+                    service_recipient_email: "client@test.com"
+                },
+                services: []
+            };
+
+            // Убираем токен для клиентского запроса
+            const tempToken = authToken;
+            authToken = null;
+
+            const response = await apiCall('/client_bookings', {
+                method: 'POST',
+                body: JSON.stringify(bookingData)
+            });
+
+            authToken = tempToken; // Восстанавливаем токен
+
+            if (response.ok) {
+                result.innerHTML = `
+                    <div class="success">✅ Клиентское бронирование создано</div>
+                    <pre>Статус: ${response.data.status.name} (${response.data.status.display_name})</pre>
+                    <pre>ID: ${response.data.id}</pre>
+                `;
+            } else {
+                result.innerHTML = `<div class="error">❌ Ошибка создания: ${JSON.stringify(response.data)}</div>`;
+            }
+        }
+
+        // 4. Создание администраторского бронирования
+        async function createAdminBooking() {
+            const result = document.getElementById('adminBookingResult');
+            result.innerHTML = '<div class="info">Создаем администраторское бронирование...</div>';
+
+            if (!authToken) {
+                result.innerHTML = '<div class="error">❌ Сначала авторизуйтесь как администратор</div>';
+                return;
+            }
+
+            const bookingData = {
+                booking: {
+                    service_point_id: 1,
+                    service_category_id: 1,
+                    booking_date: "2025-07-26",
+                    start_time: "14:00",
+                    notes: "Тест администраторского бронирования",
+                    license_plate: "ADMIN123",
+                    car_brand: "BMW",
+                    car_model: "X5",
+                    car_type_id: 1,
+                    service_recipient_first_name: "Админ",
+                    service_recipient_last_name: "Тестовый",
+                    service_recipient_phone: "+380502222222",
+                    service_recipient_email: "admin_booking@test.com"
+                },
+                services: []
+            };
+
+            const response = await apiCall('/bookings', {
+                method: 'POST',
+                body: JSON.stringify(bookingData)
+            });
+
+            if (response.ok) {
+                result.innerHTML = `
+                    <div class="success">✅ Администраторское бронирование создано</div>
+                    <pre>Статус: ${response.data.status.name} (${response.data.status.display_name})</pre>
+                    <pre>ID: ${response.data.id}</pre>
+                `;
+            } else {
+                result.innerHTML = `<div class="error">❌ Ошибка создания: ${JSON.stringify(response.data)}</div>`;
+            }
+        }
+
+        // 5. Управление настройками автоподтверждения
+        async function enableAutoConfirmation() {
+            await updateAutoConfirmation(true);
+        }
+
+        async function disableAutoConfirmation() {
+            await updateAutoConfirmation(false);
+        }
+
+        async function updateAutoConfirmation(enabled) {
+            const result = document.getElementById('settingsResult');
+            result.innerHTML = `<div class="info">${enabled ? 'Включаем' : 'Отключаем'} автоподтверждение...</div>`;
+
+            if (!authToken) {
+                result.innerHTML = '<div class="error">❌ Сначала авторизуйтесь как администратор</div>';
+                return;
+            }
+
+            const response = await apiCall('/service_points/1', {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    service_point: {
+                        auto_confirmation: enabled
+                    }
+                })
+            });
+
+            if (response.ok) {
+                result.innerHTML = `
+                    <div class="success">✅ Настройки обновлены</div>
+                    <pre>auto_confirmation: ${response.data.auto_confirmation}</pre>
+                `;
+            } else {
+                result.innerHTML = `<div class="error">❌ Ошибка обновления: ${JSON.stringify(response.data)}</div>`;
+            }
+        }
+    </script>
+</body>
+</html> 

@@ -59,6 +59,9 @@ class Booking < ApplicationRecord
   # Атрибуты для пропуска валидаций (нужны для тестов)
   attr_accessor :skip_availability_check, :skip_notifications
   
+  # Коллбэк для автоподтверждения бронирований (выполняется первым после создания)
+  after_create :auto_confirm_if_needed, unless: -> { skip_notifications }
+  
   # Коллбэки для отправки уведомлений
   after_create :send_creation_notification, unless: -> { skip_notifications }
   after_create :send_admin_new_booking_notification, unless: -> { skip_notifications }
@@ -491,5 +494,47 @@ class Booking < ApplicationRecord
     # Проверяем роль пользователя
     user = client.user
     self.is_service_booking = user.admin? || user.partner? || user.manager? || user.operator?
+  end
+  
+  # Автоподтверждение бронирований на основе настроек сервисной точки и роли пользователя
+  def auto_confirm_if_needed
+    Rails.logger.info "=== АВТОПОДТВЕРЖДЕНИЕ БРОНИРОВАНИЯ ID=#{id} ==="
+    
+    # Если бронирование уже подтверждено, ничего не делаем
+    if status == 'confirmed'
+      Rails.logger.info "Бронирование уже подтверждено, пропускаем"
+      return
+    end
+    
+    # Определяем, является ли это служебным бронированием (от админа/партнера)
+    is_admin_booking = client&.user&.admin? || client&.user&.partner?
+    
+    Rails.logger.info "Тип бронирования: #{is_admin_booking ? 'админское/партнерское' : 'клиентское'}"
+    Rails.logger.info "Настройки точки auto_confirmation: #{service_point.auto_confirmation}"
+    
+    should_confirm = false
+    
+    if is_admin_booking
+      # Админские/партнерские бронирования всегда подтверждаются автоматически
+      should_confirm = true
+      Rails.logger.info "Подтверждаем: админское/партнерское бронирование"
+    elsif service_point.auto_confirmation?
+      # Клиентские бронирования подтверждаются только если у точки включено автоподтверждение
+      should_confirm = true
+      Rails.logger.info "Подтверждаем: у точки включено автоподтверждение"
+    else
+      Rails.logger.info "Не подтверждаем: клиентское бронирование, автоподтверждение выключено"
+    end
+    
+    if should_confirm
+      # Обновляем статус без вызова callbacks (чтобы избежать зацикливания)
+      update_column(:status, 'confirmed')
+      Rails.logger.info "✅ Статус изменен на 'confirmed'"
+    else
+      Rails.logger.info "⏳ Статус остается 'pending'"
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка при автоподтверждении бронирования ID=#{id}: #{e.message}"
+    Rails.logger.error e.backtrace.join("\n")
   end
 end

@@ -726,7 +726,7 @@ module Api
         # Для FormData Rails автоматически обрабатывает nested attributes
         params.require(:service_point).permit(
           :name, :description, :address, :city_id, :partner_id, :latitude, :longitude,
-          :contact_phone, :is_active, :work_status,
+          :contact_phone, :is_active, :work_status, :auto_confirmation,
           # Локализованные поля
           :name_ru, :name_uk, :description_ru, :description_uk, :address_ru, :address_uk,
           working_hours: [

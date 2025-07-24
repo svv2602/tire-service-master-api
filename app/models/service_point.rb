@@ -65,6 +65,7 @@ class ServicePoint < ApplicationRecord
   validates :name, presence: true
   validates :address, presence: true
   validates :work_status, presence: true, inclusion: { in: work_statuses.keys }
+  validates :auto_confirmation, inclusion: { in: [true, false] }
   
   # Валидации для локализованных полей
   validates :name_ru, presence: true, length: { minimum: 2 }
@@ -86,6 +87,8 @@ class ServicePoint < ApplicationRecord
   scope :inactive, -> { where(is_active: false) }                 # неактивные точки
   scope :working, -> { where(is_active: true, work_status: 'working') }  # работающие точки
   scope :available_for_booking, -> { active.where(work_status: ['working']) } # доступны для бронирования
+  scope :with_auto_confirmation, -> { where(auto_confirmation: true) }    # точки с автоподтверждением
+  scope :with_manual_confirmation, -> { where(auto_confirmation: false) } # точки с ручным подтверждением
   scope :by_city, ->(city_id) { where(city_id: city_id) }
   scope :by_partner, ->(partner_id) { where(partner_id: partner_id) }
   scope :with_amenities, ->(amenity_ids) { 
@@ -413,5 +416,40 @@ class ServicePoint < ApplicationRecord
   def significant_changes?
     significant_fields = %w[name address phone email latitude longitude is_active]
     significant_fields.any? { |field| saved_change_to_attribute?(field) }
+  end
+  
+  public
+  
+  # ==================== МЕТОДЫ ДЛЯ АВТОПОДТВЕРЖДЕНИЯ БРОНИРОВАНИЙ ====================
+  
+  # Проверяет, включено ли автоподтверждение бронирований для этой точки
+  def auto_confirmation_enabled?
+    auto_confirmation == true
+  end
+  
+  # Проверяет, требуется ли ручное подтверждение бронирований для этой точки
+  def manual_confirmation_required?
+    auto_confirmation == false
+  end
+  
+  # Включает автоподтверждение бронирований
+  def enable_auto_confirmation!
+    update!(auto_confirmation: true)
+  end
+  
+  # Отключает автоподтверждение бронирований (переводит в ручной режим)
+  def enable_manual_confirmation!
+    update!(auto_confirmation: false)
+  end
+  
+  # Определяет статус для нового бронирования в зависимости от настроек точки
+  # @param is_admin_booking [Boolean] true если бронирование создается администратором/партнером
+  # @return [String] статус бронирования
+  def booking_status_for_new_booking(is_admin_booking: false)
+    # Если бронирование создает не клиент (админ/партнер) - сразу подтвержденное
+    return 'confirmed' if is_admin_booking
+    
+    # Для клиентских бронирований проверяем настройки точки
+    auto_confirmation_enabled? ? 'confirmed' : 'pending'
   end
 end
