@@ -13,6 +13,7 @@ essential_templates = [
     name: 'Підтвердження бронювання',
     template_type: 'booking_confirmation',
     language: 'uk',
+    channel_type: 'email',
     subject: 'Підтверджено: бронювання #{booking_id} на {booking_date}',
     body: %{
 <html>
@@ -74,6 +75,7 @@ essential_templates = [
     name: 'Подтверждение бронирования',
     template_type: 'booking_confirmation',
     language: 'ru',
+    channel_type: 'email',
     subject: 'Подтверждено: бронирование #{booking_id} на {booking_date}',
     body: %{
 <html>
@@ -136,7 +138,8 @@ essential_templates = [
     name: 'Скасування бронювання',
     template_type: 'booking_cancelled',
     language: 'uk',
-    subject: 'Бронювання скасовано - {booking_id}',
+    channel_type: 'email',
+    subject: 'Скасовано: бронювання #{booking_id}',
     body: %{
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -185,7 +188,8 @@ essential_templates = [
     name: 'Отмена бронирования',
     template_type: 'booking_cancelled',
     language: 'ru',
-    subject: 'Бронирование отменено - {booking_id}',
+    channel_type: 'email',
+    subject: 'Отменено: бронирование #{booking_id}',
     body: %{
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -235,7 +239,8 @@ essential_templates = [
     name: 'Нагадування про запис',
     template_type: 'booking_reminder',
     language: 'uk',
-    subject: 'Нагадування: ваш запис завтра о {booking_time}',
+    channel_type: 'email',
+    subject: 'Нагадування: завтра ваш запис у {service_point_name}',
     body: %{
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -290,7 +295,8 @@ essential_templates = [
     name: 'Напоминание о записи',
     template_type: 'booking_reminder',
     language: 'ru',
-    subject: 'Напоминание: ваша запись завтра в {booking_time}',
+    channel_type: 'email',
+    subject: 'Напоминание: завтра ваша запись в {service_point_name}',
     body: %{
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -346,6 +352,7 @@ essential_templates = [
     name: 'Скидання пароля',
     template_type: 'password_reset',
     language: 'uk',
+    channel_type: 'email',
     subject: 'Скидання пароля - {company_name}',
     body: %{
 <html>
@@ -402,6 +409,7 @@ essential_templates = [
     name: 'Сброс пароля',
     template_type: 'password_reset',
     language: 'ru',
+    channel_type: 'email',
     subject: 'Сброс пароля - {company_name}',
     body: %{
 <html>
@@ -459,7 +467,8 @@ essential_templates = [
     name: 'Завершення обслуговування',
     template_type: 'service_completed',
     language: 'uk',
-    subject: 'Обслуговування завершено - {booking_id}',
+    channel_type: 'email',
+    subject: 'Обслуговування завершено - {service_point_name}',
     body: %{
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -513,7 +522,8 @@ essential_templates = [
     name: 'Завершение обслуживания',
     template_type: 'service_completed',
     language: 'ru',
-    subject: 'Обслуживание завершено - {booking_id}',
+    channel_type: 'email',
+    subject: 'Обслуживание завершено - {service_point_name}',
     body: %{
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -568,7 +578,8 @@ essential_templates = [
     name: 'Запит відгуку',
     template_type: 'review_request',
     language: 'uk',
-    subject: 'Поділіться враженнями про обслуговування',
+    channel_type: 'email',
+    subject: 'Оцініть наш сервіс - {service_point_name}',
     body: %{
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -617,7 +628,8 @@ essential_templates = [
     name: 'Запрос отзыва',
     template_type: 'review_request',
     language: 'ru',
-    subject: 'Поделитесь впечатлениями об обслуживании',
+    channel_type: 'email',
+    subject: 'Оцените наш сервис - {service_point_name}',
     body: %{
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -667,6 +679,7 @@ essential_templates = [
     name: 'Вітання нового користувача',
     template_type: 'user_welcome',
     language: 'uk',
+    channel_type: 'email',
     subject: 'Ласкаво просимо до {company_name}!',
     body: %{
 <html>
@@ -730,6 +743,7 @@ essential_templates = [
     name: 'Приветствие нового пользователя',
     template_type: 'user_welcome',
     language: 'ru',
+    channel_type: 'email',
     subject: 'Добро пожаловать в {company_name}!',
     body: %{
 <html>
@@ -794,6 +808,7 @@ essential_templates = [
     name: 'Інформаційна розсилка',
     template_type: 'newsletter',
     language: 'uk',
+    channel_type: 'email',
     subject: 'Новини від {company_name}',
     body: %{
 <html>
@@ -842,6 +857,7 @@ essential_templates = [
     name: 'Информационная рассылка',
     template_type: 'newsletter',
     language: 'ru',
+    channel_type: 'email',
     subject: 'Новости от {company_name}',
     body: %{
 <html>

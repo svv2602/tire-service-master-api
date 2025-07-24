@@ -19,10 +19,9 @@ priority_seeds = [
   '04_service_point_photos.rb', # Добавляем фотографии сервисных точек
   '05_reviews.rb',           # Создаем отзывы
   'notification_settings.rb', # Создаем настройки системы уведомлений
-  'email_templates.rb',      # Создаем шаблоны email уведомлений
+  'essential_email_templates.rb', # Создаем основные шаблоны email уведомлений
   'telegram_templates.rb',   # Создаем Telegram шаблоны уведомлений
   'push_templates.rb',       # Создаем Push шаблоны уведомлений
-  'email_templates_and_variables.rb', # Создаем email шаблоны и кастомные переменные
   'articles_multilang.rb',   # Создаем многоязычные статьи
   'page_content.rb'          # Создаем контент страниц
 ]
@@ -36,7 +35,14 @@ excluded_seeds = [
   'create_admin_user.rb',    # Удален (дублировал test_users.rb)
   'test_data.rb',            # Удален (ошибки валидации)
   'services.rb',             # Старый файл услуг без локализации
-  '03_services.rb'           # Старый файл услуг без локализации
+  '03_services.rb',          # Старый файл услуг без локализации
+  'generate_test_data.rb',   # Удален (тестовые бронирования больше не нужны)
+  'fix_test_data.rb',        # Удален (тестовые данные больше не нужны)
+  'test_booking_statuses.rb', # Удален (тестовые статусы бронирований больше не нужны)
+  'email_templates.rb',      # Файл не существует (используется essential_email_templates.rb)
+  'extended_email_templates.rb', # Создает лишние шаблоны (уже есть в email_templates_and_variables.rb)
+  'complete_email_templates.rb', # Содержит destroy_all и пересоздает все шаблоны
+  'email_templates_and_variables.rb' # Дублирует шаблоны из essential_email_templates.rb
 ]
 
 # Сначала выполняем приоритетные сидеры в заданном порядке
