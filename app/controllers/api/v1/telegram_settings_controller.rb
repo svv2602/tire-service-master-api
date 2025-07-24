@@ -1,6 +1,6 @@
 class Api::V1::TelegramSettingsController < ApplicationController
   before_action :authenticate_request
-  before_action :set_telegram_settings, only: [:show, :update, :test_connection, :test_message]
+  before_action :set_telegram_settings, only: [:show, :update, :test_connection, :test_message, :get_chat_id]
 
   # GET /api/v1/telegram_settings
   def show
@@ -60,6 +60,120 @@ class Api::V1::TelegramSettingsController < ApplicationController
       render json: {
         success: false,
         message: "Исключение при подключении: #{e.message}"
+      }, status: :unprocessable_entity
+    end
+  end
+
+  # POST /api/v1/telegram_settings/get_chat_id
+  def get_chat_id
+    authorize TelegramSetting, :update?
+    
+    begin
+      telegram_service = TelegramService.new
+      webhook_was_active = false
+      original_webhook_url = nil
+      
+      # Получаем последние обновления
+      updates = telegram_service.get_updates
+      
+      # Если ошибка Conflict - значит установлен webhook, временно отключаем его
+      if !updates[:ok] && updates[:description]&.include?('Conflict')
+        Rails.logger.info "🔗 Обнаружен конфликт с webhook, временно отключаем..."
+        
+        # Получаем информацию о webhook
+        webhook_info = telegram_service.get_webhook_info
+        if webhook_info[:ok] && webhook_info[:result][:url].present?
+          original_webhook_url = webhook_info[:result][:url]
+          webhook_was_active = true
+          
+          # Отключаем webhook
+          delete_response = telegram_service.delete_webhook
+          if delete_response[:ok]
+            Rails.logger.info "✅ Webhook временно отключен"
+            sleep(1) # Небольшая пауза
+            updates = telegram_service.get_updates
+          else
+            Rails.logger.error "❌ Не удалось отключить webhook: #{delete_response[:description]}"
+          end
+        end
+      end
+      
+      if updates[:ok] && updates[:result].any?
+        # Находим первое сообщение с chat_id
+        first_update = updates[:result].first
+        
+        if first_update[:message]
+          message = first_update[:message]
+          chat = message[:chat]
+          from = message[:from]
+          
+          chat_id = chat[:id].to_s
+          
+          # Автоматически устанавливаем admin_chat_id если он пустой
+          if @telegram_settings.admin_chat_id.blank?
+            @telegram_settings.update!(admin_chat_id: chat_id)
+            Rails.logger.info "✅ Автоматически установлен admin_chat_id: #{chat_id}"
+          end
+          
+          # Восстанавливаем webhook если он был активен
+          if webhook_was_active && original_webhook_url
+            Rails.logger.info "🔄 Восстанавливаем webhook: #{original_webhook_url}"
+            restore_response = telegram_service.set_webhook(original_webhook_url)
+            if restore_response[:ok]
+              Rails.logger.info "✅ Webhook восстановлен"
+            else
+              Rails.logger.warn "⚠️ Не удалось восстановить webhook: #{restore_response[:description]}"
+            end
+          end
+          
+          render json: {
+            success: true,
+            message: 'Chat ID найден и установлен',
+            chat_id: chat_id,
+            user_info: {
+              first_name: from[:first_name],
+              last_name: from[:last_name],
+              username: from[:username],
+              message_text: message[:text],
+              date: Time.at(message[:date]).strftime('%d.%m.%Y %H:%M')
+            },
+            auto_set: @telegram_settings.admin_chat_id == chat_id,
+            webhook_restored: webhook_was_active
+          }
+        else
+          render json: {
+            success: false,
+            message: 'В обновлениях нет сообщений с chat_id'
+          }, status: :unprocessable_entity
+        end
+      else
+        render json: {
+          success: false,
+          message: 'Обновлений не найдено. Напишите боту любое сообщение (например: /start) и попробуйте снова.',
+          instruction: {
+            step1: 'Найдите вашего бота в Telegram',
+            step2: 'Напишите боту сообщение (/start или Привет)',
+            step3: 'Нажмите кнопку "Получить Chat ID" снова'
+          }
+        }, status: :unprocessable_entity
+      end
+      
+    rescue => e
+      # Восстанавливаем webhook даже в случае ошибки
+      if webhook_was_active && original_webhook_url
+        Rails.logger.info "🔄 Восстанавливаем webhook после ошибки: #{original_webhook_url}"
+        begin
+          telegram_service = TelegramService.new
+          telegram_service.set_webhook(original_webhook_url)
+        rescue => restore_error
+          Rails.logger.error "❌ Не удалось восстановить webhook: #{restore_error.message}"
+        end
+      end
+      
+      Rails.logger.error "❌ Ошибка получения Chat ID: #{e.message}"
+      render json: {
+        success: false,
+        message: "Ошибка получения Chat ID: #{e.message}"
       }, status: :unprocessable_entity
     end
   end

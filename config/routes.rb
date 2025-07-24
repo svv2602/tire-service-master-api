@@ -65,6 +65,7 @@ Rails.application.routes.draw do
         member do
           post :test_connection
           post :test_message
+          post :get_chat_id
           post :set_webhook
           post :force_webhook_update
           post :generate_ngrok_webhook

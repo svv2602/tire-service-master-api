@@ -536,8 +536,8 @@ class TelegramService
   # Подготовка переменных для шаблонов бронирований
   def prepare_booking_variables(booking)
     # Получаем название сервиса - используем разные подходы в зависимости от доступных данных
-    service_name = if booking.respond_to?(:service_point_service) && booking.service_point_service&.service
-                     booking.service_point_service.service.name
+    service_name = if booking.services.any?
+                     booking.services.first.name
                    elsif booking.respond_to?(:service_category) && booking.service_category
                      booking.service_category.name
                    else
@@ -576,7 +576,7 @@ class TelegramService
 
   # Fallback метод с жестко закодированными шаблонами (для совместимости)
   def format_booking_notification_fallback(booking, type)
-    service_name = booking.service_point_service&.service&.name || 'Невідома послуга'
+    service_name = booking.services.first&.name || 'Невідома послуга'
     point_name = booking.service_point&.name || 'Невідома точка'
     date = booking.start_time&.strftime('%d.%m.%Y о %H:%M') || 'Не вказано'
 

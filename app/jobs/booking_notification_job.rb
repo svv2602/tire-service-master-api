@@ -23,7 +23,7 @@ class BookingNotificationJob < ApplicationJob
       EmailTemplateMailer.booking_confirmation(booking_id, recipient_email).deliver_later
       Rails.logger.info "✅ Запланировано подтверждение бронирования на #{recipient_email}"
     when 'booking_cancelled'
-      EmailTemplateMailer.booking_cancellation(booking_id, recipient_email).deliver_later
+      EmailTemplateMailer.booking_cancelled(booking_id, recipient_email).deliver_later
       Rails.logger.info "✅ Запланировано уведомление об отмене на #{recipient_email}"
     when 'booking_reminder'
       EmailTemplateMailer.booking_reminder(booking_id, recipient_email).deliver_later

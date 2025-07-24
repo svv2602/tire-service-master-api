@@ -107,8 +107,8 @@ class PushService
   # Подготовка переменных для шаблонов бронирований
   def prepare_booking_variables(booking)
     # Получаем название сервиса - используем разные подходы в зависимости от доступных данных
-    service_name = if booking.respond_to?(:service_point_service) && booking.service_point_service&.service
-                     booking.service_point_service.service.name
+    service_name = if booking.services.any?
+                     booking.services.first.name
                    elsif booking.respond_to?(:service_category) && booking.service_category
                      booking.service_category.name
                    else
@@ -225,8 +225,8 @@ class PushService
   # Fallback метод с жестко закодированными шаблонами (для совместимости)
   def format_booking_notification_fallback(booking, type)
     # Получаем название сервиса - используем разные подходы в зависимости от доступных данных
-    service_name = if booking.respond_to?(:service_point_service) && booking.service_point_service&.service
-                     booking.service_point_service.service.name
+    service_name = if booking.services.any?
+                     booking.services.first.name
                    elsif booking.respond_to?(:service_category) && booking.service_category
                      booking.service_category.name
                    else

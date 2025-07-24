@@ -176,7 +176,7 @@ class EmailTemplateMailer < ApplicationMailer
       end_time: booking.end_time&.strftime('%H:%M'),
       service_point_name: booking.service_point&.name,
       service_point_address: booking.service_point&.address,
-      service_point_phone: booking.service_point&.phone,
+      service_point_phone: booking.service_point&.contact_phone,
       city_name: booking.service_point&.city&.name,
       client_first_name: booking.service_recipient_first_name || booking.client&.first_name,
       client_last_name: booking.service_recipient_last_name || booking.client&.last_name,
