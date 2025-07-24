@@ -896,12 +896,12 @@ class TelegramService
   end
 
   def build_calendar_keyboard
-    # Простая реализация календаря на 14 дней вперед
+    # ✅ ИСПРАВЛЕНИЕ: Календарь начинается с завтрашнего дня (как на веб-сайте)
     buttons = []
-    current_date = Date.current
+    start_date = Date.current + 1.day # Начинаем с завтра
     
     (0..13).each do |day_offset|
-      date = current_date + day_offset.days
+      date = start_date + day_offset.days
       next if date.sunday? # Пропускаем воскресенья
       
       day_name = I18n.l(date, format: '%A, %d.%m', locale: :ru)
