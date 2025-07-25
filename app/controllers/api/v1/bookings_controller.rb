@@ -75,8 +75,15 @@ module Api
         # Применяем фильтры
         @bookings = apply_filters(@bookings)
         
-        # Добавляем связанные данные для отображения названий вместо ID
-        @bookings = @bookings.includes(:payment_status, :car_type, :service_category, { service_point: :city }, client: :user)
+        # Добавляем связанные данные для отображения названий вместо ID (eager loading)
+        @bookings = @bookings.includes(
+          :payment_status, 
+          :car_type, 
+          :service_category,
+          { service_point: [:city, :partner, :region] },
+          { client: :user },
+          :reviews
+        )
         
         # Применяем сортировку
         sort_by = params[:sort_by] || 'booking_date'

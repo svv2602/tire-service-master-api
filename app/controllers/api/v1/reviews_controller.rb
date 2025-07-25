@@ -58,8 +58,12 @@ module Api
           Rails.logger.info("ReviewsController#index: After search filter - count: #{@reviews.count}")
         end
         
-        # Загружаем связанные данные для оптимизации
-        @reviews = @reviews.includes({ client: :user }, :service_point, :booking)
+        # Загружаем связанные данные для оптимизации (eager loading)
+        @reviews = @reviews.includes(
+          { client: :user }, 
+          { service_point: [:city, :partner] }, 
+          :booking
+        )
         
         # Сортировка
         if params[:sort_by] == 'rating'

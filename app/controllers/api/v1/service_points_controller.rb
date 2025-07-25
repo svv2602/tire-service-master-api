@@ -28,6 +28,18 @@ module Api
         else
           @service_points = policy_scope(ServicePoint)
         end
+
+        # Eager loading для избежания N+1 запросов
+        @service_points = @service_points.includes(
+          :partner,
+          :city,
+          :region,
+          :service_point_photos,
+          :service_point_services,
+          :posts,
+          :working_hours,
+          :reviews
+        )
         
         # Фильтрация по региону
         if params[:region_id].present?
@@ -718,7 +730,16 @@ module Api
       private
       
       def set_service_point
-        @service_point = ServicePoint.find(params[:id])
+        @service_point = ServicePoint.includes(
+          :partner,
+          :city,
+          :region,
+          :service_point_photos,
+          :service_point_services,
+          :posts,
+          :working_hours,
+          :reviews
+        ).find(params[:id])
       end
       
       def service_point_params
