@@ -60,12 +60,16 @@ class OperatorAssignmentService
             results[:success] << point_id
 
             # Логирование назначения
-            log_assignment_action(
-              'assign',
-              operator,
-              service_point,
-              assigned_by_user,
-              assignment
+            AuditLogJob.log_assignment(
+              user_id: assigned_by_user.id,
+              operator_id: operator.id,
+              service_point_ids: [service_point.id],
+              ip_address: Thread.current[:current_ip_address],
+              user_agent: Thread.current[:current_user_agent],
+              additional_data: {
+                action_type: 'assign',
+                assignment_id: assignment.id
+              }
             )
 
             # Отправка уведомления оператору
@@ -113,12 +117,16 @@ class OperatorAssignmentService
             results[:success] << point_id
 
             # Логирование отзыва назначения
-            log_assignment_action(
-              'unassign',
-              operator,
-              service_point,
-              unassigned_by_user,
-              assignment
+            AuditLogJob.log_unassignment(
+              user_id: unassigned_by_user.id,
+              operator_id: operator.id,
+              service_point_ids: [service_point.id],
+              ip_address: Thread.current[:current_ip_address],
+              user_agent: Thread.current[:current_user_agent],
+              additional_data: {
+                action_type: 'unassign',
+                assignment_id: assignment.id
+              }
             )
 
             # Отправка уведомления оператору
@@ -185,12 +193,16 @@ class OperatorAssignmentService
             results[:success] << operator_id
 
             # Логирование
-            log_assignment_action(
-              'bulk_assign',
-              operator,
-              service_point,
-              assigned_by_user,
-              assignment
+            AuditLogJob.log_assignment(
+              user_id: assigned_by_user.id,
+              operator_id: operator.id,
+              service_point_ids: [service_point.id],
+              ip_address: Thread.current[:current_ip_address],
+              user_agent: Thread.current[:current_user_agent],
+              additional_data: {
+                action_type: 'bulk_assign',
+                assignment_id: assignment.id
+              }
             )
 
             # Уведомление
@@ -232,12 +244,18 @@ class OperatorAssignmentService
     result = assign_operator_to_points(operator, point_ids, assigned_by_user)
 
     # Логирование автоназначения
-    SystemLog.log_operator_auto_assignment(
-      assigned_by_user,
-      operator,
-      point_ids.count,
-      result[:success].count,
-      request_context: audit_context
+    AuditLogJob.log_assignment(
+      user_id: assigned_by_user.id,
+      operator_id: operator.id,
+      service_point_ids: result[:success],
+      ip_address: Thread.current[:current_ip_address],
+      user_agent: Thread.current[:current_user_agent],
+      additional_data: {
+        action_type: 'auto_assign',
+        total_points: point_ids.count,
+        successful_assignments: result[:success].count,
+        failed_assignments: result[:failed].count
+      }
     )
 
     result
@@ -253,16 +271,7 @@ class OperatorAssignmentService
     operator.is_active? && service_point.is_active?
   end
 
-  def log_assignment_action(action, operator, service_point, performed_by_user, assignment)
-    SystemLog.log_operator_assignment(
-      performed_by_user,
-      action,
-      operator,
-      service_point,
-      assignment,
-      request_context: audit_context
-    )
-  end
+
 
   def send_assignment_notification(operator, service_point, action_type)
     # Отправляем уведомление через существующую систему уведомлений

@@ -12,6 +12,9 @@ module Auditable
     
     # Атрибут для отключения аудита (для массовых операций)
     attr_accessor :skip_audit
+    
+    # Атрибут для выбора синхронного или асинхронного логирования
+    attr_accessor :async_audit
   end
 
   private
@@ -19,14 +22,28 @@ module Auditable
   def log_creation
     return if skip_audit || !should_audit?
     
-    SystemLog.log_create(
-      current_user_for_audit,
-      self.class.name,
-      id,
-      auditable_attributes,
+    audit_data = {
+      user_id: current_user_for_audit&.id,
+      resource_type: self.class.name,
+      resource_id: id,
+      new_value: auditable_attributes,
       ip_address: current_ip_address,
-      user_agent: current_user_agent
-    )
+      user_agent: current_user_agent,
+      additional_data: audit_context_data
+    }
+    
+    if use_async_audit?
+      AuditLogJob.log_create(**audit_data)
+    else
+      SystemLog.log_create(
+        current_user_for_audit,
+        self.class.name,
+        id,
+        auditable_attributes,
+        ip_address: current_ip_address,
+        user_agent: current_user_agent
+      )
+    end
   end
 
   def log_update
@@ -36,29 +53,59 @@ module Auditable
     significant_changes = saved_changes.except('updated_at', 'created_at')
     return if significant_changes.empty?
     
-    SystemLog.log_update(
-      current_user_for_audit,
-      self.class.name,
-      id,
-      changes_before_save,
-      auditable_attributes,
-      significant_changes,
+    audit_data = {
+      user_id: current_user_for_audit&.id,
+      resource_type: self.class.name,
+      resource_id: id,
+      old_value: changes_before_save,
+      new_value: auditable_attributes,
+      changes: significant_changes,
       ip_address: current_ip_address,
-      user_agent: current_user_agent
-    )
+      user_agent: current_user_agent,
+      additional_data: audit_context_data
+    }
+    
+    if use_async_audit?
+      AuditLogJob.log_update(**audit_data)
+    else
+      SystemLog.log_update(
+        current_user_for_audit,
+        self.class.name,
+        id,
+        changes_before_save,
+        auditable_attributes,
+        significant_changes,
+        ip_address: current_ip_address,
+        user_agent: current_user_agent
+      )
+    end
   end
 
   def log_deletion
     return if skip_audit || !should_audit?
     
-    SystemLog.log_delete(
-      current_user_for_audit,
-      self.class.name,
-      id,
-      auditable_attributes,
+    audit_data = {
+      user_id: current_user_for_audit&.id,
+      resource_type: self.class.name,
+      resource_id: id,
+      old_value: auditable_attributes,
       ip_address: current_ip_address,
-      user_agent: current_user_agent
-    )
+      user_agent: current_user_agent,
+      additional_data: audit_context_data
+    }
+    
+    if use_async_audit?
+      AuditLogJob.log_delete(**audit_data)
+    else
+      SystemLog.log_delete(
+        current_user_for_audit,
+        self.class.name,
+        id,
+        auditable_attributes,
+        ip_address: current_ip_address,
+        user_agent: current_user_agent
+      )
+    end
   end
 
   def should_audit?
@@ -86,22 +133,58 @@ module Auditable
     # User-Agent можно получить из Thread.current если установлен в контроллере
     Thread.current[:current_user_agent]
   end
+  
+  def use_async_audit?
+    # Проверяем принудительное значение из Thread
+    return Thread.current[:force_async_audit] if Thread.current[:force_async_audit] != nil
+    
+    # Используем асинхронное логирование по умолчанию, если не указано иное
+    return async_audit if async_audit != nil
+    
+    # В production используем асинхронное логирование для улучшения производительности
+    Rails.env.production? || Rails.application.config.respond_to?(:audit_async_default) && Rails.application.config.audit_async_default
+  end
+  
+  def audit_context_data
+    # Дополнительные данные для аудита, можно переопределить в моделях
+    context = {}
+    
+    # Добавляем информацию о связанных объектах
+    context[:related_objects] = related_audit_objects if respond_to?(:related_audit_objects, true)
+    
+    # Добавляем пользовательские данные
+    context[:custom_data] = custom_audit_data if respond_to?(:custom_audit_data, true)
+    
+    # Добавляем информацию о сессии
+    context[:session_id] = Thread.current[:current_session_id] if Thread.current[:current_session_id]
+    
+    # Добавляем информацию о запросе
+    context[:request_id] = Thread.current[:current_request_id] if Thread.current[:current_request_id]
+    
+    context.empty? ? nil : context
+  end
 
   class_methods do
-    def with_audit_context(user: nil, ip_address: nil, user_agent: nil)
+    def with_audit_context(user: nil, ip_address: nil, user_agent: nil, session_id: nil, request_id: nil)
       old_user = Thread.current[:current_audit_user]
       old_ip = Thread.current[:current_ip_address]
       old_agent = Thread.current[:current_user_agent]
+      old_session = Thread.current[:current_session_id]
+      old_request = Thread.current[:current_request_id]
       
       Thread.current[:current_audit_user] = user
       Thread.current[:current_ip_address] = ip_address
       Thread.current[:current_user_agent] = user_agent
+      Thread.current[:current_session_id] = session_id
+      Thread.current[:current_request_id] = request_id
       
       yield
     ensure
       Thread.current[:current_audit_user] = old_user
       Thread.current[:current_ip_address] = old_ip
       Thread.current[:current_user_agent] = old_agent
+      Thread.current[:current_session_id] = old_session
+      Thread.current[:current_request_id] = old_request
     end
     
     def without_audit(&block)
@@ -110,6 +193,32 @@ module Auditable
       yield
     ensure
       Thread.current[:skip_audit] = old_value
+    end
+    
+    def with_async_audit(async: true, &block)
+      # Устанавливаем режим асинхронного аудита для всех операций в блоке
+      old_async = Thread.current[:force_async_audit]
+      Thread.current[:force_async_audit] = async
+      yield
+    ensure
+      Thread.current[:force_async_audit] = old_async
+    end
+    
+    def audit_critical_operation(user:, operation_type:, resource_type: nil, resource_id: nil, **context)
+      # Специальный метод для логирования критичных операций
+      AuditLogJob.perform_later(
+        action: operation_type,
+        user_id: user&.id,
+        resource_type: resource_type,
+        resource_id: resource_id,
+        additional_data: {
+          operation_type: operation_type,
+          timestamp: Time.current,
+          **context
+        },
+        ip_address: Thread.current[:current_ip_address],
+        user_agent: Thread.current[:current_user_agent]
+      )
     end
   end
 end 

@@ -510,10 +510,18 @@ Rails.application.routes.draw do
       resources :operator_service_points, only: [:show, :update, :destroy]
 
       # Аудит логи
-      resources :audit_logs, only: [:index, :show] do
+      resources :audit_logs, only: [:index, :show, :create] do
         collection do
           get :stats
           get :export
+          get :search_autocomplete
+          get :suspicious_activity
+          post :manual_log
+        end
+        
+        member do
+          get 'user_timeline/:user_id', action: :user_timeline, as: :user_timeline
+          get 'resource_history/:resource_type/:resource_id', action: :resource_history, as: :resource_history
         end
       end
 

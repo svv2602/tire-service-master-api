@@ -118,6 +118,162 @@ class Api::V1::AuditLogsController < ApplicationController
     end
   end
 
+  # GET /api/v1/audit_logs/search_autocomplete
+  # Автокомплит для поиска в аудит логах
+  def search_autocomplete
+    authorize SystemLog, :index?
+    
+    field = params[:field]
+    query = params[:query]&.strip
+    
+    return render json: { suggestions: [] } if query.blank? || field.blank?
+    
+    suggestions = case field
+    when 'user_email'
+      autocomplete_users(query)
+    when 'resource_type'
+      autocomplete_resource_types(query)
+    when 'action'
+      autocomplete_actions(query)
+    when 'ip_address'
+      autocomplete_ip_addresses(query)
+    when 'resource_name'
+      autocomplete_resource_names(query)
+    else
+      []
+    end
+    
+    render json: { 
+      field: field,
+      query: query,
+      suggestions: suggestions.first(10) # Ограничиваем 10 результатами
+    }
+  end
+
+  # GET /api/v1/audit_logs/suspicious_activity
+  # Обнаружение подозрительной активности
+  def suspicious_activity
+    authorize SystemLog, :index?
+    
+    days_ago = [params[:days]&.to_i || 7, 30].min
+    
+    suspicious_patterns = {
+      # Частые неудачные попытки входа
+      frequent_failed_logins: detect_frequent_failed_logins(days_ago),
+      
+      # Множественные входы с разных IP
+      multiple_ip_logins: detect_multiple_ip_logins(days_ago),
+      
+      # Массовые изменения данных
+      bulk_data_changes: detect_bulk_data_changes(days_ago),
+      
+      # Подозрительные IP адреса
+      suspicious_ips: detect_suspicious_ips(days_ago),
+      
+      # Активность в нерабочее время
+      off_hours_activity: detect_off_hours_activity(days_ago),
+      
+      # Необычные паттерны доступа
+      unusual_access_patterns: detect_unusual_access_patterns(days_ago)
+    }
+    
+    render json: {
+      period: {
+        days: days_ago,
+        from: days_ago.days.ago.to_date,
+        to: Date.current
+      },
+      suspicious_activity: suspicious_patterns,
+      generated_at: Time.current.iso8601
+    }
+  end
+
+  # GET /api/v1/audit_logs/user_timeline/:user_id
+  # Временная шкала действий пользователя
+  def user_timeline
+    user = User.find(params[:user_id])
+    authorize user, :show?
+    
+    days_ago = [params[:days]&.to_i || 30, 90].min
+    
+    timeline_data = SystemLog.where(user: user)
+                            .where('created_at >= ?', days_ago.days.ago)
+                            .order(created_at: :desc)
+                            .limit(500)
+                            .map { |log| serialize_timeline_event(log) }
+                            .group_by { |event| event[:date] }
+    
+    render json: {
+      user: {
+        id: user.id,
+        name: user.full_name,
+        email: user.email,
+        role: user.role
+      },
+      period: {
+        days: days_ago,
+        from: days_ago.days.ago.to_date,
+        to: Date.current
+      },
+      timeline: timeline_data,
+      total_events: timeline_data.values.flatten.count
+    }
+  end
+
+  # GET /api/v1/audit_logs/resource_history/:resource_type/:resource_id
+  # История изменений конкретного ресурса
+  def resource_history
+    authorize SystemLog, :show?
+    
+    resource_type = params[:resource_type]
+    resource_id = params[:resource_id]
+    
+    history = SystemLog.where(resource_type: resource_type, resource_id: resource_id)
+                      .includes(:user)
+                      .order(created_at: :desc)
+                      .limit(100)
+                      .map { |log| serialize_audit_log(log, detailed: true) }
+    
+    # Попытаемся получить информацию о ресурсе
+    resource_info = get_resource_info(resource_type, resource_id)
+    
+    render json: {
+      resource: resource_info,
+      history: history,
+      total_changes: history.count
+    }
+  end
+
+  # POST /api/v1/audit_logs/manual_log
+  # Ручное создание лога аудита (для критичных операций)
+  def manual_log
+    authorize SystemLog, :create?
+    
+    log_params = params.require(:log).permit(
+      :action, :resource_type, :resource_id, :description, :additional_data
+    )
+    
+    # Создаем лог через Job для консистентности
+    AuditLogJob.perform_later(
+      action: log_params[:action] || 'manual_entry',
+      user_id: current_user.id,
+      resource_type: log_params[:resource_type],
+      resource_id: log_params[:resource_id],
+      additional_data: {
+        manual_entry: true,
+        description: log_params[:description],
+        custom_data: log_params[:additional_data]
+      },
+      ip_address: request.remote_ip,
+      user_agent: request.user_agent
+    )
+    
+    render json: {
+      message: 'Запись аудита создана',
+      status: 'queued'
+    }, status: :created
+  end
+
   private
 
   def authorize_audit_access
@@ -300,6 +456,241 @@ class Api::V1::AuditLogsController < ApplicationController
           log.changes&.to_json
         ]
       end
+    end
+  end
+
+  # Методы автокомплита
+  def autocomplete_users(query)
+    User.joins("LEFT JOIN system_logs ON system_logs.user_id = users.id")
+        .where("users.email ILIKE ? OR users.first_name ILIKE ? OR users.last_name ILIKE ?", 
+               "%#{query}%", "%#{query}%", "%#{query}%")
+        .group("users.id, users.email, users.first_name, users.last_name")
+        .order("COUNT(system_logs.id) DESC")
+        .limit(10)
+        .pluck(:email)
+  end
+
+  def autocomplete_resource_types(query)
+    SystemLog.where("resource_type ILIKE ?", "%#{query}%")
+             .group(:resource_type)
+             .order("COUNT(*) DESC")
+             .limit(10)
+             .pluck(:resource_type)
+  end
+
+  def autocomplete_actions(query)
+    SystemLog.where("action ILIKE ?", "%#{query}%")
+             .group(:action)
+             .order("COUNT(*) DESC")
+             .limit(10)
+             .pluck(:action)
+  end
+
+  def autocomplete_ip_addresses(query)
+    SystemLog.where("ip_address::text ILIKE ?", "%#{query}%")
+             .where.not(ip_address: nil)
+             .group(:ip_address)
+             .order("COUNT(*) DESC")
+             .limit(10)
+             .pluck(:ip_address)
+  end
+
+  def autocomplete_resource_names(query)
+    # Это более сложный запрос, так как resource_name - это виртуальное поле
+    # Для простоты возвращаем пустой массив, можно расширить позже
+    []
+  end
+
+  # Методы обнаружения подозрительной активности
+  def detect_frequent_failed_logins(days_ago)
+    # Ищем частые неудачные попытки входа (больше 10 за час)
+    failed_attempts = SystemLog.where(action: 'login_failed')
+                              .where('created_at >= ?', days_ago.days.ago)
+                              .group(:ip_address, "DATE_TRUNC('hour', created_at)")
+                              .having('COUNT(*) > 10')
+                              .count
+
+    failed_attempts.map do |(ip, hour), count|
+      {
+        ip_address: ip,
+        hour: hour,
+        failed_attempts: count,
+        severity: count > 20 ? 'high' : 'medium'
+      }
+    end
+  end
+
+  def detect_multiple_ip_logins(days_ago)
+    # Ищем пользователей с входами с более чем 5 разных IP за день
+    multiple_ips = SystemLog.joins(:user)
+                           .where(action: 'login')
+                           .where('system_logs.created_at >= ?', days_ago.days.ago)
+                           .group(:user_id, "DATE(system_logs.created_at)")
+                           .having('COUNT(DISTINCT ip_address) > 5')
+                           .includes(:user)
+
+    multiple_ips.map do |log|
+      ip_count = SystemLog.where(user: log.user, action: 'login')
+                         .where('DATE(created_at) = ?', log.created_at.to_date)
+                         .distinct.count(:ip_address)
+
+      {
+        user_id: log.user.id,
+        user_email: log.user.email,
+        date: log.created_at.to_date,
+        unique_ips: ip_count,
+        severity: ip_count > 10 ? 'high' : 'medium'
+      }
+    end
+  end
+
+  def detect_bulk_data_changes(days_ago)
+    # Ищем пользователей с более чем 100 изменениями за час
+    bulk_changes = SystemLog.joins(:user)
+                           .where('created_at >= ?', days_ago.days.ago)
+                           .where(action: ['created', 'updated', 'deleted'])
+                           .group(:user_id, "DATE_TRUNC('hour', created_at)")
+                           .having('COUNT(*) > 100')
+                           .includes(:user)
+
+    bulk_changes.map do |log|
+      changes_count = SystemLog.where(user: log.user)
+                              .where('created_at >= ? AND created_at < ?', 
+                                     log.created_at.beginning_of_hour, 
+                                     log.created_at.beginning_of_hour + 1.hour)
+                              .count
+
+      {
+        user_id: log.user.id,
+        user_email: log.user.email,
+        hour: log.created_at.beginning_of_hour,
+        changes_count: changes_count,
+        severity: changes_count > 500 ? 'high' : 'medium'
+      }
+    end
+  end
+
+  def detect_suspicious_ips(days_ago)
+    # Ищем IP с аномально высокой активностью
+    suspicious_ips = SystemLog.where('created_at >= ?', days_ago.days.ago)
+                             .where.not(ip_address: nil)
+                             .group(:ip_address)
+                             .having('COUNT(*) > 1000')
+                             .count
+
+    suspicious_ips.map do |ip, count|
+      unique_users = SystemLog.where(ip_address: ip)
+                             .where('created_at >= ?', days_ago.days.ago)
+                             .distinct.count(:user_id)
+
+      {
+        ip_address: ip,
+        total_requests: count,
+        unique_users: unique_users,
+        severity: count > 5000 ? 'high' : 'medium'
+      }
+    end
+  end
+
+  def detect_off_hours_activity(days_ago)
+    # Ищем активность в нерабочее время (22:00-06:00, выходные)
+    off_hours_logs = SystemLog.where('created_at >= ?', days_ago.days.ago)
+                             .where(
+                               "EXTRACT(hour FROM created_at) < 6 OR EXTRACT(hour FROM created_at) > 22 OR EXTRACT(dow FROM created_at) IN (0, 6)"
+                             )
+                             .joins(:user)
+                             .group(:user_id)
+                             .having('COUNT(*) > 50')
+                             .includes(:user)
+
+    off_hours_logs.map do |log|
+      off_hours_count = SystemLog.where(user: log.user)
+                                .where('created_at >= ?', days_ago.days.ago)
+                                .where(
+                                  "EXTRACT(hour FROM created_at) < 6 OR EXTRACT(hour FROM created_at) > 22 OR EXTRACT(dow FROM created_at) IN (0, 6)"
+                                )
+                                .count
+
+      {
+        user_id: log.user.id,
+        user_email: log.user.email,
+        off_hours_activity: off_hours_count,
+        severity: off_hours_count > 200 ? 'high' : 'medium'
+      }
+    end
+  end
+
+  def detect_unusual_access_patterns(days_ago)
+    # Ищем необычные паттерны доступа (например, доступ к ресурсам, к которым пользователь обычно не обращается)
+    unusual_patterns = []
+
+    # Пример: пользователи, которые внезапно начали работать с ресурсами, к которым раньше не обращались
+    recent_resources = SystemLog.where('created_at >= ?', 7.days.ago)
+                               .joins(:user)
+                               .group(:user_id, :resource_type)
+                               .having('COUNT(*) > 10')
+
+    recent_resources.each do |log|
+      historical_access = SystemLog.where(user: log.user, resource_type: log.resource_type)
+                                  .where('created_at < ?', 7.days.ago)
+                                  .count
+
+      if historical_access == 0 # Новый тип ресурса для пользователя
+        recent_count = SystemLog.where(user: log.user, resource_type: log.resource_type)
+                               .where('created_at >= ?', 7.days.ago)
+                               .count
+
+        unusual_patterns << {
+          user_id: log.user.id,
+          user_email: log.user.email,
+          resource_type: log.resource_type,
+          recent_access_count: recent_count,
+          pattern: 'new_resource_access',
+          severity: recent_count > 50 ? 'high' : 'medium'
+        }
+      end
+    end
+
+    unusual_patterns
+  end
+
+  def serialize_timeline_event(log)
+    {
+      id: log.id,
+      time: log.created_at.strftime('%H:%M:%S'),
+      date: log.created_at.to_date.to_s,
+      action: log.action_description,
+      resource: log.resource_name || "#{log.resource_type} ##{log.resource_id}",
+      ip_address: log.ip_address,
+      details: {
+        resource_type: log.resource_type,
+        resource_id: log.resource_id,
+        changes: log.changes
+      }
+    }
+  end
+
+  def get_resource_info(resource_type, resource_id)
+    begin
+      resource_class = resource_type.constantize
+      resource = resource_class.find(resource_id)
+      
+      {
+        type: resource_type,
+        id: resource_id,
+        name: resource.try(:name) || resource.try(:title) || resource.try(:full_name) || "#{resource_type} ##{resource_id}",
+        status: resource.try(:is_active) || resource.try(:active) || 'unknown',
+        exists: true
+      }
+    rescue => e
+      {
+        type: resource_type,
+        id: resource_id,
+        name: "#{resource_type} ##{resource_id} (удален)",
+        status: 'deleted',
+        exists: false,
+        error: e.message
+      }
     end
   end
 end

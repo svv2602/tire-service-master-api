@@ -111,11 +111,11 @@ module Api
           )
           
           # Логируем блокировку
-          SystemLog.log_suspend(
-            current_user,
-            @user,
-            reason,
-            until_date,
+          AuditLogJob.log_suspend(
+            user_id: current_user.id,
+            target_user_id: @user.id,
+            reason: reason,
+            until_date: until_date,
             ip_address: request.remote_ip,
             user_agent: request.user_agent
           )
@@ -144,9 +144,9 @@ module Api
           @user.unsuspend!(unsuspended_by_user: current_user)
           
           # Логируем разблокировку
-          SystemLog.log_unsuspend(
-            current_user,
-            @user,
+          AuditLogJob.log_unsuspend(
+            user_id: current_user.id,
+            target_user_id: @user.id,
             ip_address: request.remote_ip,
             user_agent: request.user_agent
           )

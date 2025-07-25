@@ -57,9 +57,15 @@ module TireServiceMasterApi
     config.middleware.use PartnerDataFilterMiddleware
     config.middleware.use OperatorDataFilterMiddleware
     
+    # Добавляем middleware для контекста аудита (должен быть одним из первых)
+    config.middleware.insert_before ActionDispatch::RemoteIp, AuditContextMiddleware
+    
     # Настройка I18n
     config.i18n.available_locales = %w[uk ru]
     config.i18n.default_locale = :uk
     config.i18n.fallbacks = true
+    
+    # Настройка аудита
+    config.audit_async_default = Rails.env.production?
   end
 end

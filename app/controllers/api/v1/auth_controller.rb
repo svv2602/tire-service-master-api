@@ -46,6 +46,18 @@ module Api
         # Обновляем время последнего входа
         user.update_last_login!
 
+        # ✅ Логируем успешный вход в систему
+        AuditLogJob.log_login(
+          user_id: user.id,
+          ip_address: Thread.current[:current_ip_address],
+          user_agent: Thread.current[:current_user_agent],
+          additional_data: {
+            login_method: 'password',
+            user_role: user.role,
+            login_at: Time.current
+          }
+        )
+
         # ✅ Очищаем старые куки перед установкой новых
         cookies.delete(:refresh_token)
         cookies.delete(:access_token)
@@ -137,6 +149,19 @@ module Api
       # POST /api/v1/auth/logout
       # Выход из системы
       def logout
+        # ✅ Логируем выход из системы
+        if current_user
+          AuditLogJob.log_logout(
+            user_id: current_user.id,
+            ip_address: Thread.current[:current_ip_address],
+            user_agent: Thread.current[:current_user_agent],
+            additional_data: {
+              logout_at: Time.current,
+              user_role: current_user.role
+            }
+          )
+        end
+        
         # ✅ Удаляем ВСЕ куки при выходе
         cookies.delete(:refresh_token)
         cookies.delete(:access_token)
