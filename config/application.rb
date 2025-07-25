@@ -53,6 +53,10 @@ module TireServiceMasterApi
     # Добавляем автозагрузку папки middleware
     config.autoload_paths << Rails.root.join('app/middleware')
     
+    # Добавляем middleware для автоматической фильтрации данных
+    config.middleware.use PartnerDataFilterMiddleware
+    config.middleware.use OperatorDataFilterMiddleware
+    
     # Настройка I18n
     config.i18n.available_locales = %w[uk ru]
     config.i18n.default_locale = :uk
