@@ -114,7 +114,7 @@ module Api
           send_suspension_notification(@user, reason, until_date)
           
           render json: {
-            data: suspension_info(@user),
+            data: build_suspension_info(@user),
             message: 'Пользователь успешно заблокирован'
           }
         rescue => e
@@ -145,7 +145,7 @@ module Api
           send_unsuspension_notification(@user)
           
           render json: {
-            data: suspension_info(@user),
+            data: build_suspension_info(@user),
             message: 'Пользователь успешно разблокирован'
           }
         rescue => e
@@ -162,7 +162,7 @@ module Api
         authorize @user, :show?
         
         render json: {
-          data: suspension_info(@user)
+          data: build_suspension_info(@user)
         }
       end
 
@@ -247,7 +247,7 @@ module Api
       end
 
       # Получить информацию о блокировке пользователя
-      def suspension_info(user)
+      def build_suspension_info(user)
         if user.suspended?
           {
             is_suspended: true,
