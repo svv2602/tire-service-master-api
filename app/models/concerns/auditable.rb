@@ -44,6 +44,9 @@ module Auditable
         user_agent: current_user_agent
       )
     end
+    
+    # Проверяем на подозрительную активность
+    check_for_suspicious_activity('created')
   end
 
   def log_update
@@ -79,6 +82,9 @@ module Auditable
         user_agent: current_user_agent
       )
     end
+    
+    # Проверяем на подозрительную активность
+    check_for_suspicious_activity('updated')
   end
 
   def log_deletion
@@ -106,6 +112,9 @@ module Auditable
         user_agent: current_user_agent
       )
     end
+    
+    # Проверяем на подозрительную активность
+    check_for_suspicious_activity('deleted')
   end
 
   def should_audit?
@@ -219,6 +228,38 @@ module Auditable
         ip_address: Thread.current[:current_ip_address],
         user_agent: Thread.current[:current_user_agent]
       )
+    end
+
+    # Проверка на подозрительную активность
+    def check_for_suspicious_activity(action)
+      return unless current_user_for_audit
+      
+      # Проверяем только в рабочее время для некритичных действий
+      if is_off_hours? && is_critical_action?(action)
+        SecurityAlertJob.perform_later(
+          'off_hours_activity',
+          user: current_user_for_audit,
+          action: action,
+          resource: "#{self.class.name}##{id}",
+          timestamp: Time.current
+        )
+      end
+      
+      # Проверяем на массовые изменения (отложенная проверка)
+      if %w[created updated deleted].include?(action)
+        BulkActivityCheckJob.perform_later(current_user_for_audit.id, 1.hour.ago)
+      end
+    end
+
+    def is_off_hours?
+      current_hour = Time.current.hour
+      # Нерабочее время: с 22:00 до 6:00 и выходные
+      current_hour < 6 || current_hour > 22 || Time.current.weekend?
+    end
+
+    def is_critical_action?(action)
+      %w[deleted suspended].include?(action.to_s) || 
+      self.class.name.in?(%w[User SystemLog UserRole])
     end
   end
 end 
