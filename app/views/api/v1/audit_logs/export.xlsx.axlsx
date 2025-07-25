@@ -1,0 +1,85 @@
+wb = xlsx_package.workbook
+
+# Настройки стилей
+header_style = wb.styles.add_style(
+  bg_color: "4F81BD",
+  fg_color: "FFFFFF",
+  b: true,
+  alignment: { horizontal: :center }
+)
+
+cell_style = wb.styles.add_style(
+  alignment: { horizontal: :left, vertical: :top, wrap_text: true }
+)
+
+date_style = wb.styles.add_style(
+  format_code: "yyyy-mm-dd hh:mm:ss",
+  alignment: { horizontal: :center }
+)
+
+# Создаем рабочий лист
+wb.add_worksheet(name: "Аудит логи") do |sheet|
+  # Заголовки
+  sheet.add_row [
+    'ID',
+    'Дата и время',
+    'Пользователь',
+    'Email',
+    'Действие',
+    'Тип ресурса',
+    'ID ресурса',
+    'Название ресурса',
+    'IP адрес',
+    'User Agent',
+    'Изменения'
+  ], style: header_style
+  
+  # Данные
+  @logs.find_each do |log|
+    sheet.add_row [
+      log.id,
+      log.created_at,
+      log.user&.full_name || 'Система',
+      log.user&.email,
+      log.action_description,
+      log.resource_type,
+      log.resource_id,
+      log.resource_name,
+      log.ip_address,
+      log.user_agent,
+      log.changes&.to_json
+    ], style: [cell_style, date_style, cell_style, cell_style, cell_style, 
+               cell_style, cell_style, cell_style, cell_style, cell_style, cell_style]
+  end
+  
+  # Настройка ширины колонок
+  sheet.column_widths 8, 20, 20, 25, 15, 15, 10, 20, 15, 30, 40
+  
+  # Заморозка заголовков
+  sheet.sheet_view.pane do |pane|
+    pane.top_left_cell = "A2"
+    pane.state = :frozen
+    pane.y_split = 1
+  end
+end
+
+# Добавляем лист со статистикой
+wb.add_worksheet(name: "Статистика") do |sheet|
+  sheet.add_row ['Статистика экспорта'], style: header_style
+  sheet.add_row ['Дата экспорта', Time.current.strftime('%Y-%m-%d %H:%M:%S')], style: cell_style
+  sheet.add_row ['Количество записей', @logs.count], style: cell_style
+  sheet.add_row ['Период', "#{params[:date_from] || 'Все время'} - #{params[:date_to] || 'Сейчас'}"], style: cell_style
+  
+  if params[:user_id].present?
+    user = User.find_by(id: params[:user_id])
+    sheet.add_row ['Пользователь', user&.full_name || "ID: #{params[:user_id]}"], style: cell_style
+  end
+  
+  sheet.add_row ['Фильтры'], style: header_style
+  sheet.add_row ['Тип ресурса', params[:resource_type] || 'Все'], style: cell_style
+  sheet.add_row ['Действие', params[:action] || 'Все'], style: cell_style
+  sheet.add_row ['IP адрес', params[:ip_address] || 'Все'], style: cell_style
+  
+  # Настройка ширины колонок
+  sheet.column_widths 20, 30
+end 

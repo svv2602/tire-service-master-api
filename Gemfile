@@ -26,6 +26,10 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 # CSV support (removes Ruby 3.4 deprecation warning)
 gem "csv"
 
+# Excel export support
+gem "caxlsx"
+gem "caxlsx_rails"
+
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 

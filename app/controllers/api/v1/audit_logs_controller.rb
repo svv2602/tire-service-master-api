@@ -91,7 +91,7 @@ class Api::V1::AuditLogsController < ApplicationController
   end
 
   # GET /api/v1/audit_logs/export
-  # Экспорт аудит логов в CSV
+  # Экспорт аудит логов в CSV/Excel
   def export
     authorize SystemLog, :export?
     
@@ -109,10 +109,18 @@ class Api::V1::AuditLogsController < ApplicationController
                   type: 'text/csv'
       end
       
+      format.xlsx do
+        render xlsx: 'export', 
+               filename: "audit_logs_#{Date.current.strftime('%Y%m%d')}.xlsx"
+      end
+      
       format.json do
         render json: {
-          message: 'Для экспорта используйте формат CSV',
-          example_url: "#{request.base_url}#{request.path}.csv?#{request.query_string}"
+          message: 'Для экспорта используйте формат CSV или Excel',
+          csv_url: "#{request.base_url}#{request.path}.csv?#{request.query_string}",
+          excel_url: "#{request.base_url}#{request.path}.xlsx?#{request.query_string}",
+          total_records: @logs.count,
+          export_limit: 10000
         }
       end
     end
