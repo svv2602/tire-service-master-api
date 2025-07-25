@@ -258,20 +258,22 @@ class NotificationService
     recipient_id = recipient.id
     
     # Создаем уведомление
-    Notification.create(
-      notification_type: notification_type,
-      recipient_type: recipient_type,
-      recipient_id: recipient_id,
-      title: data[:title],
-      message: data[:message],
-      priority: data[:priority],
-      category: data[:category],
-      send_via: data[:channels]&.first || 'push',
+    begin
+      Notification.create(
+        notification_type: notification_type,
+        recipient_type: recipient_type,
+        recipient_id: recipient_id,
+        title: data[:title],
+        message: data[:message],
+        priority: data[:priority],
+        category: data[:category],
+        send_via: data[:channels]&.first || 'push',
 
-    )
-  rescue => e
-    Rails.logger.error "Failed to create notification: #{e.message}"
-    nil
+      )
+    rescue => e
+      Rails.logger.error "Failed to create notification: #{e.message}"
+      nil
+    end
   end
   
   def determine_channels(notification_type, requested_channels = nil)
@@ -315,25 +317,26 @@ class NotificationService
     
     return unless recipient_email.present?
 
-    # Используем новую систему EmailTemplate если доступна
-    if data[:template_type].present?
-      EmailTemplateMailer.send_by_template(
-        data[:template_type],
-        recipient_email,
-        data[:variables] || {}
-      ).deliver_later
-      Rails.logger.info "Email отправлен через EmailTemplate: #{data[:template_type]} → #{recipient_email}"
-    else
-      # Fallback на старую систему
-      NotificationMailer.general_notification(
-        notification.id,
-        recipient_email
-      ).deliver_later
-      Rails.logger.info "Email отправлен через NotificationMailer → #{recipient_email}"
+    begin
+      # Используем новую систему EmailTemplate если доступна
+      if data[:template_type].present?
+        EmailTemplateMailer.send_by_template(
+          data[:template_type],
+          recipient_email,
+          data[:variables] || {}
+        ).deliver_later
+        Rails.logger.info "Email отправлен через EmailTemplate: #{data[:template_type]} → #{recipient_email}"
+      else
+        # Fallback на старую систему
+        NotificationMailer.general_notification(
+          notification.id,
+          recipient_email
+        ).deliver_later
+        Rails.logger.info "Email отправлен через NotificationMailer → #{recipient_email}"
+      end
+    rescue => e
+      Rails.logger.error "Failed to send email notification: #{e.message}"
     end
-    
-  rescue => e
-    Rails.logger.error "Failed to send email notification: #{e.message}"
   end
   
   def send_push_notification(notification, data)
@@ -528,51 +531,59 @@ class NotificationService
 
   def send_email_notification(to:, template:, variables:)
     # Интеграция с существующей системой email уведомлений
-    EmailNotificationJob.perform_later(
-      to: to,
-      template: template,
-      variables: variables
-    )
-  rescue => e
-    Rails.logger.error "Ошибка отправки email уведомления: #{e.message}"
+    begin
+      EmailNotificationJob.perform_later(
+        to: to,
+        template: template,
+        variables: variables
+      )
+    rescue => e
+      Rails.logger.error "Ошибка отправки email уведомления: #{e.message}"
+    end
   end
 
   def send_telegram_notification(user:, message:)
     # Интеграция с существующей системой Telegram уведомлений
-    TelegramNotificationJob.perform_later(
-      user_id: user.id,
-      message: message
-    )
-  rescue => e
-    Rails.logger.error "Ошибка отправки Telegram уведомления: #{e.message}"
+    begin
+      TelegramNotificationJob.perform_later(
+        user_id: user.id,
+        message: message
+      )
+    rescue => e
+      Rails.logger.error "Ошибка отправки Telegram уведомления: #{e.message}"
+    end
   end
 
   def send_push_notification(user:, title:, body:, data: {})
     # Интеграция с существующей системой Push уведомлений
-    PushNotificationJob.perform_later(
-      user_id: user.id,
-      title: title,
-      body: body,
-      data: data
-    )
-  rescue => e
-    Rails.logger.error "Ошибка отправки Push уведомления: #{e.message}"
+    begin
+      PushNotificationJob.perform_later(
+        user_id: user.id,
+        title: title,
+        body: body,
+        data: data
+      )
+    rescue => e
+      Rails.logger.error "Ошибка отправки Push уведомления: #{e.message}"
+    end
   end
 
   def create_internal_notification(user:, title:, message:, notification_type:, related_id: nil, related_type: nil)
     # Создание внутреннего уведомления в системе
-    Notification.create!(
-      user: user,
-      title: title,
-      message: message,
-      notification_type: notification_type,
-      related_id: related_id,
-      related_type: related_type,
-      is_read: false,
-      created_at: Time.current
-    )
-  rescue => e
-    Rails.logger.error "Ошибка создания внутреннего уведомления: #{e.message}"
+    begin
+      Notification.create!(
+        user: user,
+        title: title,
+        message: message,
+        notification_type: notification_type,
+        related_id: related_id,
+        related_type: related_type,
+        is_read: false,
+        created_at: Time.current
+      )
+    rescue => e
+      Rails.logger.error "Ошибка создания внутреннего уведомления: #{e.message}"
+    end
   end
 
   def frontend_url(path)
@@ -580,4 +591,4 @@ class NotificationService
     base_url = Rails.application.credentials.frontend_url || 'http://localhost:3008'
     "#{base_url}#{path}"
   end
-end end
+end
