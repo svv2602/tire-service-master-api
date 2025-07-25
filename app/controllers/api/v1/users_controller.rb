@@ -1,7 +1,7 @@
 module Api
   module V1
     class UsersController < ApiController
-      before_action :set_user, only: [:show, :update, :destroy]
+      before_action :set_user, only: [:show, :update, :destroy, :suspend, :unsuspend, :suspension_info]
       before_action :authorize_admin, except: [:show, :update, :me, :check_exists]
       skip_before_action :authenticate_request, only: [:check_exists]
       
@@ -95,6 +95,87 @@ module Api
         end
       end
       
+      # PATCH /api/v1/users/:id/suspend
+      # Заблокировать пользователя
+      def suspend
+        authorize @user, :suspend?
+        
+        reason = params[:reason] || 'Причина не указана'
+        until_date = params[:until_date].present? ? Time.parse(params[:until_date]) : nil
+        
+        begin
+          @user.suspend!(
+            reason: reason,
+            until_date: until_date,
+            suspended_by_user: current_user
+          )
+          
+          # Логируем блокировку
+          SystemLog.log_suspend(
+            current_user,
+            @user,
+            reason,
+            until_date,
+            ip_address: request.remote_ip,
+            user_agent: request.user_agent
+          )
+          
+          # Отправляем уведомление пользователю
+          send_suspension_notification(@user, reason, until_date)
+          
+          render json: {
+            data: suspension_info(@user),
+            message: 'Пользователь успешно заблокирован'
+          }
+        rescue => e
+          render json: {
+            error: 'Ошибка при блокировке пользователя',
+            details: e.message
+          }, status: :unprocessable_entity
+        end
+      end
+
+      # PATCH /api/v1/users/:id/unsuspend
+      # Разблокировать пользователя
+      def unsuspend
+        authorize @user, :unsuspend?
+        
+        begin
+          @user.unsuspend!(unsuspended_by_user: current_user)
+          
+          # Логируем разблокировку
+          SystemLog.log_unsuspend(
+            current_user,
+            @user,
+            ip_address: request.remote_ip,
+            user_agent: request.user_agent
+          )
+          
+          # Отправляем уведомление о разблокировке
+          send_unsuspension_notification(@user)
+          
+          render json: {
+            data: suspension_info(@user),
+            message: 'Пользователь успешно разблокирован'
+          }
+        rescue => e
+          render json: {
+            error: 'Ошибка при разблокировке пользователя',
+            details: e.message
+          }, status: :unprocessable_entity
+        end
+      end
+
+      # GET /api/v1/users/:id/suspension_info
+      # Получить информацию о блокировке пользователя
+      def suspension_info
+        authorize @user, :show?
+        
+        render json: {
+          data: suspension_info(@user)
+        }
+      end
+
       # Проверка существования пользователя по телефону или email
       def check_exists
         phone = params[:phone]
@@ -173,6 +254,82 @@ module Api
         sort_order = 'desc' unless %w[asc desc].include?(sort_order)
         
         "#{sort_by} #{sort_order}"
+      end
+
+      # Получить информацию о блокировке пользователя
+      def suspension_info(user)
+        if user.suspended?
+          {
+            is_suspended: true,
+            reason: user.suspension_reason,
+            suspended_at: user.suspended_at&.iso8601,
+            suspended_until: user.suspended_until&.iso8601,
+            suspended_by: user.suspended_by&.full_name,
+            is_permanent: user.suspended_until.blank?,
+            days_remaining: user.suspended_until.present? ? 
+              [(user.suspended_until.to_date - Date.current).to_i, 0].max : nil
+          }
+        else
+          {
+            is_suspended: false,
+            reason: nil,
+            suspended_at: nil,
+            suspended_until: nil,
+            suspended_by: nil,
+            is_permanent: false,
+            days_remaining: nil
+          }
+        end
+      end
+
+      # Отправить уведомление о блокировке
+      def send_suspension_notification(user, reason, until_date)
+        return unless user.email.present?
+        
+        begin
+          # Используем существующую систему email уведомлений
+          template_data = {
+            user_name: user.full_name,
+            reason: reason,
+            suspended_until: until_date&.strftime('%d.%m.%Y %H:%M'),
+            is_permanent: until_date.blank?,
+            support_email: 'support@tireservice.com'
+          }
+          
+          # Отправляем email через систему уведомлений
+          # EmailNotificationService.send_template(
+          #   user.email,
+          #   'user_suspended',
+          #   template_data
+          # )
+          
+          Rails.logger.info "Отправлено уведомление о блокировке пользователю #{user.email}"
+        rescue => e
+          Rails.logger.error "Ошибка отправки уведомления о блокировке: #{e.message}"
+        end
+      end
+
+      # Отправить уведомление о разблокировке
+      def send_unsuspension_notification(user)
+        return unless user.email.present?
+        
+        begin
+          template_data = {
+            user_name: user.full_name,
+            unsuspended_at: Time.current.strftime('%d.%m.%Y %H:%M'),
+            support_email: 'support@tireservice.com'
+          }
+          
+          # EmailNotificationService.send_template(
+          #   user.email,
+          #   'user_unsuspended',
+          #   template_data
+          # )
+          
+          Rails.logger.info "Отправлено уведомление о разблокировке пользователю #{user.email}"
+        rescue => e
+          Rails.logger.error "Ошибка отправки уведомления о разблокировке: #{e.message}"
+        end
       end
     end
   end

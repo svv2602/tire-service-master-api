@@ -227,6 +227,9 @@ Rails.application.routes.draw do
       resources :users, only: [:index, :show, :create, :update, :destroy] do
         member do
           patch :toggle_active
+          patch :suspend
+          patch :unsuspend
+          get :suspension_info
         end
         collection do
           get :check_exists

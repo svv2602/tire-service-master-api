@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест API блокировки пользователей</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+        .btn-danger { background-color: #dc3545; color: white; border: none; }
+        .btn-success { background-color: #28a745; color: white; border: none; }
+        .btn-info { background-color: #17a2b8; color: white; border: none; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea { padding: 8px; width: 300px; border: 1px solid #ddd; border-radius: 3px; }
+        textarea { height: 80px; resize: vertical; }
+        .user-info { background: #e9ecef; padding: 10px; border-radius: 3px; margin: 10px 0; }
+        .suspension-status { padding: 5px 10px; border-radius: 3px; font-weight: bold; }
+        .suspended { background-color: #f8d7da; color: #721c24; }
+        .active { background-color: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚫 Тест API блокировки пользователей</h1>
+        
+        <div class="section info">
+            <h3>📋 Информация о тестировании</h3>
+            <p><strong>Базовый URL:</strong> http://localhost:8000/api/v1</p>
+            <p><strong>Требуется авторизация:</strong> Да (Bearer token)</p>
+            <p><strong>Роли для тестирования:</strong> admin, manager, partner</p>
+            <p><strong>Новые endpoints:</strong></p>
+            <ul>
+                <li>PATCH /users/:id/suspend - Заблокировать пользователя</li>
+                <li>PATCH /users/:id/unsuspend - Разблокировать пользователя</li>
+                <li>GET /users/:id/suspension_info - Информация о блокировке</li>
+            </ul>
+        </div>
+
+        <!-- Авторизация -->
+        <div class="section">
+            <h3>🔐 Авторизация</h3>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="email" value="admin@test.com">
+            </div>
+            <div class="form-group">
+                <label>Пароль:</label>
+                <input type="password" id="password" value="admin123">
+            </div>
+            <button onclick="login()" class="btn-info">Войти</button>
+            <div id="auth-result"></div>
+        </div>
+
+        <!-- Получение списка пользователей -->
+        <div class="section">
+            <h3>👥 Список пользователей</h3>
+            <button onclick="getUsers()" class="btn-info">Получить пользователей</button>
+            <div id="users-result"></div>
+        </div>
+
+        <!-- Информация о блокировке -->
+        <div class="section">
+            <h3>ℹ️ Информация о блокировке пользователя</h3>
+            <div class="form-group">
+                <label>User ID:</label>
+                <input type="number" id="info-user-id" value="2">
+            </div>
+            <button onclick="getSuspensionInfo()" class="btn-info">Получить информацию</button>
+            <div id="suspension-info-result"></div>
+        </div>
+
+        <!-- Блокировка пользователя -->
+        <div class="section">
+            <h3>🚫 Блокировка пользователя</h3>
+            <div class="form-group">
+                <label>User ID:</label>
+                <input type="number" id="suspend-user-id" value="2">
+            </div>
+            <div class="form-group">
+                <label>Причина блокировки:</label>
+                <textarea id="suspend-reason" placeholder="Укажите причину блокировки...">Нарушение правил использования сервиса</textarea>
+            </div>
+            <div class="form-group">
+                <label>Заблокировать до (опционально):</label>
+                <input type="datetime-local" id="suspend-until">
+            </div>
+            <button onclick="suspendUser()" class="btn-danger">Заблокировать пользователя</button>
+            <div id="suspend-result"></div>
+        </div>
+
+        <!-- Разблокировка пользователя -->
+        <div class="section">
+            <h3>✅ Разблокировка пользователя</h3>
+            <div class="form-group">
+                <label>User ID:</label>
+                <input type="number" id="unsuspend-user-id" value="2">
+            </div>
+            <button onclick="unsuspendUser()" class="btn-success">Разблокировать пользователя</button>
+            <div id="unsuspend-result"></div>
+        </div>
+
+        <!-- Массовые операции -->
+        <div class="section">
+            <h3>📦 Массовые операции</h3>
+            <div class="form-group">
+                <label>User IDs (через запятую):</label>
+                <input type="text" id="bulk-user-ids" value="2,3,4" style="width: 300px;">
+            </div>
+            <div class="form-group">
+                <label>Причина:</label>
+                <textarea id="bulk-reason">Массовая блокировка за нарушения</textarea>
+            </div>
+            <button onclick="bulkSuspend()" class="btn-danger">Массовая блокировка</button>
+            <button onclick="bulkUnsuspend()" class="btn-success">Массовая разблокировка</button>
+            <div id="bulk-result"></div>
+        </div>
+
+        <!-- Лог запросов -->
+        <div class="section">
+            <h3>📝 Лог запросов</h3>
+            <button onclick="clearLog()" class="btn-info">Очистить лог</button>
+            <pre id="request-log"></pre>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        const baseUrl = 'http://localhost:8000/api/v1';
+
+        function logRequest(method, url, data, response) {
+            const log = document.getElementById('request-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${method} ${url}\n`;
+            const dataEntry = data ? `Request: ${JSON.stringify(data, null, 2)}\n` : '';
+            const responseEntry = `Response: ${JSON.stringify(response, null, 2)}\n\n`;
+            log.textContent += logEntry + dataEntry + responseEntry;
+        }
+
+        function clearLog() {
+            document.getElementById('request-log').textContent = '';
+        }
+
+        async function makeRequest(method, url, data = null) {
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            if (authToken) {
+                options.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            try {
+                const response = await fetch(url, options);
+                const result = await response.json();
+                
+                logRequest(method, url, data, result);
+                
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    data: result
+                };
+            } catch (error) {
+                const errorResult = { error: error.message };
+                logRequest(method, url, data, errorResult);
+                return {
+                    ok: false,
+                    status: 0,
+                    data: errorResult
+                };
+            }
+        }
+
+        function displayResult(elementId, result, successMessage = '') {
+            const element = document.getElementById(elementId);
+            if (result.ok) {
+                element.className = 'section success';
+                element.innerHTML = `<h4>✅ ${successMessage || 'Успех'}</h4><pre>${JSON.stringify(result.data, null, 2)}</pre>`;
+            } else {
+                element.className = 'section error';
+                element.innerHTML = `<h4>❌ Ошибка (${result.status})</h4><pre>${JSON.stringify(result.data, null, 2)}</pre>`;
+            }
+        }
+
+        function displayUsersList(users) {
+            if (!users || !users.data) return '';
+            
+            return users.data.map(user => {
+                const suspensionStatus = user.is_suspended 
+                    ? `<span class="suspension-status suspended">ЗАБЛОКИРОВАН</span>`
+                    : `<span class="suspension-status active">АКТИВЕН</span>`;
+                
+                return `
+                    <div class="user-info">
+                        <strong>ID: ${user.id}</strong> - ${user.first_name} ${user.last_name} (${user.email})
+                        <br>Роль: ${user.role?.name || 'N/A'} | Статус: ${suspensionStatus}
+                        ${user.is_suspended ? `<br><small>Причина: ${user.suspension_reason || 'Не указана'}</small>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            const result = await makeRequest('POST', `${baseUrl}/auth/login`, {
+                email,
+                password
+            });
+            
+            if (result.ok && result.data.token) {
+                authToken = result.data.token;
+                displayResult('auth-result', result, 'Авторизация успешна');
+            } else {
+                displayResult('auth-result', result);
+            }
+        }
+
+        async function getUsers() {
+            const result = await makeRequest('GET', `${baseUrl}/users`);
+            
+            if (result.ok) {
+                const element = document.getElementById('users-result');
+                element.className = 'section success';
+                element.innerHTML = `
+                    <h4>✅ Список пользователей получен</h4>
+                    ${displayUsersList(result.data)}
+                    <details>
+                        <summary>Показать JSON</summary>
+                        <pre>${JSON.stringify(result.data, null, 2)}</pre>
+                    </details>
+                `;
+            } else {
+                displayResult('users-result', result);
+            }
+        }
+
+        async function getSuspensionInfo() {
+            const userId = document.getElementById('info-user-id').value;
+            
+            const result = await makeRequest('GET', `${baseUrl}/users/${userId}/suspension_info`);
+            displayResult('suspension-info-result', result, 'Информация о блокировке получена');
+        }
+
+        async function suspendUser() {
+            const userId = document.getElementById('suspend-user-id').value;
+            const reason = document.getElementById('suspend-reason').value;
+            const untilDate = document.getElementById('suspend-until').value;
+            
+            const requestData = {
+                reason: reason
+            };
+            
+            if (untilDate) {
+                requestData.until_date = untilDate;
+            }
+            
+            const result = await makeRequest('PATCH', `${baseUrl}/users/${userId}/suspend`, requestData);
+            displayResult('suspend-result', result, 'Пользователь заблокирован');
+        }
+
+        async function unsuspendUser() {
+            const userId = document.getElementById('unsuspend-user-id').value;
+            
+            const result = await makeRequest('PATCH', `${baseUrl}/users/${userId}/unsuspend`);
+            displayResult('unsuspend-result', result, 'Пользователь разблокирован');
+        }
+
+        async function bulkSuspend() {
+            const userIds = document.getElementById('bulk-user-ids').value
+                .split(',')
+                .map(id => parseInt(id.trim()))
+                .filter(id => !isNaN(id));
+            
+            const reason = document.getElementById('bulk-reason').value;
+            
+            const results = [];
+            const errors = [];
+            
+            for (const userId of userIds) {
+                try {
+                    const result = await makeRequest('PATCH', `${baseUrl}/users/${userId}/suspend`, {
+                        reason: reason
+                    });
+                    
+                    if (result.ok) {
+                        results.push({ userId, status: 'success' });
+                    } else {
+                        errors.push({ userId, error: result.data.error });
+                    }
+                } catch (e) {
+                    errors.push({ userId, error: e.message });
+                }
+            }
+            
+            const element = document.getElementById('bulk-result');
+            element.className = errors.length === 0 ? 'section success' : 'section warning';
+            element.innerHTML = `
+                <h4>📦 Массовая блокировка завершена</h4>
+                <p>Успешно: ${results.length}, Ошибок: ${errors.length}</p>
+                <pre>${JSON.stringify({ results, errors }, null, 2)}</pre>
+            `;
+        }
+
+        async function bulkUnsuspend() {
+            const userIds = document.getElementById('bulk-user-ids').value
+                .split(',')
+                .map(id => parseInt(id.trim()))
+                .filter(id => !isNaN(id));
+            
+            const results = [];
+            const errors = [];
+            
+            for (const userId of userIds) {
+                try {
+                    const result = await makeRequest('PATCH', `${baseUrl}/users/${userId}/unsuspend`);
+                    
+                    if (result.ok) {
+                        results.push({ userId, status: 'success' });
+                    } else {
+                        errors.push({ userId, error: result.data.error });
+                    }
+                } catch (e) {
+                    errors.push({ userId, error: e.message });
+                }
+            }
+            
+            const element = document.getElementById('bulk-result');
+            element.className = errors.length === 0 ? 'section success' : 'section warning';
+            element.innerHTML = `
+                <h4>📦 Массовая разблокировка завершена</h4>
+                <p>Успешно: ${results.length}, Ошибок: ${errors.length}</p>
+                <pre>${JSON.stringify({ results, errors }, null, 2)}</pre>
+            `;
+        }
+
+        // Автоматическая установка текущей даты + 7 дней для блокировки
+        window.onload = function() {
+            const suspendUntil = document.getElementById('suspend-until');
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + 7);
+            suspendUntil.value = futureDate.toISOString().slice(0, 16);
+            
+            // Автоматический вход
+            login();
+        };
+    </script>
+</body>
+</html> 
