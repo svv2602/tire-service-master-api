@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест API управления привязками операторов</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { padding: 8px; width: 200px; border: 1px solid #ddd; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 Тест API управления привязками операторов</h1>
+        
+        <div class="section info">
+            <h3>📋 Информация о тестировании</h3>
+            <p><strong>Базовый URL:</strong> http://localhost:8000/api/v1</p>
+            <p><strong>Требуется авторизация:</strong> Да (Bearer token)</p>
+            <p><strong>Роли для тестирования:</strong> admin, partner</p>
+        </div>
+
+        <!-- Авторизация -->
+        <div class="section">
+            <h3>🔐 Авторизация</h3>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="email" value="admin@test.com">
+            </div>
+            <div class="form-group">
+                <label>Пароль:</label>
+                <input type="password" id="password" value="admin123">
+            </div>
+            <button onclick="login()">Войти</button>
+            <div id="auth-result"></div>
+        </div>
+
+        <!-- Получение списка операторов -->
+        <div class="section">
+            <h3>👥 Получение списка операторов партнера</h3>
+            <div class="form-group">
+                <label>Partner ID:</label>
+                <input type="number" id="partner-id" value="1">
+            </div>
+            <button onclick="getOperators()">Получить операторов</button>
+            <div id="operators-result"></div>
+        </div>
+
+        <!-- Получение привязок оператора -->
+        <div class="section">
+            <h3>🔗 Получение привязок оператора</h3>
+            <div class="form-group">
+                <label>Partner ID:</label>
+                <input type="number" id="assignments-partner-id" value="1">
+            </div>
+            <div class="form-group">
+                <label>Operator ID:</label>
+                <input type="number" id="operator-id" value="1">
+            </div>
+            <button onclick="getOperatorAssignments()">Получить привязки</button>
+            <div id="assignments-result"></div>
+        </div>
+
+        <!-- Создание привязки -->
+        <div class="section">
+            <h3>➕ Создание привязки оператора к точке</h3>
+            <div class="form-group">
+                <label>Partner ID:</label>
+                <input type="number" id="create-partner-id" value="1">
+            </div>
+            <div class="form-group">
+                <label>Operator ID:</label>
+                <input type="number" id="create-operator-id" value="1">
+            </div>
+            <div class="form-group">
+                <label>Service Point ID:</label>
+                <input type="number" id="service-point-id" value="1">
+            </div>
+            <button onclick="createAssignment()">Создать привязку</button>
+            <div id="create-result"></div>
+        </div>
+
+        <!-- Массовое назначение -->
+        <div class="section">
+            <h3>📦 Массовое назначение оператора</h3>
+            <div class="form-group">
+                <label>Partner ID:</label>
+                <input type="number" id="bulk-partner-id" value="1">
+            </div>
+            <div class="form-group">
+                <label>Operator ID:</label>
+                <input type="number" id="bulk-operator-id" value="1">
+            </div>
+            <div class="form-group">
+                <label>Service Point IDs (через запятую):</label>
+                <input type="text" id="bulk-service-point-ids" value="1,2,3" style="width: 300px;">
+            </div>
+            <button onclick="bulkAssignOperator()">Массовое назначение</button>
+            <div id="bulk-result"></div>
+        </div>
+
+        <!-- Удаление привязки -->
+        <div class="section">
+            <h3>🗑️ Удаление привязки</h3>
+            <div class="form-group">
+                <label>Assignment ID:</label>
+                <input type="number" id="delete-assignment-id" value="1">
+            </div>
+            <button onclick="deleteAssignment()">Удалить привязку</button>
+            <div id="delete-result"></div>
+        </div>
+
+        <!-- Лог запросов -->
+        <div class="section">
+            <h3>📝 Лог запросов</h3>
+            <button onclick="clearLog()">Очистить лог</button>
+            <pre id="request-log"></pre>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        const baseUrl = 'http://localhost:8000/api/v1';
+
+        function logRequest(method, url, data, response) {
+            const log = document.getElementById('request-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${method} ${url}\n`;
+            const dataEntry = data ? `Request: ${JSON.stringify(data, null, 2)}\n` : '';
+            const responseEntry = `Response: ${JSON.stringify(response, null, 2)}\n\n`;
+            log.textContent += logEntry + dataEntry + responseEntry;
+        }
+
+        function clearLog() {
+            document.getElementById('request-log').textContent = '';
+        }
+
+        async function makeRequest(method, url, data = null) {
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            if (authToken) {
+                options.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            try {
+                const response = await fetch(url, options);
+                const result = await response.json();
+                
+                logRequest(method, url, data, result);
+                
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    data: result
+                };
+            } catch (error) {
+                const errorResult = { error: error.message };
+                logRequest(method, url, data, errorResult);
+                return {
+                    ok: false,
+                    status: 0,
+                    data: errorResult
+                };
+            }
+        }
+
+        function displayResult(elementId, result, successMessage = '') {
+            const element = document.getElementById(elementId);
+            if (result.ok) {
+                element.className = 'section success';
+                element.innerHTML = `<h4>✅ ${successMessage || 'Успех'}</h4><pre>${JSON.stringify(result.data, null, 2)}</pre>`;
+            } else {
+                element.className = 'section error';
+                element.innerHTML = `<h4>❌ Ошибка (${result.status})</h4><pre>${JSON.stringify(result.data, null, 2)}</pre>`;
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            const result = await makeRequest('POST', `${baseUrl}/auth/login`, {
+                email,
+                password
+            });
+            
+            if (result.ok && result.data.token) {
+                authToken = result.data.token;
+                displayResult('auth-result', result, 'Авторизация успешна');
+            } else {
+                displayResult('auth-result', result);
+            }
+        }
+
+        async function getOperators() {
+            const partnerId = document.getElementById('partner-id').value;
+            
+            const result = await makeRequest('GET', `${baseUrl}/partners/${partnerId}/operators`);
+            displayResult('operators-result', result, 'Список операторов получен');
+        }
+
+        async function getOperatorAssignments() {
+            const partnerId = document.getElementById('assignments-partner-id').value;
+            const operatorId = document.getElementById('operator-id').value;
+            
+            const result = await makeRequest('GET', `${baseUrl}/partners/${partnerId}/operators/${operatorId}/service_points`);
+            displayResult('assignments-result', result, 'Привязки оператора получены');
+        }
+
+        async function createAssignment() {
+            const partnerId = document.getElementById('create-partner-id').value;
+            const operatorId = document.getElementById('create-operator-id').value;
+            const servicePointId = document.getElementById('service-point-id').value;
+            
+            const result = await makeRequest('POST', `${baseUrl}/partners/${partnerId}/operators/${operatorId}/service_points`, {
+                service_point_id: parseInt(servicePointId)
+            });
+            displayResult('create-result', result, 'Привязка создана');
+        }
+
+        async function bulkAssignOperator() {
+            const partnerId = document.getElementById('bulk-partner-id').value;
+            const operatorId = document.getElementById('bulk-operator-id').value;
+            const servicePointIds = document.getElementById('bulk-service-point-ids').value
+                .split(',')
+                .map(id => parseInt(id.trim()))
+                .filter(id => !isNaN(id));
+            
+            const result = await makeRequest('POST', `${baseUrl}/partners/${partnerId}/operators/${operatorId}/service_points/bulk_assign`, {
+                service_point_ids: servicePointIds
+            });
+            displayResult('bulk-result', result, 'Массовое назначение выполнено');
+        }
+
+        async function deleteAssignment() {
+            const assignmentId = document.getElementById('delete-assignment-id').value;
+            
+            const result = await makeRequest('DELETE', `${baseUrl}/operator_service_points/${assignmentId}`);
+            displayResult('delete-result', result, 'Привязка удалена');
+        }
+
+        // Автоматический вход при загрузке страницы
+        window.onload = function() {
+            login();
+        };
+    </script>
+</body>
+</html> 

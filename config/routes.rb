@@ -246,7 +246,14 @@ Rails.application.routes.draw do
         end
         resources :price_lists, only: [:index, :show, :create, :update, :destroy]
         resources :promotions, only: [:index, :show, :create, :update, :destroy]
-        resources :operators, only: [:index, :create]
+        resources :operators, only: [:index, :create] do
+          # Управление привязками операторов к сервисным точкам
+          resources :service_points, controller: 'operator_service_points', only: [:index, :create] do
+            collection do
+              post :bulk_assign
+            end
+          end
+        end
         
         # Создание тестовых данных для партнера
         collection do
@@ -495,6 +502,9 @@ Rails.application.routes.draw do
       resources :user_roles, only: [:index, :show]
 
       resources :operators, only: [:update, :destroy]
+
+      # Прямые маршруты для управления привязками операторов
+      resources :operator_service_points, only: [:show, :update, :destroy]
 
       # Управление шаблонами уведомлений
       resources :notification_templates, only: [:index, :show, :create, :update, :destroy]
