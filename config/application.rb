@@ -50,13 +50,18 @@ module TireServiceMasterApi
     # Добавляем автозагрузку папки lib
     config.autoload_paths << Rails.root.join('lib')
     
-    # Добавляем автозагрузку папки middleware
+        # Добавляем автозагрузку папки middleware
     config.autoload_paths << Rails.root.join('app/middleware')
     
+    # Требуем middleware файлы явно
+    require_relative '../app/middleware/partner_data_filter_middleware'
+    require_relative '../app/middleware/operator_data_filter_middleware'
+    require_relative '../app/middleware/audit_context_middleware'
+
     # Добавляем middleware для автоматической фильтрации данных
     config.middleware.use PartnerDataFilterMiddleware
     config.middleware.use OperatorDataFilterMiddleware
-    
+
     # Добавляем middleware для контекста аудита (должен быть одним из первых)
     config.middleware.insert_before ActionDispatch::RemoteIp, AuditContextMiddleware
     
