@@ -201,133 +201,383 @@ class NotificationService
     end
   end
 
-    private
+  def self.send_operator_assignment_notification(operator, service_point, action_type)
+    new.send_operator_assignment_notification(operator, service_point, action_type)
+  end
+
+  def self.send_partner_operator_notification(partner, operator, action_type)
+    new.send_partner_operator_notification(partner, operator, action_type)
+  end
+
+  def send_operator_assignment_notification(operator, service_point, action_type)
+    return unless operator&.user&.email && service_point
+
+    case action_type
+    when 'assigned'
+      send_operator_assigned_notification(operator, service_point)
+    when 'unassigned'
+      send_operator_unassigned_notification(operator, service_point)
+    end
+  end
+
+  def send_partner_operator_notification(partner, operator, action_type)
+    return unless partner&.user&.email && operator
+
+    case action_type
+    when 'operator_created'
+      send_partner_new_operator_notification(partner, operator)
+    when 'operator_activated'
+      send_partner_operator_activated_notification(partner, operator)
+    when 'operator_deactivated'
+      send_partner_operator_deactivated_notification(partner, operator)
+    end
+  end
+
+  private
+
+  def prepare_notification_data(recipient, notification_type, data)
+    # Данные по умолчанию
+    default_data = {
+      title: data[:title] || notification_type.name.humanize,
+      message: data[:message] || 'No message provided',
+      priority: data[:priority] || 'normal',
+      category: data[:category] || 'general'
+    }
     
-    def prepare_notification_data(recipient, notification_type, data)
-      # Данные по умолчанию
-      default_data = {
-        title: data[:title] || notification_type.name.humanize,
-        message: data[:message] || 'No message provided',
-        priority: data[:priority] || 'normal',
-        category: data[:category] || 'general'
+    # Если есть шаблон, заполняем его данными
+    if notification_type.template.present? && data[:template_data]
+      default_data[:message] = fill_template(notification_type.template, data[:template_data])
+    end
+    
+    default_data
+  end
+  
+  def create_notification(recipient, notification_type, data)
+    # Определяем тип и ID получателя
+    recipient_type = recipient.class.name
+    recipient_id = recipient.id
+    
+    # Создаем уведомление
+    Notification.create(
+      notification_type: notification_type,
+      recipient_type: recipient_type,
+      recipient_id: recipient_id,
+      title: data[:title],
+      message: data[:message],
+      priority: data[:priority],
+      category: data[:category],
+      send_via: data[:channels]&.first || 'push',
+
+    )
+  rescue => e
+    Rails.logger.error "Failed to create notification: #{e.message}"
+    nil
+  end
+  
+  def determine_channels(notification_type, requested_channels = nil)
+    # Если каналы заданы явно, используем их
+    return requested_channels if requested_channels.present?
+    
+    # Иначе определяем на основе типа уведомления
+    channels = []
+    channels << 'push' if notification_type.is_push?
+    channels << 'email' if notification_type.is_email?
+    channels << 'sms' if notification_type.is_sms?
+    
+    channels.presence || ['push'] # По умолчанию push
+  end
+  
+  def send_via_channels(notification, channels, data)
+    channels.each do |channel|
+      case channel.to_s
+      when 'email'
+        send_email_notification(notification, data)
+      when 'push'
+        send_push_notification(notification, data)
+      when 'sms'
+        send_sms_notification(notification, data)
+      when 'telegram'
+        send_telegram_notification(notification, data)
+      end
+    end
+  end
+  
+  def send_email_notification(notification, data)
+    return unless notification.recipient_type == 'User' || 
+                 (notification.recipient_type == 'Client' && 
+                  notification.recipient.user&.email.present?)
+    
+    recipient_email = if notification.recipient_type == 'User'
+                       notification.recipient.email
+                     else
+                       notification.recipient.user&.email
+                     end
+    
+    return unless recipient_email.present?
+
+    # Используем новую систему EmailTemplate если доступна
+    if data[:template_type].present?
+      EmailTemplateMailer.send_by_template(
+        data[:template_type],
+        recipient_email,
+        data[:variables] || {}
+      ).deliver_later
+      Rails.logger.info "Email отправлен через EmailTemplate: #{data[:template_type]} → #{recipient_email}"
+    else
+      # Fallback на старую систему
+      NotificationMailer.general_notification(
+        notification.id,
+        recipient_email
+      ).deliver_later
+      Rails.logger.info "Email отправлен через NotificationMailer → #{recipient_email}"
+    end
+    
+  rescue => e
+    Rails.logger.error "Failed to send email notification: #{e.message}"
+  end
+  
+  def send_push_notification(notification, data)
+    # Заглушка для push уведомлений
+    # Здесь будет интеграция с Firebase FCM
+    Rails.logger.info "Push notification sent for notification #{notification.id}"
+  end
+  
+  def send_sms_notification(notification, data)
+    # Заглушка для SMS уведомлений
+    Rails.logger.info "SMS notification sent for notification #{notification.id}"
+  end
+  
+  def send_telegram_notification(notification, data)
+    # Заглушка для Telegram уведомлений
+    Rails.logger.info "Telegram notification sent for notification #{notification.id}"
+  end
+  
+  def fill_template(template, data)
+    result = template.dup
+  data.each do |key, value|
+      result.gsub!("{{#{key}}}", value.to_s)
+    end
+    result
+  end
+
+  def send_operator_assigned_notification(operator, service_point)
+    # Email уведомление
+    send_email_notification(
+      to: operator.user.email,
+      template: 'operator_assigned',
+      variables: {
+        operator_name: operator.user.full_name,
+        service_point_name: service_point.name,
+        service_point_address: service_point.address,
+        partner_name: service_point.partner.name,
+        assignment_date: Time.current.strftime('%d.%m.%Y'),
+        working_hours: format_working_hours(service_point),
+        contact_phone: service_point.phone,
+        login_url: frontend_url('/admin/dashboard')
       }
-      
-      # Если есть шаблон, заполняем его данными
-      if notification_type.template.present? && data[:template_data]
-        default_data[:message] = fill_template(notification_type.template, data[:template_data])
-      end
-      
-      default_data
-    end
-    
-    def create_notification(recipient, notification_type, data)
-      # Определяем тип и ID получателя
-      recipient_type = recipient.class.name
-      recipient_id = recipient.id
-      
-      # Создаем уведомление
-      Notification.create(
-        notification_type: notification_type,
-        recipient_type: recipient_type,
-        recipient_id: recipient_id,
-        title: data[:title],
-        message: data[:message],
-        priority: data[:priority],
-        category: data[:category],
-        send_via: data[:channels]&.first || 'push',
+    )
 
-      )
-    rescue => e
-      Rails.logger.error "Failed to create notification: #{e.message}"
-      nil
-    end
-    
-    def determine_channels(notification_type, requested_channels = nil)
-      # Если каналы заданы явно, используем их
-      return requested_channels if requested_channels.present?
-      
-      # Иначе определяем на основе типа уведомления
-      channels = []
-      channels << 'push' if notification_type.is_push?
-      channels << 'email' if notification_type.is_email?
-      channels << 'sms' if notification_type.is_sms?
-      
-      channels.presence || ['push'] # По умолчанию push
-    end
-    
-    def send_via_channels(notification, channels, data)
-      channels.each do |channel|
-        case channel.to_s
-        when 'email'
-          send_email_notification(notification, data)
-        when 'push'
-          send_push_notification(notification, data)
-        when 'sms'
-          send_sms_notification(notification, data)
-        when 'telegram'
-          send_telegram_notification(notification, data)
-        end
-      end
-    end
-    
-    def send_email_notification(notification, data)
-      return unless notification.recipient_type == 'User' || 
-                   (notification.recipient_type == 'Client' && 
-                    notification.recipient.user&.email.present?)
-      
-      recipient_email = if notification.recipient_type == 'User'
-                         notification.recipient.email
-                       else
-                         notification.recipient.user&.email
-                       end
-      
-      return unless recipient_email.present?
+    # Telegram уведомление (если настроено)
+    send_telegram_notification(
+      user: operator.user,
+      message: build_telegram_assignment_message(operator, service_point, 'assigned')
+    )
 
-      # Используем новую систему EmailTemplate если доступна
-      if data[:template_type].present?
-        EmailTemplateMailer.send_by_template(
-          data[:template_type],
-          recipient_email,
-          data[:variables] || {}
-        ).deliver_later
-        Rails.logger.info "Email отправлен через EmailTemplate: #{data[:template_type]} → #{recipient_email}"
-      else
-        # Fallback на старую систему
-        NotificationMailer.general_notification(
-          notification.id,
-          recipient_email
-        ).deliver_later
-        Rails.logger.info "Email отправлен через NotificationMailer → #{recipient_email}"
-      end
-      
-    rescue => e
-      Rails.logger.error "Failed to send email notification: #{e.message}"
-    end
-    
-    def send_push_notification(notification, data)
-      # Заглушка для push уведомлений
-      # Здесь будет интеграция с Firebase FCM
-      Rails.logger.info "Push notification sent for notification #{notification.id}"
-    end
-    
-    def send_sms_notification(notification, data)
-      # Заглушка для SMS уведомлений
-      Rails.logger.info "SMS notification sent for notification #{notification.id}"
-    end
-    
-    def send_telegram_notification(notification, data)
-      # Заглушка для Telegram уведомлений
-      Rails.logger.info "Telegram notification sent for notification #{notification.id}"
-    end
-    
-    def fill_template(template, data)
-      result = template.dup
-    data.each do |key, value|
-        result.gsub!("{{#{key}}}", value.to_s)
-      end
-      result
-    end
+    # Push уведомление (если настроено)
+    send_push_notification(
+      user: operator.user,
+      title: 'Новое назначение',
+      body: "Вы назначены на сервисную точку #{service_point.name}",
+      data: {
+        type: 'operator_assignment',
+        service_point_id: service_point.id,
+        action: 'assigned'
+      }
+    )
 
+    # Внутреннее уведомление в системе
+    create_internal_notification(
+      user: operator.user,
+      title: 'Назначение на сервисную точку',
+      message: "Вы назначены оператором на сервисную точку \"#{service_point.name}\"",
+      notification_type: 'operator_assignment',
+      related_id: service_point.id,
+      related_type: 'ServicePoint'
+    )
+  end
 
+  def send_operator_unassigned_notification(operator, service_point)
+    # Email уведомление
+    send_email_notification(
+      to: operator.user.email,
+      template: 'operator_unassigned',
+      variables: {
+        operator_name: operator.user.full_name,
+        service_point_name: service_point.name,
+        service_point_address: service_point.address,
+        partner_name: service_point.partner.name,
+        unassignment_date: Time.current.strftime('%d.%m.%Y'),
+        contact_phone: service_point.partner.user.phone,
+        login_url: frontend_url('/admin/dashboard')
+      }
+    )
+
+    # Telegram уведомление
+    send_telegram_notification(
+      user: operator.user,
+      message: build_telegram_assignment_message(operator, service_point, 'unassigned')
+    )
+
+    # Push уведомление
+    send_push_notification(
+      user: operator.user,
+      title: 'Отзыв назначения',
+      body: "Ваше назначение на сервисную точку #{service_point.name} отозвано",
+      data: {
+        type: 'operator_unassignment',
+        service_point_id: service_point.id,
+        action: 'unassigned'
+      }
+    )
+
+    # Внутреннее уведомление
+    create_internal_notification(
+      user: operator.user,
+      title: 'Отзыв назначения',
+      message: "Ваше назначение на сервисную точку \"#{service_point.name}\" отозвано",
+      notification_type: 'operator_unassignment',
+      related_id: service_point.id,
+      related_type: 'ServicePoint'
+    )
+  end
+
+  def send_partner_new_operator_notification(partner, operator)
+    send_email_notification(
+      to: partner.user.email,
+      template: 'partner_new_operator',
+      variables: {
+        partner_name: partner.user.full_name,
+        operator_name: operator.user.full_name,
+        operator_email: operator.user.email,
+        operator_phone: operator.user.phone,
+        creation_date: Time.current.strftime('%d.%m.%Y'),
+        manage_operators_url: frontend_url('/admin/operators')
+      }
+    )
+
+    create_internal_notification(
+      user: partner.user,
+      title: 'Новый оператор',
+      message: "Создан новый оператор: #{operator.user.full_name}",
+      notification_type: 'new_operator',
+      related_id: operator.id,
+      related_type: 'Operator'
+    )
+  end
+
+  def send_partner_operator_activated_notification(partner, operator)
+    create_internal_notification(
+      user: partner.user,
+      title: 'Оператор активирован',
+      message: "Оператор #{operator.user.full_name} активирован",
+      notification_type: 'operator_activated',
+      related_id: operator.id,
+      related_type: 'Operator'
+    )
+  end
+
+  def send_partner_operator_deactivated_notification(partner, operator)
+    create_internal_notification(
+      user: partner.user,
+      title: 'Оператор деактивирован',
+      message: "Оператор #{operator.user.full_name} деактивирован",
+      notification_type: 'operator_deactivated',
+      related_id: operator.id,
+      related_type: 'Operator'
+    )
+  end
+
+  def build_telegram_assignment_message(operator, service_point, action_type)
+    case action_type
+    when 'assigned'
+      "🎯 *Новое назначение*\n\n" \
+      "Здравствуйте, #{operator.user.first_name}!\n\n" \
+      "Вы назначены оператором на сервисную точку:\n" \
+      "📍 *#{service_point.name}*\n" \
+      "📧 #{service_point.address}\n" \
+      "📞 #{service_point.phone}\n\n" \
+      "Партнер: #{service_point.partner.name}\n" \
+      "Дата назначения: #{Time.current.strftime('%d.%m.%Y')}\n\n" \
+      "Войдите в систему для управления бронированиями."
+    when 'unassigned'
+      "⚠️ *Отзыв назначения*\n\n" \
+      "Здравствуйте, #{operator.user.first_name}!\n\n" \
+      "Ваше назначение на сервисную точку отозвано:\n" \
+      "📍 *#{service_point.name}*\n" \
+      "📧 #{service_point.address}\n\n" \
+      "Дата отзыва: #{Time.current.strftime('%d.%m.%Y')}\n\n" \
+      "Обратитесь к партнеру для уточнения деталей."
+    end
+  end
+
+  def format_working_hours(service_point)
+    # Форматируем часы работы для отображения в уведомлениях
+    # Здесь можно добавить логику форматирования расписания
+    "Пн-Пт: 9:00-18:00, Сб-Вс: 10:00-16:00" # Заглушка
+  end
+
+  def send_email_notification(to:, template:, variables:)
+    # Интеграция с существующей системой email уведомлений
+    EmailNotificationJob.perform_later(
+      to: to,
+      template: template,
+      variables: variables
+    )
+  rescue => e
+    Rails.logger.error "Ошибка отправки email уведомления: #{e.message}"
+  end
+
+  def send_telegram_notification(user:, message:)
+    # Интеграция с существующей системой Telegram уведомлений
+    TelegramNotificationJob.perform_later(
+      user_id: user.id,
+      message: message
+    )
+  rescue => e
+    Rails.logger.error "Ошибка отправки Telegram уведомления: #{e.message}"
+  end
+
+  def send_push_notification(user:, title:, body:, data: {})
+    # Интеграция с существующей системой Push уведомлений
+    PushNotificationJob.perform_later(
+      user_id: user.id,
+      title: title,
+      body: body,
+      data: data
+    )
+  rescue => e
+    Rails.logger.error "Ошибка отправки Push уведомления: #{e.message}"
+  end
+
+  def create_internal_notification(user:, title:, message:, notification_type:, related_id: nil, related_type: nil)
+    # Создание внутреннего уведомления в системе
+    Notification.create!(
+      user: user,
+      title: title,
+      message: message,
+      notification_type: notification_type,
+      related_id: related_id,
+      related_type: related_type,
+      is_read: false,
+      created_at: Time.current
+    )
+  rescue => e
+    Rails.logger.error "Ошибка создания внутреннего уведомления: #{e.message}"
+  end
+
+  def frontend_url(path)
+    # Генерация URL для frontend приложения
+    base_url = Rails.application.credentials.frontend_url || 'http://localhost:3008'
+    "#{base_url}#{path}"
   end
 end 

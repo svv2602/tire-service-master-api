@@ -143,6 +143,83 @@ class SystemLog < ApplicationRecord
       **options
     )
   end
+
+  # Логирование операций с назначениями операторов
+  def self.log_operator_assignment(user, action, operator, service_point, assignment, **options)
+    create_log(
+      user: user,
+      action: action,
+      resource_type: 'OperatorServicePoint',
+      resource_id: assignment.id,
+      resource_name: "#{operator.user.full_name} → #{service_point.name}",
+      changes: {
+        operator_id: operator.id,
+        service_point_id: service_point.id,
+        action: action,
+        assigned_at: assignment.assigned_at,
+        is_active: assignment.is_active
+      },
+      additional_data: {
+        operator_name: operator.user.full_name,
+        operator_email: operator.user.email,
+        service_point_name: service_point.name,
+        service_point_address: service_point.address,
+        partner_name: operator.partner.name,
+        assignment_id: assignment.id
+      },
+      **options
+    )
+  end
+
+  def self.log_operator_auto_assignment(user, operator, total_points, successful_points, **options)
+    create_log(
+      user: user,
+      action: 'auto_assign',
+      resource_type: 'Operator',
+      resource_id: operator.id,
+      resource_name: operator.user.full_name,
+      changes: {
+        operator_id: operator.id,
+        total_points: total_points,
+        successful_assignments: successful_points,
+        auto_assigned_at: Time.current
+      },
+      additional_data: {
+        operator_name: operator.user.full_name,
+        operator_email: operator.user.email,
+        partner_name: operator.partner.name,
+        assignment_success_rate: "#{successful_points}/#{total_points}"
+      },
+      **options
+    )
+  end
+
+  def self.log_bulk_operator_assignment(user, service_point, operator_ids, results, **options)
+    create_log(
+      user: user,
+      action: 'bulk_assign',
+      resource_type: 'ServicePoint',
+      resource_id: service_point.id,
+      resource_name: service_point.name,
+      changes: {
+        service_point_id: service_point.id,
+        operator_ids: operator_ids,
+        successful_assignments: results[:success],
+        failed_assignments: results[:failed],
+        bulk_assigned_at: Time.current
+      },
+      additional_data: {
+        service_point_name: service_point.name,
+        service_point_address: service_point.address,
+        partner_name: service_point.partner.name,
+        total_operators: operator_ids.count,
+        success_count: results[:success].count,
+        failure_count: results[:failed].count,
+        errors: results[:errors]
+      },
+      **options
+    )
+  end
   
   # Статистические методы
   def self.stats_by_action(days_ago = 30)
