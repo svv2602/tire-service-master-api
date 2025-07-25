@@ -11,6 +11,14 @@ class Client < ApplicationRecord
   validates :user_id, presence: true, uniqueness: true
   validates :preferred_notification_method, inclusion: { in: ['push', 'email', 'sms'] }, allow_nil: true
   
+  # Scope'ы для изоляции данных
+  scope :for_partner, ->(partner_id) {
+    joins(:bookings)
+      .joins('JOIN service_points ON bookings.service_point_id = service_points.id')
+      .where('service_points.partner_id = ?', partner_id)
+      .distinct
+  }
+  
   # Методы
   def primary_car
     cars.find_by(is_primary: true)

@@ -15,6 +15,11 @@ class Review < ApplicationRecord
   scope :rejected, -> { where(status: 'rejected') }
   scope :ordered_by_date, -> { order(created_at: :desc) }
   
+  # Scope для изоляции данных по партнерам
+  scope :for_partner, ->(partner_id) { 
+    joins(:service_point).where(service_points: { partner_id: partner_id }) 
+  }
+  
   # Колбэки для синхронизации is_published с status
   before_save :sync_is_published_with_status
   

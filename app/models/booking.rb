@@ -94,6 +94,11 @@ class Booking < ApplicationRecord
   scope :by_client, ->(client_id) { where(client_id: client_id) }
   scope :by_service_point, ->(service_point_id) { where(service_point_id: service_point_id) }
   
+  # Scope для изоляции данных по партнерам
+  scope :for_partner, ->(partner_id) { 
+    joins(:service_point).where(service_points: { partner_id: partner_id }) 
+  }
+  
   # Скоупы для работы с категориями
   scope :by_category, ->(category_id) { where(service_category_id: category_id) }
   scope :with_category, -> { includes(:service_category) }

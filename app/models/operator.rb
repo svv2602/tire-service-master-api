@@ -25,6 +25,12 @@ class Operator < ApplicationRecord
     joins(:operator_service_points)
       .where(operator_service_points: { service_point_id: service_point_id, is_active: true }) 
   }
+  
+  # Scope для изоляции данных по сервисной точке
+  scope :for_service_point, ->(service_point_id) { 
+    joins(:operator_service_points)
+      .where(operator_service_points: { service_point_id: service_point_id, is_active: true })
+  }
 
   # Методы
   def activate!

@@ -99,6 +99,12 @@ class ServicePoint < ApplicationRecord
   scope :available_for_booking, -> { active.where(work_status: ['working']) } # доступны для бронирования
   scope :by_city, ->(city_id) { where(city_id: city_id) }
   scope :by_partner, ->(partner_id) { where(partner_id: partner_id) }
+  
+  # Scope для изоляции данных операторов
+  scope :for_operator, ->(operator_id) { 
+    joins(:operator_service_points)
+      .where(operator_service_points: { operator_id: operator_id, is_active: true })
+  }
   scope :with_amenities, ->(amenity_ids) { 
     return none if amenity_ids.blank?
     
