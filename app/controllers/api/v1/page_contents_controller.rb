@@ -90,7 +90,7 @@ module Api
           if dynamic_data
             case content.content_type
             when 'service'
-              content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :description, :category_id, :icon])
+              content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :description, :category_id])
             when 'city'
               content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :region_id])
                                                          .map { |city| city.merge('service_points_count' => city['service_points_count'] || 0) }
@@ -140,7 +140,7 @@ module Api
         if dynamic_data
           case @page_content.content_type
           when 'service'
-            content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :description, :category_id, :icon])
+            content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :description, :category_id])
           when 'city'
             content_hash['dynamic_data'] = dynamic_data.as_json(only: [:id, :name, :region_id])
                                                        .map { |city| city.merge('service_points_count' => city['service_points_count'] || 0) }
@@ -304,9 +304,9 @@ module Api
       # Получение услуг по категории
       def get_services_by_category(category = nil)
         services = Service.where(is_active: true)
-        services = services.joins(:service_category).where(service_categories: { name: category }) if category.present?
+        services = services.joins(:category).where(service_categories: { name: category }) if category.present?
         
-        services.includes(:service_category)
+        services.includes(:category)
                 .limit(8)
                 .map do |service|
                   {
@@ -314,10 +314,11 @@ module Api
                     name: service.name,
                     description: service.description,
                     category_id: service.category_id,
-                    icon: service.icon || 'service'
+                    icon: 'service'  # Используем дефолтную иконку
                   }
                 end
-      rescue
+      rescue => e
+        Rails.logger.error "Error in get_services_by_category: #{e.message}"
         # Если таблица услуг не существует, возвращаем пустой массив
         []
       end

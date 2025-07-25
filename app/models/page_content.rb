@@ -122,11 +122,11 @@ class PageContent < ApplicationRecord
   def get_service_data
     return nil unless settings['category']
     
-    Service.joins(:service_category)
+    Service.joins(:category)
            .where(is_active: true)
            .where('service_categories.name ILIKE ?', "%#{settings['category']}%")
            .limit(8)
-           .select('services.id, services.name, services.description, services.category_id, services.icon')
+           .select('services.id, services.name, services.description, services.category_id')
   end
 
   def get_city_data
