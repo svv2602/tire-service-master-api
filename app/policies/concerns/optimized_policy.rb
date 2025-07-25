@@ -10,7 +10,7 @@ module OptimizedPolicy
         
         data = {
           id: user.id,
-          role: user.role_name,
+          role: user.role&.name,
           is_admin: user.admin?,
           is_partner: user.partner?,
           is_manager: user.manager?,
