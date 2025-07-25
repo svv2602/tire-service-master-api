@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_25_120132) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -171,6 +171,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.index ["car_brand", "car_model"], name: "index_bookings_on_car_brand_model"
     t.index ["car_id"], name: "index_bookings_on_car_id"
     t.index ["car_type_id"], name: "index_bookings_on_car_type_id"
+    t.index ["client_id", "status", "booking_date"], name: "idx_bookings_client_status_date"
     t.index ["client_id"], name: "index_bookings_guest_only", where: "(client_id IS NULL)"
     t.index ["client_id"], name: "index_bookings_on_client_id"
     t.index ["is_service_booking"], name: "index_bookings_on_is_service_booking"
@@ -178,6 +179,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.index ["payment_status_id"], name: "index_bookings_on_payment_status_id"
     t.index ["service_category_id"], name: "index_bookings_on_service_category_id"
     t.index ["service_point_id", "booking_date", "start_time"], name: "idx_bookings_service_point_date_time"
+    t.index ["service_point_id", "booking_date"], name: "idx_bookings_point_date"
+    t.index ["service_point_id", "status", "booking_date", "start_time"], name: "idx_bookings_complex_filter"
+    t.index ["service_point_id", "status"], name: "idx_bookings_point_status"
     t.index ["service_point_id"], name: "index_bookings_on_service_point_id"
     t.index ["service_recipient_phone"], name: "index_bookings_on_guest_phone"
     t.index ["service_recipient_phone"], name: "index_bookings_on_service_recipient_phone"
@@ -468,8 +472,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["is_active"], name: "index_operator_service_points_on_is_active"
+    t.index ["operator_id", "service_point_id"], name: "idx_operator_service_points_operator_point", unique: true
     t.index ["operator_id", "service_point_id"], name: "index_operator_service_points_unique", unique: true
     t.index ["operator_id"], name: "index_operator_service_points_on_operator_id"
+    t.index ["service_point_id", "is_active"], name: "idx_operator_service_points_point_active"
     t.index ["service_point_id"], name: "index_operator_service_points_on_service_point_id"
   end
 
@@ -518,6 +524,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.bigint "city_id"
     t.index ["city_id"], name: "index_partners_on_city_id"
     t.index ["company_name"], name: "index_partners_on_company_name"
+    t.index ["id", "is_active"], name: "idx_partners_id_active"
     t.index ["is_active"], name: "index_partners_on_is_active"
     t.index ["region_id"], name: "index_partners_on_region_id"
     t.index ["user_id"], name: "index_partners_on_user_id", unique: true
@@ -636,9 +643,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.datetime "updated_at", null: false
     t.boolean "recommend", default: true, null: false
     t.string "status", default: "published", null: false
+    t.index "to_tsvector('russian'::regconfig, COALESCE(comment, ''::text))", name: "idx_reviews_search_text", using: :gin
     t.index ["booking_id"], name: "index_reviews_on_booking_id"
+    t.index ["client_id", "created_at"], name: "idx_reviews_client_created"
     t.index ["client_id"], name: "index_reviews_on_client_id"
     t.index ["recommend"], name: "index_reviews_on_recommend"
+    t.index ["service_point_id", "is_published"], name: "idx_reviews_point_published"
     t.index ["service_point_id"], name: "index_reviews_on_service_point_id"
     t.index ["status"], name: "index_reviews_on_status"
     t.check_constraint "rating >= 1 AND rating <= 5", name: "check_rating_range"
@@ -821,6 +831,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.text "description_uk", null: false
     t.string "address_ru", null: false
     t.string "address_uk", null: false
+    t.index "to_tsvector('russian'::regconfig, (((name)::text || ' '::text) || COALESCE(description, ''::text)))", name: "idx_service_points_search_text", using: :gin
     t.index ["category_contacts"], name: "index_service_points_on_category_contacts", using: :gin
     t.index ["city_id"], name: "index_service_points_on_city_id"
     t.index ["is_active", "work_status"], name: "index_service_points_on_is_active_and_work_status"
@@ -828,6 +839,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.index ["latitude", "longitude"], name: "idx_service_points_location"
     t.index ["name_ru"], name: "index_service_points_on_name_ru"
     t.index ["name_uk"], name: "index_service_points_on_name_uk"
+    t.index ["partner_id", "city_id"], name: "idx_service_points_partner_city"
+    t.index ["partner_id", "is_active", "city_id", "created_at"], name: "idx_service_points_complex_filter"
+    t.index ["partner_id", "is_active"], name: "idx_service_points_partner_active"
     t.index ["partner_id"], name: "index_service_points_on_partner_id"
     t.index ["work_status"], name: "index_service_points_on_work_status"
   end
@@ -879,12 +893,18 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.datetime "updated_at", null: false
     t.jsonb "changes", comment: "Детальные изменения в JSON формате"
     t.jsonb "additional_data", comment: "Дополнительная контекстная информация"
+    t.index ["action", "created_at"], name: "idx_system_logs_action_created"
     t.index ["action"], name: "index_system_logs_on_action"
+    t.index ["additional_data"], name: "idx_system_logs_additional_data_gin", using: :gin
     t.index ["additional_data"], name: "index_system_logs_on_additional_data", using: :gin
+    t.index ["changes"], name: "idx_system_logs_changes_gin", using: :gin
     t.index ["changes"], name: "index_system_logs_on_changes", using: :gin
     t.index ["created_at"], name: "index_system_logs_on_created_at"
+    t.index ["ip_address", "created_at"], name: "idx_system_logs_ip_created"
     t.index ["resource_type", "action"], name: "index_system_logs_on_resource_type_and_action"
+    t.index ["resource_type", "resource_id", "created_at"], name: "idx_system_logs_resource_created"
     t.index ["resource_type", "resource_id"], name: "idx_system_logs_resource"
+    t.index ["user_id", "created_at"], name: "idx_system_logs_user_created"
     t.index ["user_id", "created_at"], name: "index_system_logs_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_system_logs_on_user_id"
   end
@@ -969,6 +989,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.datetime "updated_at", null: false
     t.string "name_uk"
     t.text "description_uk"
+    t.index ["name", "is_active"], name: "idx_user_roles_name_active"
     t.index ["name"], name: "index_user_roles_on_name", unique: true
     t.index ["name_uk"], name: "index_user_roles_on_name_uk"
   end
@@ -1006,9 +1027,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
     t.bigint "suspended_by_id", comment: "Кто заблокировал пользователя"
     t.datetime "suspended_at", comment: "Дата и время блокировки"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["id", "is_active"], name: "idx_users_id_active"
     t.index ["is_suspended"], name: "index_users_on_is_suspended"
     t.index ["password_reset_token"], name: "index_users_on_password_reset_token", unique: true
     t.index ["phone"], name: "index_users_on_phone", unique: true
+    t.index ["role_id", "is_active"], name: "idx_users_role_active"
     t.index ["role_id"], name: "index_users_on_role_id"
     t.index ["suspended_by_id"], name: "index_users_on_suspended_by_id"
     t.index ["suspended_until"], name: "index_users_on_suspended_until"

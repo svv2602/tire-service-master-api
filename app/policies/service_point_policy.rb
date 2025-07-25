@@ -1,4 +1,5 @@
 class ServicePointPolicy < ApplicationPolicy
+  include OptimizedPolicy
   def index?
     true # Публичный доступ к списку сервисных точек
   end
@@ -12,12 +13,16 @@ class ServicePointPolicy < ApplicationPolicy
   end
 
   def update?
-    user&.admin? || (user&.partner? && record.partner_id == user.partner&.id) || 
-      (user&.manager? && user.manager&.service_points&.include?(record))
+    return true if cached_user_data[:is_admin]
+    return belongs_to_user_partner?(record.partner_id) if cached_user_data[:is_partner]
+    return can_access_service_point?(record.id) if cached_user_data[:is_manager]
+    false
   end
 
   def destroy?
-    user&.admin? || (user&.partner? && record.partner_id == user.partner&.id)
+    return true if cached_user_data[:is_admin]
+    return belongs_to_user_partner?(record.partner_id) if cached_user_data[:is_partner]
+    false
   end
 
   def nearby?
@@ -29,28 +34,12 @@ class ServicePointPolicy < ApplicationPolicy
   end
 
   class Scope < Scope
-    def resolve
-      if user.nil? || user.client?
-        # Неаутентифицированные пользователи и клиенты видят только активные работающие точки
-        scope.available_for_booking
-      elsif user.admin?
-        # Админы видят все точки
-        scope.all
-      elsif user.partner?
-        # Партнеры видят только свои точки (в любом состоянии)
-        scope.by_partner(user.partner&.id)
-      elsif user.manager?
-        # Менеджеры видят точки, к которым у них есть доступ
-        if user.manager&.id
-          scope.joins(:manager_service_points)
-               .where(manager_service_points: { manager_id: user.manager.id })
-               .distinct
-        else
-          scope.none
-        end
-      else
-        scope.none
-      end
+    include OptimizedPolicy
+    
+        def resolve
+      # Используем оптимизированный scope
+            optimized_scope_for_service_points(scope)
     end
   end
+end
 end

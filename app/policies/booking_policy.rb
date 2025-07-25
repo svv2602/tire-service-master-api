@@ -1,22 +1,22 @@
 class BookingPolicy < ApplicationPolicy
+  include OptimizedPolicy
   def index?
     user.present?
   end
 
   def show?
     return false unless user.present?
+    return true if cached_user_data[:is_admin]
     
-    if user.admin?
-      true
-    elsif user.partner?
-      record.service_point.partner_id == user.partner&.id
-    elsif user.manager?
-      user.manager&.service_points&.include?(record.service_point)
-    elsif user.client?
-      record.client_id == user.client&.id
-    else
-      false
+    if cached_user_data[:is_partner]
+      return belongs_to_user_partner?(record.service_point.partner_id)
+    elsif cached_user_data[:is_manager] || cached_user_data[:is_operator]
+      return can_access_service_point?(record.service_point_id)
+    elsif cached_user_data[:is_client]
+      return record.client_id == cached_user_data[:client_id]
     end
+    
+    false
   end
 
   def create?
@@ -25,18 +25,17 @@ class BookingPolicy < ApplicationPolicy
 
   def update?
     return false unless user.present?
+    return true if cached_user_data[:is_admin]
     
-    if user.admin?
-      true
-    elsif user.partner?
-      record.service_point.partner_id == user.partner&.id
-    elsif user.manager?
-      user.manager&.service_points&.include?(record.service_point)
-    elsif user.client?
-      record.client_id == user.client&.id && record.status == "pending"
-    else
-      false
+    if cached_user_data[:is_partner]
+      return belongs_to_user_partner?(record.service_point.partner_id)
+    elsif cached_user_data[:is_manager] || cached_user_data[:is_operator]
+      return can_access_service_point?(record.service_point_id)
+    elsif cached_user_data[:is_client]
+      return record.client_id == cached_user_data[:client_id] && record.status == "pending"
     end
+    
+    false
   end
 
   def update_status?
@@ -107,28 +106,13 @@ class BookingPolicy < ApplicationPolicy
   end
 
   class Scope < Scope
+    include OptimizedPolicy
+    
     def resolve
       return scope.none unless user.present?
       
-      if user.admin?
-        scope.all
-      elsif user.partner?
-        scope.joins(:service_point).where(service_points: { partner_id: user.partner&.id })
-      elsif user.manager?
-        if user.manager&.service_point_ids.present?
-          scope.joins(:service_point).where(service_points: { id: user.manager.service_point_ids })
-        else
-          scope.none
-        end
-      elsif user.client?
-        if user.client.present?
-          scope.where(client_id: user.client.id)
-        else
-          scope.none
-        end
-      else
-        scope.none
-      end
+      # Используем оптимизированный scope
+      optimized_scope_for_bookings(scope)
     end
   end
 end
