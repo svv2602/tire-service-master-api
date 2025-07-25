@@ -36,10 +36,9 @@ class ServicePointPolicy < ApplicationPolicy
   class Scope < Scope
     include OptimizedPolicy
     
-        def resolve
+    def resolve
       # Используем оптимизированный scope
-            optimized_scope_for_service_points(scope)
+      optimized_scope_for_service_points(scope)
     end
   end
-end
 end

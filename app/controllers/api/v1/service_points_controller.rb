@@ -669,12 +669,10 @@ module Api
       def set_service_point
         @service_point = ServicePoint.includes(
           :partner,
-          :city,
-          :region,
-          :service_point_photos,
+          { city: :region },
+          :photos,
           :service_point_services,
-          :posts,
-          :working_hours,
+          :service_posts,
           :reviews
         ).find(params[:id])
       end
@@ -1179,12 +1177,10 @@ module Api
         # Eager loading для избежания N+1 запросов
         @service_points = @service_points.includes(
           :partner,
-          :city,
-          :region,
-          :service_point_photos,
+          { city: :region },
+          :photos,
           :service_point_services,
-          :posts,
-          :working_hours,
+          :service_posts,
           :reviews
         )
         
