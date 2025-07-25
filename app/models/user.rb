@@ -1,4 +1,6 @@
 class User < ApplicationRecord
+  include Auditable
+  
   has_secure_password
   
   # Атрибуты

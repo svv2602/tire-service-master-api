@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_25_065347) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_25_065721) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -868,18 +868,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_065347) do
 
   create_table "system_logs", force: :cascade do |t|
     t.bigint "user_id"
-    t.string "action", null: false
-    t.string "entity_type"
-    t.integer "entity_id"
+    t.string "action", null: false, comment: "Тип действия (created/updated/deleted/suspended/assigned)"
+    t.string "resource_type", comment: "Тип ресурса (User/Booking/ServicePoint/Operator)"
+    t.integer "resource_id", comment: "ID ресурса"
     t.jsonb "old_value"
     t.jsonb "new_value"
-    t.string "ip_address", limit: 45
-    t.text "user_agent"
+    t.string "ip_address", limit: 45, comment: "IP адрес пользователя"
+    t.text "user_agent", comment: "User-Agent браузера"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "changes", comment: "Детальные изменения в JSON формате"
+    t.jsonb "additional_data", comment: "Дополнительная контекстная информация"
     t.index ["action"], name: "index_system_logs_on_action"
+    t.index ["additional_data"], name: "index_system_logs_on_additional_data", using: :gin
+    t.index ["changes"], name: "index_system_logs_on_changes", using: :gin
     t.index ["created_at"], name: "index_system_logs_on_created_at"
-    t.index ["entity_type", "entity_id"], name: "idx_system_logs_entity"
+    t.index ["resource_type", "action"], name: "index_system_logs_on_resource_type_and_action"
+    t.index ["resource_type", "resource_id"], name: "idx_system_logs_resource"
+    t.index ["user_id", "created_at"], name: "index_system_logs_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_system_logs_on_user_id"
   end
 
