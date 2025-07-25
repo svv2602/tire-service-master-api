@@ -509,6 +509,14 @@ Rails.application.routes.draw do
       # Прямые маршруты для управления привязками операторов
       resources :operator_service_points, only: [:show, :update, :destroy]
 
+      # Аудит логи
+      resources :audit_logs, only: [:index, :show] do
+        collection do
+          get :stats
+          get :export
+        end
+      end
+
       # Управление шаблонами уведомлений
       resources :notification_templates, only: [:index, :show, :create, :update, :destroy]
       

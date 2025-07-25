@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест API аудита системы</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; border: none; }
+        .btn-success { background-color: #28a745; color: white; border: none; }
+        .btn-info { background-color: #17a2b8; color: white; border: none; }
+        .btn-warning { background-color: #ffc107; color: #212529; border: none; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; max-height: 400px; }
+        .form-group { margin: 10px 0; display: inline-block; margin-right: 15px; }
+        .form-group.full-width { display: block; margin-right: 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 12px; }
+        input, select { padding: 6px; width: 150px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px; }
+        .wide-input { width: 250px; }
+        .filters-row { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+        .log-entry { background: #f8f9fa; margin: 5px 0; padding: 10px; border-radius: 3px; border-left: 4px solid #007bff; }
+        .log-meta { font-size: 11px; color: #6c757d; margin-bottom: 5px; }
+        .log-action { font-weight: bold; color: #495057; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
+        .stats-card { background: #f8f9fa; padding: 15px; border-radius: 5px; border: 1px solid #dee2e6; }
+        .stats-title { font-weight: bold; margin-bottom: 10px; }
+        .chart-placeholder { height: 200px; background: #e9ecef; display: flex; align-items: center; justify-content: center; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Тест API аудита системы</h1>
+        
+        <div class="section info">
+            <h3>📋 Информация о тестировании</h3>
+            <p><strong>Базовый URL:</strong> http://localhost:8000/api/v1</p>
+            <p><strong>Требуется авторизация:</strong> Да (Bearer token)</p>
+            <p><strong>Роли для доступа:</strong> admin, manager</p>
+            <p><strong>Endpoints:</strong></p>
+            <ul>
+                <li>GET /audit_logs - Список логов с фильтрами и пагинацией</li>
+                <li>GET /audit_logs/stats - Статистика по активности</li>
+                <li>GET /audit_logs/:id - Детальная информация о логе</li>
+                <li>GET /audit_logs/export.csv - Экспорт в CSV</li>
+            </ul>
+        </div>
+
+        <!-- Авторизация -->
+        <div class="section">
+            <h3>🔐 Авторизация</h3>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="email" value="admin@test.com">
+            </div>
+            <div class="form-group">
+                <label>Пароль:</label>
+                <input type="password" id="password" value="admin123">
+            </div>
+            <button onclick="login()" class="btn-info">Войти</button>
+            <div id="auth-result"></div>
+        </div>
+
+        <!-- Фильтры для поиска логов -->
+        <div class="section">
+            <h3>🔍 Поиск аудит логов с фильтрами</h3>
+            <div class="filters-row">
+                <div class="form-group">
+                    <label>User ID:</label>
+                    <input type="number" id="filter-user-id" placeholder="1">
+                </div>
+                <div class="form-group">
+                    <label>Email пользователя:</label>
+                    <input type="text" id="filter-user-email" placeholder="admin@test.com">
+                </div>
+                <div class="form-group">
+                    <label>Действие:</label>
+                    <select id="filter-action">
+                        <option value="">Все</option>
+                        <option value="created">Создание</option>
+                        <option value="updated">Обновление</option>
+                        <option value="deleted">Удаление</option>
+                        <option value="suspended">Блокировка</option>
+                        <option value="unsuspended">Разблокировка</option>
+                        <option value="assigned">Назначение</option>
+                        <option value="login">Вход</option>
+                        <option value="logout">Выход</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Тип ресурса:</label>
+                    <select id="filter-resource-type">
+                        <option value="">Все</option>
+                        <option value="User">Пользователь</option>
+                        <option value="Booking">Бронирование</option>
+                        <option value="ServicePoint">Сервисная точка</option>
+                        <option value="Operator">Оператор</option>
+                        <option value="Partner">Партнер</option>
+                        <option value="Client">Клиент</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>ID ресурса:</label>
+                    <input type="number" id="filter-resource-id" placeholder="123">
+                </div>
+            </div>
+            <div class="filters-row">
+                <div class="form-group">
+                    <label>Дата от:</label>
+                    <input type="date" id="filter-date-from">
+                </div>
+                <div class="form-group">
+                    <label>Дата до:</label>
+                    <input type="date" id="filter-date-to">
+                </div>
+                <div class="form-group">
+                    <label>IP адрес:</label>
+                    <input type="text" id="filter-ip" placeholder="127.0.0.1">
+                </div>
+                <div class="form-group">
+                    <label>Страница:</label>
+                    <input type="number" id="filter-page" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>На странице:</label>
+                    <select id="filter-per-page">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <button onclick="getAuditLogs()" class="btn-primary">🔍 Поиск логов</button>
+                <button onclick="clearFilters()" class="btn-warning">🧹 Очистить фильтры</button>
+            </div>
+            <div id="audit-logs-result"></div>
+        </div>
+
+        <!-- Статистика -->
+        <div class="section">
+            <h3>📈 Статистика аудита</h3>
+            <div class="form-group">
+                <label>Период (дней):</label>
+                <select id="stats-days">
+                    <option value="7">7 дней</option>
+                    <option value="30" selected>30 дней</option>
+                    <option value="90">90 дней</option>
+                    <option value="365">365 дней</option>
+                </select>
+            </div>
+            <button onclick="getAuditStats()" class="btn-success">📊 Получить статистику</button>
+            <div id="audit-stats-result"></div>
+        </div>
+
+        <!-- Детальный просмотр лога -->
+        <div class="section">
+            <h3>🔍 Детальный просмотр лога</h3>
+            <div class="form-group">
+                <label>ID лога:</label>
+                <input type="number" id="log-detail-id" value="1">
+            </div>
+            <button onclick="getLogDetail()" class="btn-info">👁️ Просмотр деталей</button>
+            <div id="log-detail-result"></div>
+        </div>
+
+        <!-- Экспорт -->
+        <div class="section">
+            <h3>📤 Экспорт логов</h3>
+            <p>Экспорт использует те же фильтры, что и поиск логов выше.</p>
+            <button onclick="exportLogs()" class="btn-success">💾 Экспорт в CSV</button>
+            <button onclick="getExportInfo()" class="btn-info">ℹ️ Информация об экспорте</button>
+            <div id="export-result"></div>
+        </div>
+
+        <!-- Лог запросов -->
+        <div class="section">
+            <h3>📝 Лог запросов</h3>
+            <button onclick="clearLog()" class="btn-info">Очистить лог</button>
+            <pre id="request-log"></pre>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        const baseUrl = 'http://localhost:8000/api/v1';
+
+        function logRequest(method, url, data, response) {
+            const log = document.getElementById('request-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${method} ${url}\n`;
+            const dataEntry = data ? `Request: ${JSON.stringify(data, null, 2)}\n` : '';
+            const responseEntry = `Response: ${JSON.stringify(response, null, 2)}\n\n`;
+            log.textContent += logEntry + dataEntry + responseEntry;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('request-log').textContent = '';
+        }
+
+        async function makeRequest(method, url, data = null) {
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            if (authToken) {
+                options.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            try {
+                const response = await fetch(url, options);
+                const result = await response.json();
+                
+                logRequest(method, url, data, result);
+                
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    data: result
+                };
+            } catch (error) {
+                const errorResult = { error: error.message };
+                logRequest(method, url, data, errorResult);
+                return {
+                    ok: false,
+                    status: 0,
+                    data: errorResult
+                };
+            }
+        }
+
+        function displayResult(elementId, result, successMessage = '') {
+            const element = document.getElementById(elementId);
+            if (result.ok) {
+                element.className = 'section success';
+                element.innerHTML = `<h4>✅ ${successMessage || 'Успех'}</h4><pre>${JSON.stringify(result.data, null, 2)}</pre>`;
+            } else {
+                element.className = 'section error';
+                element.innerHTML = `<h4>❌ Ошибка (${result.status})</h4><pre>${JSON.stringify(result.data, null, 2)}</pre>`;
+            }
+        }
+
+        function displayAuditLogs(result) {
+            const element = document.getElementById('audit-logs-result');
+            if (!result.ok) {
+                displayResult('audit-logs-result', result);
+                return;
+            }
+
+            const logs = result.data.data || [];
+            const meta = result.data.meta || {};
+
+            let logsHtml = logs.map(log => `
+                <div class="log-entry">
+                    <div class="log-meta">
+                        ID: ${log.id} | ${log.created_at} | IP: ${log.ip_address || 'N/A'} | 
+                        Пользователь: ${log.user_name} (${log.user_email || 'N/A'})
+                    </div>
+                    <div class="log-action">
+                        ${log.action_description} - ${log.resource_type || 'N/A'} 
+                        ${log.resource_id ? `#${log.resource_id}` : ''} 
+                        ${log.resource_name ? `(${log.resource_name})` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            if (logs.length === 0) {
+                logsHtml = '<p>Логи не найдены</p>';
+            }
+
+            element.className = 'section success';
+            element.innerHTML = `
+                <h4>✅ Найдено логов: ${meta.total_count || 0}</h4>
+                <div style="margin-bottom: 15px;">
+                    <strong>Страница:</strong> ${meta.current_page}/${meta.total_pages} | 
+                    <strong>На странице:</strong> ${meta.per_page} | 
+                    <strong>Фильтры:</strong> ${Object.keys(meta.filters_applied || {}).length}
+                </div>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    ${logsHtml}
+                </div>
+                <details style="margin-top: 15px;">
+                    <summary>Показать JSON</summary>
+                    <pre>${JSON.stringify(result.data, null, 2)}</pre>
+                </details>
+            `;
+        }
+
+        function displayStats(result) {
+            const element = document.getElementById('audit-stats-result');
+            if (!result.ok) {
+                displayResult('audit-stats-result', result);
+                return;
+            }
+
+            const stats = result.data.data || {};
+
+            element.className = 'section success';
+            element.innerHTML = `
+                <h4>✅ Статистика за ${stats.period?.days || 0} дней</h4>
+                <div class="stats-grid">
+                    <div class="stats-card">
+                        <div class="stats-title">📊 Общая статистика</div>
+                        <p><strong>Всего записей:</strong> ${stats.total_logs || 0}</p>
+                        <p><strong>Период:</strong> ${stats.period?.from} - ${stats.period?.to}</p>
+                    </div>
+                    
+                    <div class="stats-card">
+                        <div class="stats-title">🎯 Топ действий</div>
+                        ${Object.entries(stats.actions || {}).slice(0, 5).map(([action, count]) => 
+                            `<p>${action}: ${count}</p>`
+                        ).join('')}
+                    </div>
+                    
+                    <div class="stats-card">
+                        <div class="stats-title">👥 Активные пользователи</div>
+                        ${(stats.top_users || []).slice(0, 5).map(user => 
+                            `<p>${user.email}: ${user.actions_count}</p>`
+                        ).join('')}
+                    </div>
+                    
+                    <div class="stats-card">
+                        <div class="stats-title">🏗️ Ресурсы</div>
+                        ${(stats.resources || []).slice(0, 5).map(resource => 
+                            `<p>${resource.resource_type}: ${resource.changes_count}</p>`
+                        ).join('')}
+                    </div>
+                    
+                    <div class="stats-card">
+                        <div class="stats-title">🌐 Топ IP адресов</div>
+                        ${(stats.top_ips || []).slice(0, 5).map(ip => 
+                            `<p>${ip.ip_address}: ${ip.requests_count}</p>`
+                        ).join('')}
+                    </div>
+                    
+                    <div class="stats-card">
+                        <div class="stats-title">📅 Активность по дням</div>
+                        <div class="chart-placeholder">
+                            График активности<br>
+                            (${(stats.daily_activity || []).length} дней данных)
+                        </div>
+                    </div>
+                </div>
+                <details style="margin-top: 15px;">
+                    <summary>Показать полный JSON</summary>
+                    <pre>${JSON.stringify(result.data, null, 2)}</pre>
+                </details>
+            `;
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            const result = await makeRequest('POST', `${baseUrl}/auth/login`, {
+                email,
+                password
+            });
+            
+            if (result.ok && result.data.token) {
+                authToken = result.data.token;
+                displayResult('auth-result', result, 'Авторизация успешна');
+            } else {
+                displayResult('auth-result', result);
+            }
+        }
+
+        async function getAuditLogs() {
+            const params = new URLSearchParams();
+            
+            const userId = document.getElementById('filter-user-id').value;
+            const userEmail = document.getElementById('filter-user-email').value;
+            const action = document.getElementById('filter-action').value;
+            const resourceType = document.getElementById('filter-resource-type').value;
+            const resourceId = document.getElementById('filter-resource-id').value;
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+            const ip = document.getElementById('filter-ip').value;
+            const page = document.getElementById('filter-page').value;
+            const perPage = document.getElementById('filter-per-page').value;
+            
+            if (userId) params.append('user_id', userId);
+            if (userEmail) params.append('user_email', userEmail);
+            if (action) params.append('action', action);
+            if (resourceType) params.append('resource_type', resourceType);
+            if (resourceId) params.append('resource_id', resourceId);
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            if (ip) params.append('ip_address', ip);
+            if (page) params.append('page', page);
+            if (perPage) params.append('per_page', perPage);
+            
+            const url = `${baseUrl}/audit_logs${params.toString() ? '?' + params.toString() : ''}`;
+            const result = await makeRequest('GET', url);
+            displayAuditLogs(result);
+        }
+
+        async function getAuditStats() {
+            const days = document.getElementById('stats-days').value;
+            const url = `${baseUrl}/audit_logs/stats?days=${days}`;
+            
+            const result = await makeRequest('GET', url);
+            displayStats(result);
+        }
+
+        async function getLogDetail() {
+            const logId = document.getElementById('log-detail-id').value;
+            
+            const result = await makeRequest('GET', `${baseUrl}/audit_logs/${logId}`);
+            displayResult('log-detail-result', result, 'Детали лога получены');
+        }
+
+        async function exportLogs() {
+            const params = new URLSearchParams();
+            
+            // Используем те же фильтры, что и для поиска
+            const userId = document.getElementById('filter-user-id').value;
+            const userEmail = document.getElementById('filter-user-email').value;
+            const action = document.getElementById('filter-action').value;
+            const resourceType = document.getElementById('filter-resource-type').value;
+            const resourceId = document.getElementById('filter-resource-id').value;
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+            const ip = document.getElementById('filter-ip').value;
+            
+            if (userId) params.append('user_id', userId);
+            if (userEmail) params.append('user_email', userEmail);
+            if (action) params.append('action', action);
+            if (resourceType) params.append('resource_type', resourceType);
+            if (resourceId) params.append('resource_id', resourceId);
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            if (ip) params.append('ip_address', ip);
+            
+            const url = `${baseUrl}/audit_logs/export.csv${params.toString() ? '?' + params.toString() : ''}`;
+            
+            // Открываем в новом окне для скачивания
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+            
+            if (authToken) {
+                // Для скачивания с авторизацией используем fetch
+                try {
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const downloadUrl = window.URL.createObjectURL(blob);
+                        link.href = downloadUrl;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(downloadUrl);
+                        
+                        document.getElementById('export-result').className = 'section success';
+                        document.getElementById('export-result').innerHTML = '<h4>✅ Файл скачан</h4>';
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    document.getElementById('export-result').className = 'section error';
+                    document.getElementById('export-result').innerHTML = `<h4>❌ Ошибка экспорта: ${error.message}</h4>`;
+                }
+            }
+        }
+
+        async function getExportInfo() {
+            const result = await makeRequest('GET', `${baseUrl}/audit_logs/export`);
+            displayResult('export-result', result, 'Информация об экспорте');
+        }
+
+        function clearFilters() {
+            document.getElementById('filter-user-id').value = '';
+            document.getElementById('filter-user-email').value = '';
+            document.getElementById('filter-action').value = '';
+            document.getElementById('filter-resource-type').value = '';
+            document.getElementById('filter-resource-id').value = '';
+            document.getElementById('filter-date-from').value = '';
+            document.getElementById('filter-date-to').value = '';
+            document.getElementById('filter-ip').value = '';
+            document.getElementById('filter-page').value = '1';
+            document.getElementById('filter-per-page').value = '50';
+        }
+
+        // Автоматические настройки при загрузке
+        window.onload = function() {
+            // Устанавливаем дату "от" на неделю назад
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            document.getElementById('filter-date-from').value = weekAgo.toISOString().split('T')[0];
+            
+            // Устанавливаем дату "до" на сегодня
+            const today = new Date();
+            document.getElementById('filter-date-to').value = today.toISOString().split('T')[0];
+            
+            // Автоматический вход
+            login();
+        };
+    </script>
+</body>
+</html> 
