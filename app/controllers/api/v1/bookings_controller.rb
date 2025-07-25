@@ -80,9 +80,8 @@ module Api
           :payment_status, 
           :car_type, 
           :service_category,
-          { service_point: [:city, :partner, :region] },
-          { client: :user },
-          :reviews
+          { service_point: [{ city: :region }, :partner] },
+          { client: :user }
         )
         
         # Применяем сортировку
