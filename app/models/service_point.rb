@@ -30,6 +30,12 @@ class ServicePoint < ApplicationRecord
   has_many :service_point_category_settings, dependent: :destroy
   has_many :configured_categories, through: :service_point_category_settings, source: :service_category
   
+  # Связи many-to-many с операторами
+  has_many :operator_service_points, dependent: :destroy
+  has_many :operators, through: :operator_service_points
+  has_many :active_operators, -> { where(operator_service_points: { is_active: true }) }, 
+           through: :operator_service_points, source: :operator
+  
   # Принимаем вложенные атрибуты
   accepts_nested_attributes_for :photos, allow_destroy: true
   accepts_nested_attributes_for :service_point_services, allow_destroy: true

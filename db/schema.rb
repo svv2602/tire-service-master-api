@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_24_115317) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_25_065347) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -458,6 +458,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_24_115317) do
     t.index ["priority"], name: "index_notifications_on_priority"
     t.index ["recipient_type", "recipient_id"], name: "idx_notifications_recipient"
     t.index ["sent_at"], name: "index_notifications_on_sent_at"
+  end
+
+  create_table "operator_service_points", force: :cascade do |t|
+    t.bigint "operator_id", null: false, comment: "Ссылка на оператора"
+    t.bigint "service_point_id", null: false, comment: "Ссылка на сервисную точку"
+    t.datetime "assigned_at", default: -> { "CURRENT_TIMESTAMP" }, null: false, comment: "Дата и время назначения"
+    t.boolean "is_active", default: true, null: false, comment: "Активность привязки"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["is_active"], name: "index_operator_service_points_on_is_active"
+    t.index ["operator_id", "service_point_id"], name: "index_operator_service_points_unique", unique: true
+    t.index ["operator_id"], name: "index_operator_service_points_on_operator_id"
+    t.index ["service_point_id"], name: "index_operator_service_points_on_service_point_id"
   end
 
   create_table "operators", force: :cascade do |t|
@@ -981,10 +994,18 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_24_115317) do
     t.string "password_reset_token", comment: "Токен для восстановления пароля"
     t.datetime "password_reset_sent_at", comment: "Время истечения токена восстановления пароля"
     t.string "preferred_locale", limit: 2, default: "uk"
+    t.boolean "is_suspended", default: false, null: false, comment: "Флаг блокировки пользователя"
+    t.datetime "suspended_until", comment: "Дата окончания блокировки (null = бессрочно)"
+    t.text "suspension_reason", comment: "Причина блокировки"
+    t.bigint "suspended_by_id", comment: "Кто заблокировал пользователя"
+    t.datetime "suspended_at", comment: "Дата и время блокировки"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["is_suspended"], name: "index_users_on_is_suspended"
     t.index ["password_reset_token"], name: "index_users_on_password_reset_token", unique: true
     t.index ["phone"], name: "index_users_on_phone", unique: true
     t.index ["role_id"], name: "index_users_on_role_id"
+    t.index ["suspended_by_id"], name: "index_users_on_suspended_by_id"
+    t.index ["suspended_until"], name: "index_users_on_suspended_until"
   end
 
   create_table "weekdays", force: :cascade do |t|
@@ -1029,6 +1050,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_24_115317) do
   add_foreign_key "managers", "partners"
   add_foreign_key "managers", "users"
   add_foreign_key "notifications", "notification_types"
+  add_foreign_key "operator_service_points", "operators"
+  add_foreign_key "operator_service_points", "service_points"
   add_foreign_key "operators", "users"
   add_foreign_key "partners", "cities"
   add_foreign_key "partners", "regions"
@@ -1067,4 +1090,5 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_24_115317) do
   add_foreign_key "telegram_subscriptions", "users"
   add_foreign_key "user_social_accounts", "users"
   add_foreign_key "users", "user_roles", column: "role_id"
+  add_foreign_key "users", "users", column: "suspended_by_id"
 end

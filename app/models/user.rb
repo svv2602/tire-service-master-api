@@ -47,9 +47,16 @@ class User < ApplicationRecord
   before_validation :normalize_email, :normalize_phone, :set_default_locale
   after_create :create_role_specific_record, unless: :skip_role_specific_record
   
+  # Связи для блокировки
+  belongs_to :suspended_by, class_name: 'User', optional: true
+  has_many :suspended_users, class_name: 'User', foreign_key: 'suspended_by_id', dependent: :nullify
+
   # Скоупы
-  scope :active, -> { where(is_active: true) }
+  scope :active, -> { where(is_active: true, is_suspended: false) }
   scope :inactive, -> { where(is_active: false) }
+  scope :suspended, -> { where(is_suspended: true) }
+  scope :not_suspended, -> { where(is_suspended: false) }
+  scope :suspension_expired, -> { where('suspended_until IS NOT NULL AND suspended_until < ?', Time.current) }
   scope :with_role, ->(role_name) { joins(:role).where(user_roles: { name: role_name }) }
   scope :by_role, ->(role_name) { with_role(role_name) }
   scope :admins, -> { with_role('admin') }
@@ -247,5 +254,75 @@ class User < ApplicationRecord
     end
   rescue ActiveRecord::RecordInvalid => e
     Rails.logger.warn "Не удалось создать связанную запись для пользователя #{id}: #{e.message}"
+  end
+
+  # Методы для блокировки пользователей
+  def suspend!(reason: nil, until_date: nil, suspended_by_user: nil)
+    transaction do
+      update!(
+        is_suspended: true,
+        suspension_reason: reason,
+        suspended_until: until_date,
+        suspended_by: suspended_by_user,
+        suspended_at: Time.current
+      )
+      
+      # Логируем блокировку
+      Rails.logger.info "Пользователь #{email} заблокирован. Причина: #{reason}"
+    end
+  end
+
+  def unsuspend!(unsuspended_by_user: nil)
+    transaction do
+      update!(
+        is_suspended: false,
+        suspension_reason: nil,
+        suspended_until: nil,
+        suspended_by: nil,
+        suspended_at: nil
+      )
+      
+      # Логируем разблокировку
+      Rails.logger.info "Пользователь #{email} разблокирован пользователем #{unsuspended_by_user&.email}"
+    end
+  end
+
+  def suspended?
+    return false unless is_suspended?
+    
+    # Если указана дата окончания блокировки, проверяем её
+    if suspended_until.present?
+      return suspended_until > Time.current
+    end
+    
+    # Если дата не указана - блокировка бессрочная
+    true
+  end
+
+  def suspension_expired?
+    return false unless is_suspended?
+    return false if suspended_until.blank?
+    
+    suspended_until <= Time.current
+  end
+
+  def auto_unsuspend_if_expired!
+    return false unless suspension_expired?
+    
+    unsuspend!
+    true
+  end
+
+  def suspension_info
+    return nil unless suspended?
+    
+    {
+      is_suspended: is_suspended?,
+      reason: suspension_reason,
+      suspended_at: suspended_at,
+      suspended_until: suspended_until,
+      suspended_by: suspended_by&.full_name,
+      is_permanent: suspended_until.blank?
+    }
   end
 end
