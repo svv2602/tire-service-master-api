@@ -52,18 +52,32 @@ module Api
       def update
         authorize @user
         
+        puts "🔍 USER UPDATE DEBUG:"
+        puts "  User ID: #{@user.id}"
+        puts "  Current user data: #{@user.attributes.inspect}"
+        puts "  Received params: #{params.inspect}"
+        puts "  User update params: #{user_update_params.inspect}"
+        
         old_values = @user.as_json
         
         if @user.update(user_update_params)
-          log_action('update', 'user', @user.id, old_values, @user.as_json)
+          puts "  ✅ Update successful"
+          begin
+            log_action('update', 'user', @user.id, old_values, @user.as_json)
+          rescue => e
+            puts "  ⚠️ Audit logging failed: #{e.message}"
+            # Продолжаем выполнение, даже если аудит не сработал
+          end
           render json: { 
             data: @user,
             message: I18n.t('users.messages.updated')
           }
         else
+          puts "  ❌ Update failed with errors: #{@user.errors.full_messages}"
+          puts "  ❌ Detailed errors: #{@user.errors.details}"
           render json: { 
             error: I18n.t('users.errors.update_failed'),
-            details: @user.errors 
+            details: @user.errors.full_messages
           }, status: :unprocessable_entity
         end
       end

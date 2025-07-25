@@ -262,6 +262,8 @@ class User < ApplicationRecord
     Rails.logger.warn "Не удалось создать связанную запись для пользователя #{id}: #{e.message}"
   end
 
+  public
+
   # Методы для блокировки пользователей
   def suspend!(reason: nil, until_date: nil, suspended_by_user: nil)
     transaction do
