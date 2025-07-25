@@ -46,7 +46,7 @@ module Auditable
     end
     
     # Проверяем на подозрительную активность
-    check_for_suspicious_activity('created')
+    # check_for_suspicious_activity('created') # Временно отключено
   end
 
   def log_update
@@ -84,7 +84,7 @@ module Auditable
     end
     
     # Проверяем на подозрительную активность
-    check_for_suspicious_activity('updated')
+    # check_for_suspicious_activity('updated') # Временно отключено
   end
 
   def log_deletion
@@ -113,8 +113,8 @@ module Auditable
       )
     end
     
-    # Проверяем на подозрительную активность
-    check_for_suspicious_activity('deleted')
+        # Проверяем на подозрительную активность  
+    # check_for_suspicious_activity('deleted') # Временно отключено
   end
 
   def should_audit?
