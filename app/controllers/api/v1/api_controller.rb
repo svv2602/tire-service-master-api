@@ -69,17 +69,21 @@ module Api
       end
       
       # Логирование действий
-      def log_action(action, entity_type, entity_id, old_value = nil, new_value = nil)
-        SystemLog.create(
+      def log_action(action, resource_type, resource_id, old_value = nil, new_value = nil)
+        SystemLog.create!(
           user: current_user,
           action: action,
-          entity_type: entity_type,
-          entity_id: entity_id,
+          resource_type: resource_type,
+          resource_id: resource_id,
           old_value: old_value,
           new_value: new_value,
           ip_address: current_ip,
           user_agent: current_user_agent
         )
+      rescue => e
+        Rails.logger.error "Ошибка создания системного лога: #{e.message}"
+        Rails.logger.error "Параметры: action=#{action}, resource_type=#{resource_type}, resource_id=#{resource_id}"
+        # Не прерываем выполнение основного действия из-за ошибки логирования
       end
     end
   end

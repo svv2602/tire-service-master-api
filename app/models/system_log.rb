@@ -2,6 +2,10 @@ class SystemLog < ApplicationRecord
   # Связи
   belongs_to :user, optional: true
   
+  # Избегаем конфликта с встроенным методом ActiveRecord changes
+  # Используем alias для поля changes
+  alias_attribute :record_changes, :changes
+  
   # Валидации
   validates :action, presence: true
   validates :resource_type, presence: true, if: -> { resource_id.present? }
@@ -34,7 +38,7 @@ class SystemLog < ApplicationRecord
     )
   end
   
-  def self.log_update(user, resource_type, resource_id, old_value, new_value, changes = nil, **options)
+  def self.log_update(user, resource_type, resource_id, old_value, new_value, record_changes = nil, **options)
     create_log(
       user: user,
       action: 'updated',
@@ -42,7 +46,7 @@ class SystemLog < ApplicationRecord
       resource_id: resource_id,
       old_value: old_value,
       new_value: new_value,
-      changes: changes,
+      record_changes: record_changes,
       **options
     )
   end
@@ -64,7 +68,7 @@ class SystemLog < ApplicationRecord
       action: 'suspended',
       resource_type: 'User',
       resource_id: suspended_user.id,
-      changes: {
+      record_changes: {
         reason: reason,
         until_date: until_date,
         suspended_at: Time.current
@@ -79,7 +83,7 @@ class SystemLog < ApplicationRecord
       action: 'unsuspended',
       resource_type: 'User',
       resource_id: unsuspended_user.id,
-      changes: {
+      record_changes: {
         unsuspended_at: Time.current
       },
       **options
@@ -92,7 +96,7 @@ class SystemLog < ApplicationRecord
       action: 'assigned',
       resource_type: 'OperatorServicePoint',
       resource_id: nil,
-      changes: {
+      record_changes: {
         operator_id: operator.id,
         service_point_id: service_point.id,
         assigned_at: Time.current
@@ -111,7 +115,7 @@ class SystemLog < ApplicationRecord
       action: 'unassigned',
       resource_type: 'OperatorServicePoint',
       resource_id: nil,
-      changes: {
+      record_changes: {
         operator_id: operator.id,
         service_point_id: service_point.id,
         unassigned_at: Time.current
@@ -152,7 +156,7 @@ class SystemLog < ApplicationRecord
       resource_type: 'OperatorServicePoint',
       resource_id: assignment.id,
       resource_name: "#{operator.user.full_name} → #{service_point.name}",
-      changes: {
+      record_changes: {
         operator_id: operator.id,
         service_point_id: service_point.id,
         action: action,
@@ -178,7 +182,7 @@ class SystemLog < ApplicationRecord
       resource_type: 'Operator',
       resource_id: operator.id,
       resource_name: operator.user.full_name,
-      changes: {
+      record_changes: {
         operator_id: operator.id,
         total_points: total_points,
         successful_assignments: successful_points,
@@ -201,7 +205,7 @@ class SystemLog < ApplicationRecord
       resource_type: 'ServicePoint',
       resource_id: service_point.id,
       resource_name: service_point.name,
-      changes: {
+      record_changes: {
         service_point_id: service_point.id,
         operator_ids: operator_ids,
         successful_assignments: results[:success],
@@ -284,7 +288,7 @@ class SystemLog < ApplicationRecord
   
   private
   
-  def self.create_log(user:, action:, resource_type: nil, resource_id: nil, old_value: nil, new_value: nil, changes: nil, additional_data: nil, ip_address: nil, user_agent: nil)
+  def self.create_log(user:, action:, resource_type: nil, resource_id: nil, old_value: nil, new_value: nil, record_changes: nil, additional_data: nil, ip_address: nil, user_agent: nil)
     create(
       user: user,
       action: action,
@@ -292,7 +296,7 @@ class SystemLog < ApplicationRecord
       resource_id: resource_id,
       old_value: old_value,
       new_value: new_value,
-      changes: changes,
+      record_changes: record_changes,
       additional_data: additional_data,
       ip_address: ip_address,
       user_agent: user_agent

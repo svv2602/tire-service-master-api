@@ -14,7 +14,7 @@ class AuditLogJob < ApplicationJob
   end
   
   # Создание лога обновления объекта
-  def self.log_update(user_id:, resource_type:, resource_id:, old_value:, new_value:, changes: nil, **options)
+  def self.log_update(user_id:, resource_type:, resource_id:, old_value:, new_value:, record_changes: nil, **options)
     perform_later(
       action: 'updated',
       user_id: user_id,
@@ -22,7 +22,7 @@ class AuditLogJob < ApplicationJob
       resource_id: resource_id,
       old_value: old_value,
       new_value: new_value,
-      changes: changes,
+      record_changes: record_changes,
       **options
     )
   end
@@ -123,7 +123,7 @@ class AuditLogJob < ApplicationJob
     )
   end
   
-  def perform(action:, user_id: nil, resource_type: nil, resource_id: nil, old_value: nil, new_value: nil, changes: nil, additional_data: nil, ip_address: nil, user_agent: nil, **options)
+  def perform(action:, user_id: nil, resource_type: nil, resource_id: nil, old_value: nil, new_value: nil, record_changes: nil, additional_data: nil, ip_address: nil, user_agent: nil, **options)
     # Находим пользователя
     user = user_id ? User.find_by(id: user_id) : nil
     
@@ -135,7 +135,7 @@ class AuditLogJob < ApplicationJob
       resource_id: resource_id,
       old_value: old_value,
       new_value: new_value,
-      changes: changes,
+      record_changes: record_changes,
       additional_data: additional_data,
       ip_address: ip_address,
       user_agent: user_agent

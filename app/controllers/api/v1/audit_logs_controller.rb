@@ -376,7 +376,7 @@ class Api::V1::AuditLogsController < ApplicationController
       base_data.merge!({
         old_value: log.old_value,
         new_value: log.new_value,
-        changes: log.changes,
+        changes: log.record_changes,
         additional_data: log.additional_data,
         user_agent: log.user_agent,
         updated_at: log.updated_at.iso8601
@@ -673,7 +673,7 @@ class Api::V1::AuditLogsController < ApplicationController
       details: {
         resource_type: log.resource_type,
         resource_id: log.resource_id,
-        changes: log.changes
+                  changes: log.record_changes
       }
     }
   end

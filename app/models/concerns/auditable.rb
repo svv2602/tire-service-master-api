@@ -62,7 +62,7 @@ module Auditable
       resource_id: id,
       old_value: changes_before_save,
       new_value: auditable_attributes,
-      changes: significant_changes,
+      record_changes: significant_changes,
       ip_address: current_ip_address,
       user_agent: current_user_agent,
       additional_data: audit_context_data
