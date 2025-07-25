@@ -12,25 +12,15 @@ module Api
       
       # GET /api/v1/users
       def index
-        @users = User.all
+        # Генерируем ключ кэша на основе параметров запроса
+        cache_key = generate_users_cache_key
         
-        # Фильтрация по роли
-        @users = @users.with_role(params[:role]) if params[:role].present?
-        
-        # Фильтрация по активности
-        if params[:active].present?
-          @users = @users.where(is_active: params[:active] == 'true')
+        # Кэшируем результат для часто запрашиваемых данных
+        cached_result = Rails.cache.fetch(cache_key, expires_in: RolesCacheConfig::USER_PERMISSIONS_TTL) do
+          build_users_response
         end
         
-        # Поиск по email, имени или номеру телефона
-        if params[:query].present?
-          query_downcase = params[:query].downcase
-          @users = @users.where("LOWER(email) LIKE ? OR LOWER(first_name) LIKE ? OR LOWER(last_name) LIKE ? OR phone LIKE ?", 
-                               "%#{query_downcase}%", "%#{query_downcase}%", "%#{query_downcase}%", "%#{params[:query]}%")
-        end
-        
-        result = paginate(@users.order(created_at: :desc))
-        render json: result
+        render json: cached_result
       end
       
       # GET /api/v1/users/:id
@@ -330,6 +320,45 @@ module Api
         rescue => e
           Rails.logger.error "Ошибка отправки уведомления о разблокировке: #{e.message}"
         end
+      end
+
+      def generate_users_cache_key
+        # Создаем уникальный ключ кэша на основе всех параметров запроса
+        key_parts = [
+          'users',
+          params[:role],
+          params[:active],
+          params[:query],
+          params[:page],
+          params[:per_page],
+          current_user&.id,
+          current_user&.role
+        ].compact.join('/')
+        
+        # Добавляем timestamp последнего обновления пользователей
+        last_updated = User.maximum(:updated_at)&.to_i || 0
+        "#{key_parts}/#{last_updated}"
+      end
+
+      def build_users_response
+        @users = User.all
+        
+        # Фильтрация по роли
+        @users = @users.with_role(params[:role]) if params[:role].present?
+        
+        # Фильтрация по активности
+        if params[:active].present?
+          @users = @users.where(is_active: params[:active] == 'true')
+        end
+        
+        # Поиск по email, имени или номеру телефона
+        if params[:query].present?
+          query_downcase = params[:query].downcase
+          @users = @users.where("LOWER(email) LIKE ? OR LOWER(first_name) LIKE ? OR LOWER(last_name) LIKE ? OR phone LIKE ?", 
+                               "%#{query_downcase}%", "%#{query_downcase}%", "%#{query_downcase}%", "%#{params[:query]}%")
+        end
+        
+        paginate(@users.order(created_at: :desc))
       end
     end
   end

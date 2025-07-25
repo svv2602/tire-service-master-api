@@ -48,6 +48,10 @@ class ServicePoint < ApplicationRecord
   # Callback для анализа конфликтов при изменении статуса
   after_update :analyze_booking_conflicts_if_status_changed
   
+  # Callback для инвалидации кэша при изменении данных
+  after_save :invalidate_service_points_cache
+  after_destroy :invalidate_service_points_cache
+  
   # Колбэки для уведомлений администраторов
   after_create :send_service_point_creation_notification, unless: -> { skip_notifications }
   after_update :send_service_point_change_notification, if: -> { significant_changes? && !skip_notifications }
@@ -485,5 +489,23 @@ class ServicePoint < ApplicationRecord
       settings[setting.service_category_id] = setting.auto_confirmation
     end
     settings
+  end
+
+  private
+
+  # Инвалидация кэша сервисных точек при изменении данных
+  def invalidate_service_points_cache
+    # Очищаем все кэши связанные с сервисными точками
+    Rails.cache.delete_matched("service_points/*")
+    
+    # Уведомляем о необходимости инвалидации кэша
+    ActiveSupport::Notifications.instrument('service_point_changed', {
+      service_point_id: id,
+      partner_id: partner_id,
+      city_id: city_id,
+      changes: previous_changes
+    })
+    
+    Rails.logger.info "🗑️ ServicePoint cache invalidated for service_point #{id}"
   end
 end

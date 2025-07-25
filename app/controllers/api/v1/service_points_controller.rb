@@ -12,78 +12,15 @@ module Api
           authenticate_request unless current_user.present?
         end
         
-        if params[:partner_id]
-          @partner = Partner.find(params[:partner_id])
-          
-          # Для админов используем policy_scope(ServicePoint) с фильтрацией по партнеру
-          # Для остальных используем policy_scope(@partner.service_points)
-          if current_user&.admin?
-            @service_points = policy_scope(ServicePoint).where(partner_id: @partner.id)
-          else
-            @service_points = policy_scope(@partner.service_points)
-          end
-        elsif params[:manager_id]
-          @manager = Manager.find(params[:manager_id])
-          @service_points = policy_scope(@manager.service_points)
-        else
-          @service_points = policy_scope(ServicePoint)
-        end
-
-        # Eager loading для избежания N+1 запросов
-        @service_points = @service_points.includes(
-          :partner,
-          :city,
-          :region,
-          :service_point_photos,
-          :service_point_services,
-          :posts,
-          :working_hours,
-          :reviews
-        )
+        # Генерируем ключ кэша на основе параметров запроса
+        cache_key = generate_service_points_cache_key
         
-        # Фильтрация по региону
-        if params[:region_id].present?
-          @service_points = @service_points.joins(:city).where(cities: { region_id: params[:region_id] })
+        # Кэшируем результат для часто запрашиваемых данных
+        cached_result = Rails.cache.fetch(cache_key, expires_in: RolesCacheConfig::SERVICE_POINTS_TTL) do
+          build_service_points_response
         end
         
-        # Фильтрация по городу
-        @service_points = @service_points.by_city(params[:city_id]) if params[:city_id].present?
-        
-        # Фильтрация по активности (is_active)
-        if params[:is_active].present?
-          @service_points = @service_points.where(is_active: params[:is_active] == 'true')
-        end
-        
-        # Фильтрация по состоянию работы (work_status)
-        if params[:work_status].present?
-          @service_points = @service_points.where(work_status: params[:work_status])
-        end
-        
-        # Фильтрация по удобствам (amenities)
-        if params[:amenity_ids].present?
-          amenity_ids = params[:amenity_ids].to_s.split(',').map(&:strip)
-          @service_points = @service_points.with_amenities(amenity_ids)
-        end
-        
-        # Поиск по названию или адресу (регистронезависимый)
-        if params[:query].present?
-          # Используем LOWER для сравнения без учета регистра как для полей базы данных, так и для поискового запроса
-          @service_points = @service_points.where("LOWER(service_points.name) LIKE LOWER(?) OR LOWER(service_points.address) LIKE LOWER(?)", 
-                                              "%#{params[:query]}%", "%#{params[:query]}%")
-        end
-        
-        # Сортировка
-        if params[:sort_by] == 'rating'
-          @service_points = @service_points.order(average_rating: params[:sort_direction] || 'desc')
-        else
-          @service_points = @service_points.order(sort_params)
-        end
-        
-        # Получаем локаль из параметров или заголовков
-        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
-        
-        # Возвращаем результат в формате JSON с пагинацией
-        render json: paginate(@service_points, locale: locale)
+        render json: cached_result
       end
       
       # GET /api/v1/service_points/:id
@@ -1193,6 +1130,107 @@ module Api
         
         # Обновляем поле working_hours в модели ServicePoint
         @service_point.update_working_hours_from_templates
+      end
+
+      def generate_service_points_cache_key
+        # Создаем уникальный ключ кэша на основе всех параметров запроса
+        key_parts = [
+          'service_points',
+          params[:partner_id],
+          params[:manager_id], 
+          params[:region_id],
+          params[:city_id],
+          params[:is_active],
+          params[:work_status],
+          params[:amenity_ids],
+          params[:query],
+          params[:sort_by],
+          params[:sort_direction],
+          params[:page],
+          params[:per_page],
+          current_user&.id,
+          current_user&.role,
+          I18n.locale
+        ].compact.join('/')
+        
+        # Добавляем timestamp последнего обновления сервисных точек
+        last_updated = ServicePoint.maximum(:updated_at)&.to_i || 0
+        "#{key_parts}/#{last_updated}"
+      end
+
+      def build_service_points_response
+        if params[:partner_id]
+          @partner = Partner.find(params[:partner_id])
+          
+          # Для админов используем policy_scope(ServicePoint) с фильтрацией по партнеру
+          # Для остальных используем policy_scope(@partner.service_points)
+          if current_user&.admin?
+            @service_points = policy_scope(ServicePoint).where(partner_id: @partner.id)
+          else
+            @service_points = policy_scope(@partner.service_points)
+          end
+        elsif params[:manager_id]
+          @manager = Manager.find(params[:manager_id])
+          @service_points = policy_scope(@manager.service_points)
+        else
+          @service_points = policy_scope(ServicePoint)
+        end
+
+        # Eager loading для избежания N+1 запросов
+        @service_points = @service_points.includes(
+          :partner,
+          :city,
+          :region,
+          :service_point_photos,
+          :service_point_services,
+          :posts,
+          :working_hours,
+          :reviews
+        )
+        
+        # Фильтрация по региону
+        if params[:region_id].present?
+          @service_points = @service_points.joins(:city).where(cities: { region_id: params[:region_id] })
+        end
+        
+        # Фильтрация по городу
+        @service_points = @service_points.by_city(params[:city_id]) if params[:city_id].present?
+        
+        # Фильтрация по активности (is_active)
+        if params[:is_active].present?
+          @service_points = @service_points.where(is_active: params[:is_active] == 'true')
+        end
+        
+        # Фильтрация по состоянию работы (work_status)
+        if params[:work_status].present?
+          @service_points = @service_points.where(work_status: params[:work_status])
+        end
+        
+        # Фильтрация по удобствам (amenities)
+        if params[:amenity_ids].present?
+          amenity_ids = params[:amenity_ids].to_s.split(',').map(&:strip)
+          @service_points = @service_points.with_amenities(amenity_ids)
+        end
+        
+        # Поиск по названию или адресу (регистронезависимый)
+        if params[:query].present?
+          # Используем LOWER для сравнения без учета регистра как для полей базы данных, так и для поискового запроса
+          @service_points = @service_points.where("LOWER(service_points.name) LIKE LOWER(?) OR LOWER(service_points.address) LIKE LOWER(?)", 
+                                              "%#{params[:query]}%", "%#{params[:query]}%")
+        end
+        
+        # Сортировка
+        if params[:sort_by] == 'rating'
+          @service_points = @service_points.order(average_rating: params[:sort_direction] || 'desc')
+        else
+          @service_points = @service_points.order(sort_params)
+        end
+        
+        # Получаем локаль из параметров или заголовков
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        
+        # Возвращаем результат в формате JSON с пагинацией
+        paginate(@service_points, locale: locale)
       end
     end
   end

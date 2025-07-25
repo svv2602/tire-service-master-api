@@ -49,6 +49,10 @@ class User < ApplicationRecord
   before_validation :normalize_email, :normalize_phone, :set_default_locale
   after_create :create_role_specific_record, unless: :skip_role_specific_record
   
+  # Callback'ы для инвалидации кэша
+  after_save :invalidate_users_cache
+  after_destroy :invalidate_users_cache
+  
   # Связи для блокировки
   belongs_to :suspended_by, class_name: 'User', optional: true
   has_many :suspended_users, class_name: 'User', foreign_key: 'suspended_by_id', dependent: :nullify
@@ -326,5 +330,22 @@ class User < ApplicationRecord
       suspended_by: suspended_by&.full_name,
       is_permanent: suspended_until.blank?
     }
+  end
+
+  private
+
+  # Инвалидация кэша пользователей при изменении данных
+  def invalidate_users_cache
+    # Очищаем все кэши связанные с пользователями
+    Rails.cache.delete_matched("users/*")
+    
+    # Уведомляем о необходимости инвалидации кэша ролей
+    ActiveSupport::Notifications.instrument('user_role_changed', {
+      user_id: id,
+      role: role&.name,
+      changes: previous_changes
+    })
+    
+    Rails.logger.info "🗑️ Users cache invalidated for user #{id}"
   end
 end
