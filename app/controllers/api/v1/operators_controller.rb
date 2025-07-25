@@ -1,15 +1,66 @@
 module Api
   module V1
     class OperatorsController < ApiController
-      before_action :set_partner, only: [:index, :create]
+      before_action :set_partner, only: [:create], if: -> { params[:partner_id].present? }
+      before_action :set_partner, only: [:index], if: -> { params[:partner_id].present? }
       before_action :set_operator, only: [:update, :destroy]
       before_action :set_operator_with_partner, only: [:update, :destroy], if: -> { params[:partner_id].present? }
 
-      # Получить всех сотрудников-операторов партнера
+      # Получить всех сотрудников-операторов партнера ИЛИ всех операторов (для админов)
       def index
-        operators = Operator.includes(:user, :partner)
-          .where(partner_id: @partner.id)
-        render json: operators, each_serializer: OperatorSerializer
+        if params[:partner_id].present?
+          # Операторы конкретного партнера
+          operators = Operator.includes(:user, :partner)
+            .where(partner_id: @partner.id)
+          render json: operators, each_serializer: OperatorSerializer
+        else
+          # Все операторы (для админов)
+          authorize Operator, :index?
+          
+          # Параметры фильтрации и пагинации
+          page = [params[:page].to_i, 1].max
+          per_page = [[params[:per_page].to_i, 20].max, 100].min
+          
+          # Базовый запрос
+          operators_scope = Operator.includes(:user, :partner, operator_service_points: :service_point)
+          
+          # Фильтрация
+          if params[:search].present?
+            search_term = "%#{params[:search]}%"
+            operators_scope = operators_scope.joins(:user)
+              .where(
+                "users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ? OR users.phone ILIKE ?",
+                search_term, search_term, search_term, search_term
+              )
+          end
+          
+          if params[:partner_id].present?
+            operators_scope = operators_scope.where(partner_id: params[:partner_id])
+          end
+          
+          if params[:is_active].present?
+            is_active = params[:is_active] == 'true'
+            operators_scope = operators_scope.where(is_active: is_active)
+          end
+          
+          # Пагинация
+          total_count = operators_scope.count
+          total_pages = (total_count.to_f / per_page).ceil
+          operators = operators_scope
+            .order(created_at: :desc)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+          
+          render json: {
+            data: operators.map { |operator| OperatorSerializer.new(operator).as_json },
+            pagination: {
+              current_page: page,
+              total_pages: total_pages,
+              total_count: total_count,
+              per_page: per_page
+            }
+          }
+        end
       end
 
       # Добавить нового сотрудника-оператора

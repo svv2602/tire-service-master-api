@@ -1,9 +1,18 @@
 class UserSerializer < ActiveModel::Serializer
   attributes :id, :email, :phone, :first_name, :last_name, :middle_name, :last_login, 
-             :is_active, :email_verified, :phone_verified, :created_at, :updated_at, :role, :profile
+             :is_active, :email_verified, :phone_verified, :created_at, :updated_at, :role, :profile,
+             :is_suspended, :suspension_reason, :suspended_at, :suspended_until, :suspended_by_name, :full_name
 
   def role
     object.role.name
+  end
+
+  def suspended_by_name
+    object.suspended_by&.full_name
+  end
+
+  def full_name
+    "#{object.first_name} #{object.last_name}".strip
   end
 
   def profile

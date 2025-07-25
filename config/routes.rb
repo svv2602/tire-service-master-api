@@ -504,7 +504,7 @@ Rails.application.routes.draw do
       # Маршруты для ролей пользователей
       resources :user_roles, only: [:index, :show]
 
-      resources :operators, only: [:update, :destroy]
+      resources :operators, only: [:index, :update, :destroy]
 
       # Прямые маршруты для управления привязками операторов
       resources :operator_service_points, only: [:show, :update, :destroy]
