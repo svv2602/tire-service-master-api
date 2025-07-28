@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_25_120132) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_28_075717) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -503,7 +503,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_120132) do
     t.string "category", comment: "Категория товара"
     t.string "brand", comment: "Бренд товара"
     t.string "model", comment: "Модель товара"
-    t.json "attributes", comment: "Дополнительные атрибуты товара в JSON"
+    t.json "item_attributes", comment: "Дополнительные атрибуты товара в JSON"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["artikul"], name: "index_order_items_on_artikul"

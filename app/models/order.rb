@@ -17,13 +17,13 @@ class Order < ApplicationRecord
   validates :total_quantity, presence: true, numericality: { greater_than: 0 }
   
   # Enum для статусов заказа
-  enum status: {
+  enum :status, {
     received: 'received',          # Получен
     processing: 'processing',      # В обработке
     ready: 'ready',               # Готов к выдаче
     delivered: 'delivered',       # Выдан
     canceled: 'canceled'          # Отменен
-  }
+  }, prefix: true
   
   # Scope для фильтрации
   scope :by_status, ->(status) { where(status: status) }

@@ -1,12 +1,56 @@
 # Создание тестовых заказов для интернет-магазинов
 puts "🛒 Создание тестовых заказов интернет-магазинов..."
 
-# Получаем существующие сервисные точки
-service_points = ServicePoint.includes(:partner).limit(5)
+# Получаем все активные сервисные точки с партнерами
+service_points = ServicePoint.includes(:partner, :city)
+  .where(is_active: true)
+  .joins(:partner)
+  .where(partners: { is_active: true })
 
 if service_points.empty?
-  puts "❌ Нет доступных сервисных точек для создания заказов"
-  return
+  puts "❌ Нет доступных активных сервисных точек для создания заказов"
+  puts "   Создаем тестовые сервисные точки..."
+  
+  # Создаем минимальные тестовые данные если их нет
+  region = Region.first || Region.create!(name: "Киевская область")
+  city = City.first || City.create!(name: "Киев", region: region)
+  
+  # Создаем тестового партнера если его нет
+  partner_user = User.find_by(email: 'partner@test.com') || 
+    User.create!(
+      email: 'partner@test.com',
+      password: 'partner123',
+      first_name: 'Тестовый',
+      last_name: 'Партнер',
+      phone: '+380501234567',
+      role: Role.find_by(name: 'partner')
+    )
+  
+  partner = Partner.find_by(user: partner_user) ||
+    Partner.create!(
+      user: partner_user,
+      name: 'Тестовая компания',
+      is_active: true
+    )
+  
+  # Создаем тестовую сервисную точку
+  service_point = ServicePoint.create!(
+    name: 'Тестовая точка обслуживания',
+    address: 'ул. Тестовая, 1',
+    city: city,
+    partner: partner,
+    phone: '+380441234567',
+    is_active: true,
+    work_status: 'working'
+  )
+  
+  service_points = [service_point]
+  puts "✅ Создана тестовая сервисная точка: #{service_point.name}"
+end
+
+puts "📍 Найдено #{service_points.count} активных сервисных точек:"
+service_points.each do |sp|
+  puts "  - #{sp.name} (#{sp.city.name}) - Партнер: #{sp.partner.name}"
 end
 
 # Массив тестовых клиентов
@@ -85,12 +129,21 @@ test_goods = [
 # Создаем заказы
 created_orders = []
 
-20.times do |i|
-  service_point = service_points.sample
+# Равномерно распределяем заказы по сервисным точкам
+orders_per_point = 20 / service_points.count
+remaining_orders = 20 % service_points.count
+
+order_counter = 0
+service_points.each_with_index do |service_point, sp_index|
+  # Определяем количество заказов для этой точки
+  orders_for_this_point = orders_per_point + (sp_index < remaining_orders ? 1 : 0)
+  
+  orders_for_this_point.times do |local_i|
   customer = test_customers.sample
   
-  # Генерируем уникальный ТТН
-  ttn = "TTN#{Time.current.strftime('%Y%m%d')}#{sprintf('%04d', i + 1)}"
+      # Генерируем уникальный ТТН
+    order_counter += 1
+    ttn = "TTN#{Time.current.strftime('%Y%m%d')}#{sprintf('%04d', order_counter)}"
   
   # Выбираем случайное количество товаров (1-3)
   goods_count = rand(1..3)
@@ -118,11 +171,11 @@ created_orders = []
       status: status,
       order_date: order_date,
       ttn: ttn,
-      number: "ORD-#{sprintf('%06d', i + 1)}",
+      number: "ORD-#{sprintf('%06d', order_counter)}",
       customer_name: customer[:name],
       customer_phone: customer[:phone],
-      status_kod: sprintf('%09d', i + 1),
-      bas_id: "BAS-#{sprintf('%06d', i + 1)}",
+      status_kod: sprintf('%09d', order_counter),
+      bas_id: "BAS-#{sprintf('%06d', order_counter)}",
       separate: 1,
       point_name: service_point.name,
       point_id: service_point.id.to_s,
@@ -136,7 +189,7 @@ created_orders = []
       delivered_at: delivered_at,
       canceled_at: canceled_at,
       cancellation_reason: status == 'canceled' ? 'Отказ клиента' : nil,
-      notes: i.even? ? "Заметка к заказу №#{i + 1}: особые условия доставки" : nil
+      notes: order_counter.even? ? "Заметка к заказу №#{order_counter}: особые условия доставки" : nil
     )
     
     # Создаем товары для заказа
@@ -158,8 +211,9 @@ created_orders = []
     created_orders << order
     print "."
     
-  rescue ActiveRecord::RecordInvalid => e
-    puts "\n❌ Ошибка создания заказа #{i + 1}: #{e.message}"
+      rescue ActiveRecord::RecordInvalid => e
+      puts "\n❌ Ошибка создания заказа #{order_counter}: #{e.message}"
+    end
   end
 end
 

@@ -200,7 +200,31 @@ module Api
               average_rating_given: current_user.client.average_rating_given
             }
           end
-        when 'admin', 'manager', 'partner', 'operator'
+        when 'partner'
+          response_data[:admin_info] = {
+            role_permissions: get_role_permissions(current_user.role.name),
+            last_login: current_user.last_login
+          }
+          if current_user.partner
+            response_data[:partner] = {
+              id: current_user.partner.id,
+              name: current_user.partner.name
+            }
+          end
+        when 'operator'
+          response_data[:admin_info] = {
+            role_permissions: get_role_permissions(current_user.role.name),
+            last_login: current_user.last_login
+          }
+          if current_user.operator
+            response_data[:operator] = {
+              id: current_user.operator.id,
+              partner_id: current_user.operator.partner_id,
+              access_level: current_user.operator.access_level,
+              service_point_ids: current_user.operator.operator_service_points&.where(is_active: true)&.pluck(:service_point_id) || []
+            }
+          end
+        when 'admin', 'manager'
           response_data[:admin_info] = {
             role_permissions: get_role_permissions(current_user.role.name),
             last_login: current_user.last_login

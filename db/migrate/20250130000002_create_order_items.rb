@@ -17,7 +17,7 @@ class CreateOrderItems < ActiveRecord::Migration[8.0]
       t.string :category, comment: 'Категория товара'
       t.string :brand, comment: 'Бренд товара'
       t.string :model, comment: 'Модель товара'
-      t.json :attributes, comment: 'Дополнительные атрибуты товара в JSON'
+      t.json :item_attributes, comment: 'Дополнительные атрибуты товара в JSON'
       
       t.timestamps
     end
