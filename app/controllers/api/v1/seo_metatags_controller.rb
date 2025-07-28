@@ -122,8 +122,8 @@ class Api::V1::SeoMetatagsController < ApplicationController
         good_pages: metatags.select { |m| m.seo_status == 'good' }.count,
         warning_pages: metatags.select { |m| m.seo_status == 'warning' }.count,
         error_pages: metatags.select { |m| m.seo_status == 'error' }.count,
-        average_title_length: metatags.average(:title).to_i,
-        average_description_length: metatags.average(:description).to_i,
+        average_title_length: metatags.average('LENGTH(title)').to_i,
+        average_description_length: metatags.average('LENGTH(description)').to_i,
         languages_count: metatags.group(:language).count,
         page_types_count: metatags.group(:page_type).count
       }

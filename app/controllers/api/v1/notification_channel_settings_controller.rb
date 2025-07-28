@@ -102,7 +102,7 @@ class Api::V1::NotificationChannelSettingsController < ApplicationController
   end
 
   def ensure_admin
-    unless current_user&.admin?
+    unless current_user&.admin? || current_user&.partner?
       render json: { error: 'Доступ запрещен' }, status: :forbidden
     end
   end
