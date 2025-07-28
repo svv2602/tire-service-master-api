@@ -1,22 +1,21 @@
 module Api
   module V1
     class PartnerOrdersController < ApiController
-      before_action :authenticate_user!
       before_action :ensure_partner_access
       before_action :set_partner
       before_action :set_order, only: [:show, :mark_as_ready, :mark_as_delivered, :cancel, :add_note]
       
       # GET /api/v1/partners/:partner_id/orders
       def index
-        @orders = apply_filters(base_orders_scope)
-        @orders = @orders.includes(:order_items, :service_point)
-                         .order(created_at: :desc)
-                         .page(params[:page] || 1)
-                         .per(params[:per_page] || 20)
+        orders_scope = apply_filters(base_orders_scope)
+        orders_scope = orders_scope.includes(:order_items, :service_point)
+                                  .order(created_at: :desc)
+        
+        paginated_data = paginate(orders_scope)
         
         render json: {
-          orders: OrderSerializer.new(@orders).serializable_hash[:data],
-          meta: pagination_meta(@orders),
+          orders: paginated_data[:data].map { |order| OrderSerializer.new(order).as_json },
+          pagination: paginated_data[:pagination],
           stats: partner_orders_stats
         }
       end
@@ -241,14 +240,7 @@ module Api
         end
       end
       
-      def pagination_meta(collection)
-        {
-          current_page: collection.current_page,
-          per_page: collection.limit_value,
-          total_pages: collection.total_pages,
-          total_count: collection.total_count
-        }
-      end
+
     end
   end
 end 

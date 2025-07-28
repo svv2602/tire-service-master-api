@@ -46,6 +46,18 @@ class Order < ApplicationRecord
     !status_delivered? && !status_canceled?
   end
   
+  # Человекочитаемое название статуса
+  def status_label
+    case status
+    when 'received' then 'Получен'
+    when 'processing' then 'В обработке'
+    when 'ready' then 'Готов к выдаче'
+    when 'delivered' then 'Выдан'
+    when 'canceled' then 'Отменен'
+    else status.humanize
+    end
+  end
+  
   # Автоматический расчет общих показателей при создании
   before_save :calculate_totals
   
