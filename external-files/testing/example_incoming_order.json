@@ -1,0 +1,50 @@
+[
+  {
+    "status": "Прийнято",
+    "date": "29.05.2025 13:27:43",
+    "ttn": "20400458972774",
+    "number": "ORD-TEST-001",
+    "phone": "380667324633",
+    "klient": "Палій Андрій Андрій",
+    "status_kod": "000000001",
+    "bas_id": "ТО00-000170",
+    "separate": 1,
+    "ttn_status": "",
+    "ttn_status_kod": "",
+    "point": "ШиноСервіс Експрес на Хрещатику",
+    "point_id": "1",
+    "third_party_point": "Да",
+    "goods": [
+      {
+        "artikul": "00000047875",
+        "quantity": 4,
+        "price": 1872,
+        "sum": 7488,
+        "bas_id": "ТО00-000170",
+        "name": "Шина всесезонная Bridgestone Turanza",
+        "category": "Шины",
+        "brand": "Bridgestone"
+      },
+      {
+        "artikul": "BRAKE-PAD-FRONT",
+        "quantity": 1,
+        "price": 1890,
+        "sum": 1890,
+        "bas_id": "ТО00-000176",
+        "name": "Колодки тормозные передние Brembo",
+        "category": "Тормозная система",
+        "brand": "Brembo"
+      },
+      {
+        "artikul": "AIR-FILTER-BOSCH",
+        "quantity": 1,
+        "price": 450,
+        "sum": 450,
+        "bas_id": "ТО00-000178",
+        "name": "Фильтр воздушный Bosch",
+        "category": "Фильтры",
+        "brand": "Bosch"
+      }
+    ]
+  }
+] 

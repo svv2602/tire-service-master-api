@@ -115,6 +115,10 @@ class OrderProcessorService
       end
     end
     
+    # Рассчитываем итоги вручную
+    order.total_quantity = order.order_items.sum(&:quantity)
+    order.total_amount = order.order_items.sum(&:sum)
+    
     # Сохранение
     if order.save
       Rails.logger.info "Создан заказ ID: #{order.id}, ТТН: #{order.ttn}"
