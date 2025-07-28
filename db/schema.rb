@@ -491,6 +491,64 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_120132) do
     t.index ["user_id"], name: "index_operators_on_user_id"
   end
 
+  create_table "order_items", force: :cascade do |t|
+    t.bigint "order_id", null: false, comment: "Заказ, к которому относится товар"
+    t.string "artikul", null: false, comment: "Артикул товара"
+    t.integer "quantity", null: false, comment: "Количество товара"
+    t.decimal "price", precision: 10, scale: 2, null: false, comment: "Цена за единицу товара"
+    t.decimal "sum", precision: 10, scale: 2, null: false, comment: "Общая стоимость (quantity * price)"
+    t.string "bas_id", null: false, comment: "ID товара в системе 1С/BAS"
+    t.string "name", comment: "Название товара"
+    t.text "description", comment: "Описание товара"
+    t.string "category", comment: "Категория товара"
+    t.string "brand", comment: "Бренд товара"
+    t.string "model", comment: "Модель товара"
+    t.json "attributes", comment: "Дополнительные атрибуты товара в JSON"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["artikul"], name: "index_order_items_on_artikul"
+    t.index ["bas_id"], name: "index_order_items_on_bas_id"
+    t.index ["order_id", "artikul"], name: "index_order_items_on_order_id_and_artikul"
+    t.index ["order_id"], name: "index_order_items_on_order_id"
+  end
+
+  create_table "orders", force: :cascade do |t|
+    t.bigint "service_point_id", null: false, comment: "Сервисная точка для выдачи заказа"
+    t.string "status", default: "received", null: false, comment: "Статус заказа"
+    t.datetime "order_date", null: false, comment: "Дата создания заказа"
+    t.string "ttn", null: false, comment: "ТТН (номер накладной)"
+    t.string "number", comment: "Номер заказа (может быть пустым)"
+    t.string "status_kod", null: false, comment: "Код статуса из внешней системы"
+    t.string "bas_id", null: false, comment: "ID заказа в системе 1С/BAS"
+    t.integer "separate", default: 1, comment: "Признак разделения заказа"
+    t.string "customer_name", null: false, comment: "ФИО клиента"
+    t.string "customer_phone", null: false, comment: "Телефон клиента"
+    t.string "point_name", null: false, comment: "Название точки выдачи"
+    t.string "point_id", null: false, comment: "ID точки выдачи во внешней системе"
+    t.boolean "third_party_point", default: false, comment: "Является ли точка сторонней"
+    t.string "ttn_status", comment: "Статус ТТН"
+    t.string "ttn_status_kod", comment: "Код статуса ТТН"
+    t.decimal "total_amount", precision: 10, scale: 2, null: false, comment: "Общая сумма заказа"
+    t.integer "total_quantity", null: false, comment: "Общее количество товаров"
+    t.datetime "processed_at", comment: "Время начала обработки"
+    t.datetime "ready_at", comment: "Время готовности к выдаче"
+    t.datetime "delivered_at", comment: "Время выдачи клиенту"
+    t.datetime "canceled_at", comment: "Время отмены"
+    t.text "cancellation_reason", comment: "Причина отмены"
+    t.text "notes", comment: "Дополнительные заметки"
+    t.json "metadata", comment: "Дополнительные данные в JSON формате"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "to_tsvector('russian'::regconfig, (customer_name)::text)", name: "idx_orders_customer_search", using: :gin
+    t.index ["bas_id"], name: "index_orders_on_bas_id"
+    t.index ["customer_phone"], name: "index_orders_on_customer_phone"
+    t.index ["order_date"], name: "index_orders_on_order_date"
+    t.index ["point_id"], name: "index_orders_on_point_id"
+    t.index ["service_point_id", "status"], name: "index_orders_on_service_point_id_and_status"
+    t.index ["service_point_id"], name: "index_orders_on_service_point_id"
+    t.index ["ttn"], name: "index_orders_on_ttn", unique: true
+  end
+
   create_table "page_contents", force: :cascade do |t|
     t.string "section"
     t.string "content_type"
@@ -1082,6 +1140,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_25_120132) do
   add_foreign_key "operator_service_points", "operators"
   add_foreign_key "operator_service_points", "service_points"
   add_foreign_key "operators", "users"
+  add_foreign_key "order_items", "orders"
+  add_foreign_key "orders", "service_points"
   add_foreign_key "partners", "cities"
   add_foreign_key "partners", "regions"
   add_foreign_key "partners", "users"

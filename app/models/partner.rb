@@ -8,6 +8,7 @@ class Partner < ApplicationRecord
   belongs_to :city, optional: true
   has_many :managers, dependent: :destroy
   has_many :service_points, dependent: :destroy
+  has_many :orders, through: :service_points
   has_many :price_lists, dependent: :destroy
   has_many :promotions, dependent: :destroy
   has_many :operators, dependent: :destroy

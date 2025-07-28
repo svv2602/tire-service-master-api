@@ -258,6 +258,20 @@ Rails.application.routes.draw do
           end
         end
         
+        # Заказы партнера
+        resources :orders, controller: 'partner_orders', only: [:index, :show] do
+          member do
+            post 'mark_as_ready'
+            post 'mark_as_delivered'
+            post 'cancel'
+            post 'add_note'
+          end
+          collection do
+            get 'stats'
+            get 'export'
+          end
+        end
+        
         # Создание тестовых данных для партнера
         collection do
           post 'create_test', to: 'partners#create_test'
@@ -410,6 +424,15 @@ Rails.application.routes.draw do
         end
       end
       
+      # Заказы интернет-магазинов  
+      resources :orders do
+        member do
+          post 'mark_as_ready', to: 'orders#mark_as_ready'
+          post 'mark_as_delivered', to: 'orders#mark_as_delivered'  
+          post 'cancel', to: 'orders#cancel'
+        end
+      end
+
       # Бронирования
       resources :bookings, only: [:index, :show, :create, :update, :destroy] do
         member do
@@ -484,6 +507,7 @@ Rails.application.routes.draw do
         resources :reviews, only: [:index, :show]
         resources :services
         resources :bookings
+        resources :orders
         resources :working_hours
         resources :holidays
         resources :availability, only: [:index]
