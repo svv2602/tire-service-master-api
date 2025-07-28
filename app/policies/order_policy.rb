@@ -1,7 +1,7 @@
 class OrderPolicy < ApplicationPolicy
   class Scope < Scope
     def resolve
-      case user&.role
+      case user&.role&.name
       when 'admin'
         # Администраторы видят все заказы
         scope.all
@@ -37,7 +37,7 @@ class OrderPolicy < ApplicationPolicy
   def show?
     return true if user&.admin?
     
-    case user&.role
+    case user&.role&.name
     when 'partner'
       # Партнер может видеть заказы своих сервисных точек
       partner = user.partner
@@ -79,7 +79,7 @@ class OrderPolicy < ApplicationPolicy
     return true if user&.admin?
     
     # Партнеры и операторы могут отмечать заказы как готовые
-    case user&.role
+    case user&.role&.name
     when 'partner'
       partner = user.partner
       return false unless partner
@@ -106,7 +106,7 @@ class OrderPolicy < ApplicationPolicy
     return true if user&.admin?
     
     # Партнеры и операторы могут отмечать заказы как выданные
-    case user&.role
+    case user&.role&.name
     when 'partner'
       partner = user.partner
       return false unless partner
@@ -133,7 +133,7 @@ class OrderPolicy < ApplicationPolicy
     return true if user&.admin?
     
     # Партнеры и операторы могут отменять заказы
-    case user&.role
+    case user&.role&.name
     when 'partner'
       partner = user.partner
       return false unless partner
@@ -160,7 +160,7 @@ class OrderPolicy < ApplicationPolicy
     # Добавлять заметки могут партнеры, операторы и менеджеры для своих заказов
     return true if user&.admin?
     
-    case user&.role
+    case user&.role&.name
     when 'partner'
       partner = user.partner
       return false unless partner
@@ -194,7 +194,7 @@ class OrderPolicy < ApplicationPolicy
 
   def owner?
     # Определяем, является ли пользователь "владельцем" заказа
-    case user&.role
+    case user&.role&.name
     when 'partner'
       partner = user.partner
       return false unless partner

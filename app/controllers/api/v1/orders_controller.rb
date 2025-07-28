@@ -12,12 +12,21 @@ module Api
         @orders = apply_filters(policy_scope(Order))
         @orders = @orders.includes(:order_items, :service_point)
                          .order(created_at: :desc)
-                         .page(params[:page] || 1)
-                         .per(params[:per_page] || 20)
+                         .limit(params[:per_page] || 20)
+                         .offset(((params[:page] || 1).to_i - 1) * (params[:per_page] || 20).to_i)
+        
+        total_count = policy_scope(Order).count
+        page = (params[:page] || 1).to_i
+        per_page = (params[:per_page] || 20).to_i
         
         render json: {
-          orders: OrderSerializer.new(@orders).serializable_hash[:data],
-          meta: pagination_meta(@orders)
+          orders: @orders.map { |order| OrderSerializer.new(order).as_json },
+          meta: {
+            current_page: page,
+            per_page: per_page,
+            total_pages: (total_count.to_f / per_page).ceil,
+            total_count: total_count
+          }
         }
       end
       
@@ -216,15 +225,7 @@ module Api
       def order_update_params
         params.require(:order).permit(:notes, :cancellation_reason)
       end
-      
-      def pagination_meta(collection)
-        {
-          current_page: collection.current_page,
-          per_page: collection.limit_value,
-          total_pages: collection.total_pages,
-          total_count: collection.total_count
-        }
-      end
+
     end
   end
 end 

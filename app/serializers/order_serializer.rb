@@ -1,18 +1,62 @@
 class OrderSerializer
-  include JSONAPI::Serializer
+  attr_reader :order
   
-  attributes :status, :order_date, :ttn, :number, :customer_name, :customer_phone,
-             :point_name, :point_id, :third_party_point, :status_kod, :bas_id,
-             :separate, :ttn_status, :ttn_status_kod, :total_amount, :total_quantity,
-             :processed_at, :ready_at, :delivered_at, :canceled_at, :cancellation_reason,
-             :notes, :metadata, :created_at, :updated_at
+  def initialize(order)
+    @order = order
+  end
   
-  # Связи
-  belongs_to :service_point, serializer: ServicePointSerializer
-  has_many :order_items, serializer: OrderItemSerializer
+  def as_json
+    {
+      id: order.id,
+      status: order.status,
+      order_date: order.order_date,
+      ttn: order.ttn,
+      number: order.number,
+      customer_name: order.customer_name,
+      customer_phone: order.customer_phone,
+      point_name: order.point_name,
+      point_id: order.point_id,
+      third_party_point: order.third_party_point,
+      status_kod: order.status_kod,
+      bas_id: order.bas_id,
+      separate: order.separate,
+      ttn_status: order.ttn_status,
+      ttn_status_kod: order.ttn_status_kod,
+      total_amount: order.total_amount,
+      total_quantity: order.total_quantity,
+      processed_at: order.processed_at,
+      ready_at: order.ready_at,
+      delivered_at: order.delivered_at,
+      canceled_at: order.canceled_at,
+      cancellation_reason: order.cancellation_reason,
+      notes: order.notes,
+      metadata: order.metadata,
+      created_at: order.created_at,
+      updated_at: order.updated_at,
+      
+      # Вычисляемые атрибуты
+      status_label: status_label,
+      status_color: status_color,
+      can_mark_as_ready: order.can_mark_as_ready?,
+      can_mark_as_delivered: order.can_mark_as_delivered?,
+      can_cancel: order.can_cancel?,
+      formatted_order_date: order.order_date&.strftime('%d.%m.%Y %H:%M'),
+      formatted_phone: formatted_phone,
+      
+      # Информация о сервисной точке
+      service_point_name: order.service_point&.name,
+      service_point_city: order.service_point&.city&.name,
+      service_point_address: order.service_point&.address,
+      
+      # Количество товаров
+      items_count: order.order_items.count,
+      items_summary: items_summary
+    }
+  end
   
-  # Вычисляемые атрибуты
-  attribute :status_label do |order|
+  private
+  
+  def status_label
     case order.status
     when 'received' then 'Получен'
     when 'processing' then 'В обработке'
@@ -23,7 +67,7 @@ class OrderSerializer
     end
   end
   
-  attribute :status_color do |order|
+  def status_color
     case order.status
     when 'received' then '#2196F3'    # синий
     when 'processing' then '#FF9800'  # оранжевый
@@ -34,24 +78,7 @@ class OrderSerializer
     end
   end
   
-  attribute :can_mark_as_ready do |order|
-    order.can_mark_as_ready?
-  end
-  
-  attribute :can_mark_as_delivered do |order|
-    order.can_mark_as_delivered?
-  end
-  
-  attribute :can_cancel do |order|
-    order.can_cancel?
-  end
-  
-  attribute :formatted_order_date do |order|
-    order.order_date&.strftime('%d.%m.%Y %H:%M')
-  end
-  
-  attribute :formatted_phone do |order|
-    # Форматирование телефона для отображения
+  def formatted_phone
     phone = order.customer_phone
     return phone unless phone.present?
     
@@ -64,5 +91,11 @@ class OrderSerializer
     else
       phone
     end
+  end
+  
+  def items_summary
+    order.order_items.limit(3).map do |item|
+      "#{item.name} (#{item.quantity} шт.)"
+    end.join(', ') + (order.order_items.count > 3 ? '...' : '')
   end
 end 

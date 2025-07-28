@@ -35,15 +35,15 @@ class Order < ApplicationRecord
   
   # Методы для работы со статусами
   def can_mark_as_ready?
-    received? || processing?
+    status_received? || status_processing?
   end
   
   def can_mark_as_delivered?
-    ready?
+    status_ready?
   end
   
   def can_cancel?
-    !delivered? && !canceled?
+    !status_delivered? && !status_canceled?
   end
   
   # Автоматический расчет общих показателей при создании
