@@ -1,8 +1,7 @@
 module Api
   module V1
     class OperatorsController < ApiController
-      before_action :set_partner, only: [:create], if: -> { params[:partner_id].present? }
-      before_action :set_partner, only: [:index], if: -> { params[:partner_id].present? }
+      before_action :set_partner, only: [:create, :index], if: -> { params[:partner_id].present? }
       before_action :set_operator, only: [:update, :destroy]
       before_action :set_operator_with_partner, only: [:update, :destroy], if: -> { params[:partner_id].present? }
 
@@ -65,6 +64,10 @@ module Api
 
       # Добавить нового сотрудника-оператора
       def create
+        Rails.logger.info "=== CREATE OPERATOR DEBUG ==="
+        Rails.logger.info "params[:partner_id]: #{params[:partner_id]}"
+        Rails.logger.info "@partner: #{@partner.inspect}"
+        
         user_params = params.require(:user).permit(:first_name, :last_name, :email, :phone, :password, :is_active)
         operator_params = params.require(:operator).permit(:position, :access_level, :is_active)
 
