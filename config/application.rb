@@ -72,5 +72,8 @@ module TireServiceMasterApi
     
     # Настройка аудита
     config.audit_async_default = Rails.env.production?
+
+      # <== ВАЖНО Добавил строку
+    config.active_storage.routes_prefix = '/api/rails/active_storage'
   end
 end
