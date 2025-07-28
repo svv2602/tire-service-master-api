@@ -33,7 +33,7 @@ module Api
       # GET /api/v1/orders/:id
       def show
         authorize @order
-        render json: OrderSerializer.new(@order, include: [:order_items]).serializable_hash
+        render json: OrderSerializer.new(@order).as_json
       end
       
       # POST /api/v1/orders

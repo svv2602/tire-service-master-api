@@ -1,22 +1,37 @@
 class OrderItemSerializer
-  include JSONAPI::Serializer
+  attr_reader :item
   
-  attributes :artikul, :quantity, :price, :sum, :bas_id, :name, :description,
-             :category, :brand, :model, :attributes, :created_at, :updated_at
-  
-  # Связи
-  belongs_to :order, serializer: OrderSerializer
-  
-  # Вычисляемые атрибуты
-  attribute :formatted_price do |item|
-    "#{item.price} ₴"
+  def initialize(item)
+    @item = item
   end
   
-  attribute :formatted_sum do |item|
-    "#{item.sum} ₴"
+  def as_json
+    {
+      id: item.id,
+      artikul: item.artikul,
+      quantity: item.quantity,
+      price: item.price,
+      sum: item.sum,
+      bas_id: item.bas_id,
+      name: item.name,
+      description: item.description,
+      category: item.category,
+      brand: item.brand,
+      model: item.model,
+      item_attributes: item.item_attributes,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      
+      # Вычисляемые атрибуты
+      formatted_price: "#{item.price} ₴",
+      formatted_sum: "#{item.sum} ₴",
+      unit_description: unit_description
+    }
   end
   
-  attribute :unit_description do |item|
+  private
+  
+  def unit_description
     case item.quantity
     when 1
       "#{item.quantity} шт."

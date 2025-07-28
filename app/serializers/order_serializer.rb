@@ -50,7 +50,10 @@ class OrderSerializer
       
       # Количество товаров
       items_count: order.order_items.count,
-      items_summary: items_summary
+      items_summary: items_summary,
+      
+      # Товары заказа
+      order_items: order.order_items.map { |item| OrderItemSerializer.new(item).as_json }
     }
   end
   

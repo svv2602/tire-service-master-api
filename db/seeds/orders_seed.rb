@@ -123,6 +123,51 @@ test_goods = [
     price: 320,
     quantity: 1,
     bas_id: "FILT001"
+  },
+  {
+    artikul: "00000047875",
+    name: "Шина всесезонная Bridgestone Turanza",
+    category: "Шины",
+    brand: "Bridgestone",
+    price: 1872,
+    quantity: 4,
+    bas_id: "ТО00-000170"
+  },
+  {
+    artikul: "BRAKE-PAD-FRONT",
+    name: "Колодки тормозные передние Brembo",
+    category: "Тормозная система",
+    brand: "Brembo",
+    price: 1890,
+    quantity: 1,
+    bas_id: "ТО00-000176"
+  },
+  {
+    artikul: "SPARK-PLUG-NGK",
+    name: "Свечи зажигания NGK",
+    category: "Зажигание",
+    brand: "NGK",
+    price: 180,
+    quantity: 4,
+    bas_id: "ТО00-000177"
+  },
+  {
+    artikul: "AIR-FILTER-BOSCH",
+    name: "Фильтр воздушный Bosch",
+    category: "Фильтры",
+    brand: "Bosch",
+    price: 450,
+    quantity: 1,
+    bas_id: "ТО00-000178"
+  },
+  {
+    artikul: "BATTERY-VARTA-12V",
+    name: "Аккумулятор Varta Blue Dynamic 12V 60Ah",
+    category: "Электрооборудование",
+    brand: "Varta",
+    price: 2150,
+    quantity: 1,
+    bas_id: "ТО00-000179"
   }
 ]
 
