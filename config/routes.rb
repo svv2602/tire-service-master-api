@@ -239,6 +239,16 @@ Rails.application.routes.draw do
       # Администраторы
       resources :administrators, only: [:index, :show, :create, :update, :destroy]
       
+      # Заявки партнеров
+      resources :partner_applications, only: [:index, :show, :create, :update, :destroy] do
+        member do
+          patch :update_status
+        end
+        collection do
+          get :stats
+        end
+      end
+      
       # Партнеры
       resources :partners, only: [:index, :show, :create, :update, :destroy] do
         resources :service_points, only: [:index, :show, :create, :update, :destroy]

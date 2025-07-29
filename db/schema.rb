@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_28_075717) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_29_055944) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -564,6 +564,34 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_28_075717) do
     t.index ["content_type", "language"], name: "index_page_contents_on_content_type_and_language"
     t.index ["language"], name: "index_page_contents_on_language"
     t.index ["section", "language"], name: "index_page_contents_on_section_and_language"
+  end
+
+  create_table "partner_applications", force: :cascade do |t|
+    t.string "company_name", null: false
+    t.text "business_description", null: false
+    t.string "contact_person", null: false
+    t.string "email", null: false
+    t.string "phone", null: false
+    t.string "city", null: false
+    t.string "address"
+    t.bigint "region_id"
+    t.bigint "city_record_id"
+    t.string "website"
+    t.text "additional_info"
+    t.integer "expected_service_points", default: 1, null: false
+    t.string "status", default: "new", null: false
+    t.bigint "processed_by_id"
+    t.text "admin_notes"
+    t.datetime "processed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["city_record_id"], name: "index_partner_applications_on_city_record_id"
+    t.index ["company_name"], name: "index_partner_applications_on_company_name"
+    t.index ["created_at"], name: "index_partner_applications_on_created_at"
+    t.index ["email"], name: "index_partner_applications_on_email"
+    t.index ["processed_by_id"], name: "index_partner_applications_on_processed_by_id"
+    t.index ["region_id"], name: "index_partner_applications_on_region_id"
+    t.index ["status"], name: "index_partner_applications_on_status"
   end
 
   create_table "partners", force: :cascade do |t|
@@ -1142,6 +1170,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_28_075717) do
   add_foreign_key "operators", "users"
   add_foreign_key "order_items", "orders"
   add_foreign_key "orders", "service_points"
+  add_foreign_key "partner_applications", "cities", column: "city_record_id"
+  add_foreign_key "partner_applications", "regions"
+  add_foreign_key "partner_applications", "users", column: "processed_by_id"
   add_foreign_key "partners", "cities"
   add_foreign_key "partners", "regions"
   add_foreign_key "partners", "users"
