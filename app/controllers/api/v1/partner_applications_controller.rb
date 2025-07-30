@@ -130,9 +130,12 @@ module Api
         end
       end
 
-      # PATCH /api/v1/partner_applications/:id/status
+      # PATCH /api/v1/partner_applications/:id/update_status
       # Изменение статуса заявки
       def update_status
+        Rails.logger.info "🔍 PartnerApplicationsController#update_status вызван для заявки #{@application.id}"
+        Rails.logger.info "🔍 Параметры: status=#{params[:status]}, admin_notes=#{params[:admin_notes]}"
+        
         authorize @application, :update_status?
         
         new_status = params[:status]

@@ -355,7 +355,7 @@ module Api
       end
 
       def build_users_response
-        @users = User.all
+        @users = User.includes(:role).all
         
         # Фильтрация по роли
         @users = @users.with_role(params[:role]) if params[:role].present?
