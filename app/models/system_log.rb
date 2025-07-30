@@ -2,10 +2,6 @@ class SystemLog < ApplicationRecord
   # Связи
   belongs_to :user, optional: true
   
-  # Избегаем конфликта с встроенным методом ActiveRecord changes
-  # Используем alias для поля changes
-  alias_attribute :record_changes, :changes
-  
   # Валидации
   validates :action, presence: true
   validates :resource_type, presence: true, if: -> { resource_id.present? }

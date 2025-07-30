@@ -488,7 +488,20 @@ Rails.application.routes.draw do
       end
       
       # Системные логи (только для администраторов)
-      resources :system_logs, only: [:index, :show]
+      resources :system_logs, only: [:index, :show] do
+        collection do
+          get :stats
+          get :export
+          get :search_autocomplete
+          get :suspicious_activity
+          get 'user_timeline/:user_id', action: :user_timeline, as: :user_timeline
+          post :manual_log
+        end
+        
+        member do
+          get 'resource_history/:resource_type/:resource_id', action: :resource_history, as: :resource_history
+        end
+      end
       
       # Тестовые данные для разработки
       namespace :tests do
@@ -550,11 +563,11 @@ Rails.application.routes.draw do
           get :export
           get :search_autocomplete
           get :suspicious_activity
+          get 'user_timeline/:user_id', action: :user_timeline, as: :user_timeline
           post :manual_log
         end
         
         member do
-          get 'user_timeline/:user_id', action: :user_timeline, as: :user_timeline
           get 'resource_history/:resource_type/:resource_id', action: :resource_history, as: :resource_history
         end
       end

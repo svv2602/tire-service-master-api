@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_29_055944) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_30_105733) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -977,16 +977,17 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_29_055944) do
     t.text "user_agent", comment: "User-Agent браузера"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.jsonb "changes", comment: "Детальные изменения в JSON формате"
+    t.jsonb "record_changes", comment: "Детальные изменения записи в JSON формате"
     t.jsonb "additional_data", comment: "Дополнительная контекстная информация"
     t.index ["action", "created_at"], name: "idx_system_logs_action_created"
     t.index ["action"], name: "index_system_logs_on_action"
     t.index ["additional_data"], name: "idx_system_logs_additional_data_gin", using: :gin
     t.index ["additional_data"], name: "index_system_logs_on_additional_data", using: :gin
-    t.index ["changes"], name: "idx_system_logs_changes_gin", using: :gin
-    t.index ["changes"], name: "index_system_logs_on_changes", using: :gin
     t.index ["created_at"], name: "index_system_logs_on_created_at"
     t.index ["ip_address", "created_at"], name: "idx_system_logs_ip_created"
+    t.index ["record_changes"], name: "idx_system_logs_changes_gin", using: :gin
+    t.index ["record_changes"], name: "idx_system_logs_record_changes_gin", using: :gin
+    t.index ["record_changes"], name: "index_system_logs_on_record_changes", using: :gin
     t.index ["resource_type", "action"], name: "index_system_logs_on_resource_type_and_action"
     t.index ["resource_type", "resource_id", "created_at"], name: "idx_system_logs_resource_created"
     t.index ["resource_type", "resource_id"], name: "idx_system_logs_resource"

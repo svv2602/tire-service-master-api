@@ -298,8 +298,8 @@ class Api::V1::AuditLogsController < ApplicationController
       logs = logs.joins(:user).where('users.email ILIKE ?', "%#{params[:user_email]}%")
     end
     
-    # Фильтр по действию
-    if params[:action].present?
+    # Фильтр по действию (исключаем системный параметр Rails)
+    if params[:action].present? && params[:action] != 'index'
       actions = params[:action].split(',').map(&:strip)
       logs = logs.where(action: actions)
     end
@@ -347,7 +347,8 @@ class Api::V1::AuditLogsController < ApplicationController
     
     filters[:user_id] = params[:user_id] if params[:user_id].present?
     filters[:user_email] = params[:user_email] if params[:user_email].present?
-    filters[:action] = params[:action] if params[:action].present?
+    # Исключаем системный параметр Rails params[:action] - используем только пользовательские фильтры
+    filters[:action] = params[:action] if params[:action].present? && params[:action] != 'index'
     filters[:resource_type] = params[:resource_type] if params[:resource_type].present?
     filters[:resource_id] = params[:resource_id] if params[:resource_id].present?
     filters[:date_from] = params[:date_from] if params[:date_from].present?
@@ -510,11 +511,56 @@ class Api::V1::AuditLogsController < ApplicationController
   end
 
   # Методы обнаружения подозрительной активности
+  def detect_bulk_data_changes(days_ago)
+    # Ищем пользователей с более чем 100 изменениями за час
+    bulk_changes_data = SystemLog.joins(:user)
+                                 .where('system_logs.created_at >= ?', days_ago.days.ago)
+                                 .where(action: ['created', 'updated', 'deleted'])
+                                 .group(:user_id, Arel.sql("DATE_TRUNC('hour', system_logs.created_at)"))
+                                 .having('COUNT(*) > 100')
+                                 .pluck(:user_id, Arel.sql("DATE_TRUNC('hour', system_logs.created_at)"), Arel.sql('COUNT(*)'))
+
+    bulk_changes_data.map do |user_id, hour, changes_count|
+      user = User.find(user_id)
+
+      {
+        user_id: user.id,
+        user_email: user.email,
+        hour: hour,
+        changes_count: changes_count,
+        severity: changes_count > 500 ? 'high' : 'medium'
+      }
+    end
+  end
+
+  def detect_off_hours_activity(days_ago)
+    # Активность в нерабочее время (до 6 утра, после 22 вечера, выходные)
+    off_hours_data = SystemLog.where('system_logs.created_at >= ?', days_ago.days.ago)
+                             .where(
+                               "EXTRACT(hour FROM system_logs.created_at) < 6 OR EXTRACT(hour FROM system_logs.created_at) > 22 OR EXTRACT(dow FROM system_logs.created_at) IN (0, 6)"
+                             )
+                             .joins(:user)
+                             .group(:user_id)
+                             .having('COUNT(*) > 50')
+                             .pluck(:user_id, Arel.sql('COUNT(*)'))
+
+    off_hours_data.map do |user_id, off_hours_count|
+      user = User.find(user_id)
+
+      {
+        user_id: user.id,
+        user_email: user.email,
+        off_hours_activity: off_hours_count,
+        severity: off_hours_count > 200 ? 'high' : 'medium'
+      }
+    end
+  end
+
   def detect_frequent_failed_logins(days_ago)
     # Ищем частые неудачные попытки входа (больше 10 за час)
     failed_attempts = SystemLog.where(action: 'login_failed')
-                              .where('created_at >= ?', days_ago.days.ago)
-                              .group(:ip_address, "DATE_TRUNC('hour', created_at)")
+                              .where('system_logs.created_at >= ?', days_ago.days.ago)
+                              .group(:ip_address, Arel.sql("DATE_TRUNC('hour', system_logs.created_at)"))
                               .having('COUNT(*) > 10')
                               .count
 
@@ -529,51 +575,23 @@ class Api::V1::AuditLogsController < ApplicationController
   end
 
   def detect_multiple_ip_logins(days_ago)
-    # Ищем пользователей с входами с более чем 5 разных IP за день
-    multiple_ips = SystemLog.joins(:user)
-                           .where(action: 'login')
-                           .where('system_logs.created_at >= ?', days_ago.days.ago)
-                           .group(:user_id, "DATE(system_logs.created_at)")
-                           .having('COUNT(DISTINCT ip_address) > 5')
-                           .includes(:user)
+    # Находим пользователей, которые входили с более чем 5 различных IP за день
+    multiple_ips_data = SystemLog.joins(:user)
+                                 .where(action: 'login')
+                                 .where('system_logs.created_at >= ?', days_ago.days.ago)
+                                 .group(:user_id, Arel.sql("DATE(system_logs.created_at)"))
+                                 .having('COUNT(DISTINCT ip_address) > 5')
+                                 .pluck(:user_id, Arel.sql("DATE(system_logs.created_at)"), Arel.sql('COUNT(DISTINCT ip_address)'))
 
-    multiple_ips.map do |log|
-      ip_count = SystemLog.where(user: log.user, action: 'login')
-                         .where('DATE(created_at) = ?', log.created_at.to_date)
-                         .distinct.count(:ip_address)
-
+    multiple_ips_data.map do |user_id, date, ip_count|
+      user = User.find(user_id)
+      
       {
-        user_id: log.user.id,
-        user_email: log.user.email,
-        date: log.created_at.to_date,
+        user_id: user.id,
+        user_email: user.email,
+        date: date,
         unique_ips: ip_count,
         severity: ip_count > 10 ? 'high' : 'medium'
-      }
-    end
-  end
-
-  def detect_bulk_data_changes(days_ago)
-    # Ищем пользователей с более чем 100 изменениями за час
-    bulk_changes = SystemLog.joins(:user)
-                           .where('created_at >= ?', days_ago.days.ago)
-                           .where(action: ['created', 'updated', 'deleted'])
-                           .group(:user_id, "DATE_TRUNC('hour', created_at)")
-                           .having('COUNT(*) > 100')
-                           .includes(:user)
-
-    bulk_changes.map do |log|
-      changes_count = SystemLog.where(user: log.user)
-                              .where('created_at >= ? AND created_at < ?', 
-                                     log.created_at.beginning_of_hour, 
-                                     log.created_at.beginning_of_hour + 1.hour)
-                              .count
-
-      {
-        user_id: log.user.id,
-        user_email: log.user.email,
-        hour: log.created_at.beginning_of_hour,
-        changes_count: changes_count,
-        severity: changes_count > 500 ? 'high' : 'medium'
       }
     end
   end
@@ -600,58 +618,29 @@ class Api::V1::AuditLogsController < ApplicationController
     end
   end
 
-  def detect_off_hours_activity(days_ago)
-    # Ищем активность в нерабочее время (22:00-06:00, выходные)
-    off_hours_logs = SystemLog.where('created_at >= ?', days_ago.days.ago)
-                             .where(
-                               "EXTRACT(hour FROM created_at) < 6 OR EXTRACT(hour FROM created_at) > 22 OR EXTRACT(dow FROM created_at) IN (0, 6)"
-                             )
-                             .joins(:user)
-                             .group(:user_id)
-                             .having('COUNT(*) > 50')
-                             .includes(:user)
-
-    off_hours_logs.map do |log|
-      off_hours_count = SystemLog.where(user: log.user)
-                                .where('created_at >= ?', days_ago.days.ago)
-                                .where(
-                                  "EXTRACT(hour FROM created_at) < 6 OR EXTRACT(hour FROM created_at) > 22 OR EXTRACT(dow FROM created_at) IN (0, 6)"
-                                )
-                                .count
-
-      {
-        user_id: log.user.id,
-        user_email: log.user.email,
-        off_hours_activity: off_hours_count,
-        severity: off_hours_count > 200 ? 'high' : 'medium'
-      }
-    end
-  end
-
   def detect_unusual_access_patterns(days_ago)
     # Ищем необычные паттерны доступа (например, доступ к ресурсам, к которым пользователь обычно не обращается)
     unusual_patterns = []
 
     # Пример: пользователи, которые внезапно начали работать с ресурсами, к которым раньше не обращались
-    recent_resources = SystemLog.where('created_at >= ?', 7.days.ago)
-                               .joins(:user)
-                               .group(:user_id, :resource_type)
-                               .having('COUNT(*) > 10')
+    recent_resources_data = SystemLog.where('system_logs.created_at >= ?', 7.days.ago)
+                                     .joins(:user)
+                                     .group(:user_id, :resource_type)
+                                     .having('COUNT(*) > 10')
+                                     .pluck(:user_id, :resource_type, Arel.sql('COUNT(*)'))
 
-    recent_resources.each do |log|
-      historical_access = SystemLog.where(user: log.user, resource_type: log.resource_type)
-                                  .where('created_at < ?', 7.days.ago)
+    recent_resources_data.each do |user_id, resource_type, recent_count|
+      user = User.find(user_id)
+      
+      historical_access = SystemLog.where(user: user, resource_type: resource_type)
+                                  .where('system_logs.created_at < ?', 7.days.ago)
                                   .count
 
       if historical_access == 0 # Новый тип ресурса для пользователя
-        recent_count = SystemLog.where(user: log.user, resource_type: log.resource_type)
-                               .where('created_at >= ?', 7.days.ago)
-                               .count
-
         unusual_patterns << {
-          user_id: log.user.id,
-          user_email: log.user.email,
-          resource_type: log.resource_type,
+          user_id: user.id,
+          user_email: user.email,
+          resource_type: resource_type,
           recent_access_count: recent_count,
           pattern: 'new_resource_access',
           severity: recent_count > 50 ? 'high' : 'medium'
@@ -668,12 +657,12 @@ class Api::V1::AuditLogsController < ApplicationController
       time: log.created_at.strftime('%H:%M:%S'),
       date: log.created_at.to_date.to_s,
       action: log.action_description,
-      resource: log.resource_name || "#{log.resource_type} ##{log.resource_id}",
+      resource: log.resource_name || (log.resource_type && log.resource_id ? "#{log.resource_type} ##{log.resource_id}" : "Системное действие"),
       ip_address: log.ip_address,
       details: {
         resource_type: log.resource_type,
         resource_id: log.resource_id,
-                  changes: log.record_changes
+        changes: log.record_changes
       }
     }
   end
