@@ -5,7 +5,7 @@ module Api
     module Admin
       # Контроллер для управления системными настройками через админку
       class SystemSettingsController < AdminController
-        before_action :authenticate_admin!
+        # Аутентификация и проверка прав админа уже выполняется в AdminController
 
         # GET /api/v1/admin/system_settings
         def index
@@ -100,8 +100,13 @@ module Api
 
         # Получить все настройки
         def get_all_settings
-          settings = Rails.cache.fetch('system_settings:all', expires_in: 5.minutes) do
-            default_settings.merge(custom_settings)
+          begin
+            settings = Rails.cache.fetch('system_settings:all', expires_in: 5.minutes) do
+              default_settings.merge(custom_settings)
+            end
+          rescue => e
+            Rails.logger.error "Error caching settings, using direct access: #{e.message}"
+            settings = default_settings.merge(custom_settings)
           end
           
           # Группируем по категориям
@@ -310,14 +315,19 @@ module Api
           settings = {}
           
           begin
-            keys = Rails.cache.redis.keys('system_settings:custom:*')
-            
-            keys.each do |redis_key|
-              setting_json = Rails.cache.redis.get(redis_key)
-              next unless setting_json
+            # Проверяем, доступен ли Redis
+            if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+              keys = Rails.cache.redis.keys('system_settings:custom:*')
               
-              setting_data = JSON.parse(setting_json, symbolize_names: true)
-              settings[setting_data[:key]] = setting_data
+              keys.each do |redis_key|
+                setting_json = Rails.cache.redis.get(redis_key)
+                next unless setting_json
+                
+                setting_data = JSON.parse(setting_json, symbolize_names: true)
+                settings[setting_data[:key]] = setting_data
+              end
+            else
+              Rails.logger.warn "Redis не доступен, используем пустые кастомные настройки"
             end
           rescue => e
             Rails.logger.error "Error loading custom settings: #{e.message}"
