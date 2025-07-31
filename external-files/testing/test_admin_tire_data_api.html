@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏛️ Тестирование Admin TireData API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #FF6B35, #F7931E);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .auth-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .auth-section h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        .test-section {
+            margin-bottom: 40px;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .test-section:hover {
+            border-color: #FF6B35;
+            box-shadow: 0 5px 15px rgba(255, 107, 53, 0.1);
+        }
+
+        .test-section h3 {
+            color: #FF6B35;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .endpoint-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 5px solid #2196F3;
+        }
+
+        .endpoint-info code {
+            background: #1976D2;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .input-group input, .input-group select, .input-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-group input:focus, .input-group select:focus, .input-group textarea:focus {
+            outline: none;
+            border-color: #FF6B35;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #FF6B35, #F7931E);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 53, 0.4);
+        }
+
+        .btn.secondary {
+            background: linear-gradient(135deg, #757575, #616161);
+        }
+
+        .btn.success {
+            background: linear-gradient(135deg, #4CAF50, #388E3C);
+        }
+
+        .btn.danger {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+        }
+
+        .result-area {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 5px solid #FF6B35;
+            display: none;
+        }
+
+        .result-area h4 {
+            color: #FF6B35;
+            margin-bottom: 15px;
+        }
+
+        .result-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .status.warning {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .pre-code {
+            background: #263238;
+            color: #00e676;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            margin-top: 10px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #FF6B35;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .version-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .version-item {
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .version-item:last-child {
+            border-bottom: none;
+        }
+
+        .version-item.active {
+            background: #e8f5e8;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .version-badge {
+            background: #2196F3;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .version-badge.active {
+            background: #4CAF50;
+        }
+
+        @media (max-width: 768px) {
+            .controls-row {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏛️ Admin TireData API</h1>
+            <p>Тестирование административных функций управления данными поиска шин</p>
+        </div>
+
+        <div class="content">
+            <!-- Секция авторизации -->
+            <div class="auth-section">
+                <h3>🔐 Авторизация администратора</h3>
+                <p><strong>Важно:</strong> Для тестирования админских функций необходимо войти как администратор.</p>
+                <div class="controls-row">
+                    <div class="input-group">
+                        <label for="adminEmail">Email администратора:</label>
+                        <input type="email" id="adminEmail" value="admin@test.com" placeholder="admin@test.com">
+                    </div>
+                    <div class="input-group">
+                        <label for="adminPassword">Пароль:</label>
+                        <input type="password" id="adminPassword" value="admin123" placeholder="Пароль администратора">
+                    </div>
+                    <button class="btn" onclick="loginAdmin()">🔑 Войти как админ</button>
+                </div>
+                <div id="authStatus" style="margin-top: 15px;"></div>
+            </div>
+
+            <!-- Тест 1: Получение списка версий -->
+            <div class="test-section">
+                <h3>📋 Тест 1: Список версий данных</h3>
+                <div class="endpoint-info">
+                    <strong>Endpoint:</strong> <code>GET /api/v1/admin/tire_data/versions</code><br>
+                    <strong>Назначение:</strong> Получение списка всех версий данных поиска шин
+                </div>
+                <div class="controls-row">
+                    <div class="input-group">
+                        <label for="versionsLimit">Лимит записей:</label>
+                        <select id="versionsLimit">
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <button class="btn" onclick="getVersions()">📋 Получить версии</button>
+                    <button class="btn secondary" onclick="clearResults('versionsResult')">🗑️ Очистить</button>
+                </div>
+                <div id="versionsResult" class="result-area">
+                    <h4>Список версий данных:</h4>
+                    <div id="versionsContent"></div>
+                </div>
+            </div>
+
+            <!-- Тест 2: Текущая версия -->
+            <div class="test-section">
+                <h3>🎯 Тест 2: Текущая активная версия</h3>
+                <div class="endpoint-info">
+                    <strong>Endpoint:</strong> <code>GET /api/v1/admin/tire_data/current_version</code><br>
+                    <strong>Назначение:</strong> Получение информации о текущей активной версии данных
+                </div>
+                <div class="controls-row">
+                    <button class="btn" onclick="getCurrentVersion()">🎯 Текущая версия</button>
+                    <button class="btn secondary" onclick="clearResults('currentVersionResult')">🗑️ Очистить</button>
+                </div>
+                <div id="currentVersionResult" class="result-area">
+                    <h4>Информация о текущей версии:</h4>
+                    <div id="currentVersionContent"></div>
+                </div>
+            </div>
+
+            <!-- Тест 3: Статистика данных -->
+            <div class="test-section">
+                <h3>📊 Тест 3: Статистика данных поиска</h3>
+                <div class="endpoint-info">
+                    <strong>Endpoint:</strong> <code>GET /api/v1/admin/tire_data/statistics</code><br>
+                    <strong>Назначение:</strong> Получение детальной статистики по данным поиска шин
+                </div>
+                <div class="controls-row">
+                    <button class="btn" onclick="getStatistics()">📊 Получить статистику</button>
+                    <button class="btn secondary" onclick="clearResults('statisticsResult')">🗑️ Очистить</button>
+                </div>
+                <div id="statisticsResult" class="result-area">
+                    <h4>Статистика данных:</h4>
+                    <div id="statisticsContent"></div>
+                </div>
+            </div>
+
+            <!-- Тест 4: Обновление данных -->
+            <div class="test-section">
+                <h3>🔄 Тест 4: Обновление данных (ОСТОРОЖНО!)</h3>
+                <div class="endpoint-info">
+                    <strong>Endpoint:</strong> <code>POST /api/v1/admin/tire_data/update</code><br>
+                    <strong>Назначение:</strong> Обновление данных поиска шин из CSV файлов<br>
+                    <strong style="color: #d32f2f;">⚠️ ВНИМАНИЕ: Эта операция может изменить данные в системе!</strong>
+                </div>
+                <div class="controls-row">
+                    <div class="input-group">
+                        <label for="sourceDescription">Описание источника:</label>
+                        <input type="text" id="sourceDescription" placeholder="Тестовое обновление данных" value="Тестовое обновление данных">
+                    </div>
+                    <div class="input-group">
+                        <label for="csvDirectory">Путь к CSV файлам:</label>
+                        <input type="text" id="csvDirectory" placeholder="/path/to/csv/files" value="">
+                    </div>
+                </div>
+                <div class="controls-row">
+                    <button class="btn warning" onclick="updateData()">🔄 Обновить данные</button>
+                    <button class="btn secondary" onclick="clearResults('updateResult')">🗑️ Очистить</button>
+                </div>
+                <div id="updateResult" class="result-area">
+                    <h4>Результат обновления:</h4>
+                    <div id="updateContent"></div>
+                </div>
+            </div>
+
+            <!-- Тест 5: Откат версии -->
+            <div class="test-section">
+                <h3>↩️ Тест 5: Откат к предыдущей версии (ОСТОРОЖНО!)</h3>
+                <div class="endpoint-info">
+                    <strong>Endpoint:</strong> <code>DELETE /api/v1/admin/tire_data/rollback</code><br>
+                    <strong>Назначение:</strong> Откат к предыдущей версии данных<br>
+                    <strong style="color: #d32f2f;">⚠️ ВНИМАНИЕ: Эта операция изменит активную версию данных!</strong>
+                </div>
+                <div class="controls-row">
+                    <div class="input-group">
+                        <label for="rollbackVersion">Версия для отката:</label>
+                        <input type="text" id="rollbackVersion" placeholder="1.0.0" value="">
+                    </div>
+                    <button class="btn danger" onclick="rollbackVersion()">↩️ Откатить версию</button>
+                    <button class="btn secondary" onclick="clearResults('rollbackResult')">🗑️ Очистить</button>
+                </div>
+                <div id="rollbackResult" class="result-area">
+                    <h4>Результат отката:</h4>
+                    <div id="rollbackContent"></div>
+                </div>
+            </div>
+
+            <!-- Тест 6: Очистка старых версий -->
+            <div class="test-section">
+                <h3>🧹 Тест 6: Очистка старых версий (ОСТОРОЖНО!)</h3>
+                <div class="endpoint-info">
+                    <strong>Endpoint:</strong> <code>POST /api/v1/admin/tire_data/cleanup</code><br>
+                    <strong>Назначение:</strong> Удаление старых версий данных (оставляем последние N)<br>
+                    <strong style="color: #d32f2f;">⚠️ ВНИМАНИЕ: Эта операция безвозвратно удалит старые версии!</strong>
+                </div>
+                <div class="controls-row">
+                    <div class="input-group">
+                        <label for="keepVersions">Сколько версий оставить:</label>
+                        <select id="keepVersions">
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="5" selected>5</option>
+                            <option value="10">10</option>
+                        </select>
+                    </div>
+                    <button class="btn danger" onclick="cleanupVersions()">🧹 Очистить старые версии</button>
+                    <button class="btn secondary" onclick="clearResults('cleanupResult')">🗑️ Очистить</button>
+                </div>
+                <div id="cleanupResult" class="result-area">
+                    <h4>Результат очистки:</h4>
+                    <div id="cleanupContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Конфигурация API
+        const API_BASE_URL = 'http://localhost:8000/api/v1';
+        let authToken = localStorage.getItem('admin_auth_token');
+
+        // Утилиты
+        function showResult(containerId, content) {
+            const container = document.getElementById(containerId);
+            const contentDiv = document.getElementById(containerId.replace('Result', 'Content'));
+            contentDiv.innerHTML = content;
+            container.style.display = 'block';
+        }
+
+        function clearResults(containerId) {
+            document.getElementById(containerId).style.display = 'none';
+        }
+
+        function formatJson(obj) {
+            return `<div class="pre-code">${JSON.stringify(obj, null, 2)}</div>`;
+        }
+
+        function updateAuthStatus(message, isSuccess = true) {
+            const statusDiv = document.getElementById('authStatus');
+            statusDiv.innerHTML = `<span class="status ${isSuccess ? 'success' : 'error'}">${message}</span>`;
+        }
+
+        // Авторизация администратора
+        async function loginAdmin() {
+            const email = document.getElementById('adminEmail').value.trim();
+            const password = document.getElementById('adminPassword').value.trim();
+
+            if (!email || !password) {
+                updateAuthStatus('❌ Введите email и пароль', false);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.token) {
+                    authToken = data.token;
+                    localStorage.setItem('admin_auth_token', authToken);
+                    updateAuthStatus(`✅ Авторизован как ${data.user?.email || email} (${data.user?.role || 'unknown'})`);
+                } else {
+                    updateAuthStatus(`❌ Ошибка авторизации: ${data.error || 'Неизвестная ошибка'}`, false);
+                }
+            } catch (error) {
+                updateAuthStatus(`❌ Ошибка соединения: ${error.message}`, false);
+            }
+        }
+
+        // Базовая функция для API запросов
+        async function makeApiRequest(endpoint, method = 'GET', body = null) {
+            if (!authToken) {
+                return { error: 'Необходима авторизация администратора', needAuth: true };
+            }
+
+            const config = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            };
+
+            if (body) {
+                config.body = JSON.stringify(body);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+                const data = await response.json();
+
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    data: data,
+                    error: response.ok ? null : (data.error || `HTTP ${response.status}`)
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: `Ошибка соединения: ${error.message}`
+                };
+            }
+        }
+
+        // Тест 1: Получение списка версий
+        async function getVersions() {
+            const limit = document.getElementById('versionsLimit').value;
+            const result = await makeApiRequest(`/admin/tire_data/versions?limit=${limit}`);
+
+            if (result.needAuth) {
+                showResult('versionsResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Требуется авторизация</span>
+                        <p>Войдите как администратор для доступа к этой функции</p>
+                    </div>
+                `);
+                return;
+            }
+
+            if (result.success) {
+                const versions = result.data.versions || [];
+                const pagination = result.data.pagination || {};
+
+                let versionsHtml = `
+                    <div class="result-item">
+                        <span class="status success">✅ Список версий получен</span>
+                        <p><strong>Всего версий:</strong> ${pagination.total || 0}</p>
+                        <p><strong>Показано:</strong> ${versions.length}</p>
+                    </div>
+                `;
+
+                if (versions.length > 0) {
+                    versionsHtml += '<div class="version-list">';
+                    versions.forEach(version => {
+                        const isActive = version.is_active;
+                        versionsHtml += `
+                            <div class="version-item ${isActive ? 'active' : ''}">
+                                <div>
+                                    <strong>${version.version}</strong>
+                                    <span class="version-badge ${isActive ? 'active' : ''}">${isActive ? 'АКТИВНАЯ' : 'НЕАКТИВНАЯ'}</span>
+                                    <br>
+                                    <small>${version.source_description}</small>
+                                    <br>
+                                    <small>Импорт: ${new Date(version.imported_at).toLocaleString('ru')}</small>
+                                </div>
+                                <div>
+                                    <div>Конфигураций: ${version.configurations_count}</div>
+                                    <div>Брендов: ${version.brands_count}</div>
+                                    <div>Моделей: ${version.models_count}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    versionsHtml += '</div>';
+                } else {
+                    versionsHtml += `
+                        <div class="result-item">
+                            <span class="status warning">⚠️ Версии не найдены</span>
+                            <p>В системе нет версий данных поиска шин</p>
+                        </div>
+                    `;
+                }
+
+                showResult('versionsResult', versionsHtml);
+            } else {
+                showResult('versionsResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Ошибка</span>
+                        <p><strong>Ошибка:</strong> ${result.error}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            }
+        }
+
+        // Тест 2: Текущая версия
+        async function getCurrentVersion() {
+            const result = await makeApiRequest('/admin/tire_data/current_version');
+
+            if (result.needAuth) {
+                showResult('currentVersionResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Требуется авторизация</span>
+                        <p>Войдите как администратор для доступа к этой функции</p>
+                    </div>
+                `);
+                return;
+            }
+
+            if (result.success) {
+                const version = result.data.version;
+                showResult('currentVersionResult', `
+                    <div class="result-item">
+                        <span class="status success">✅ Текущая версия получена</span>
+                        <h5>Версия: ${version.version}</h5>
+                        <p><strong>Описание:</strong> ${version.source_description}</p>
+                        <p><strong>Дата импорта:</strong> ${new Date(version.imported_at).toLocaleString('ru')}</p>
+                        <p><strong>Конфигураций:</strong> ${version.configurations_count}</p>
+                        <p><strong>Брендов:</strong> ${version.brands_count}</p>
+                        <p><strong>Моделей:</strong> ${version.models_count}</p>
+                        ${formatJson(version)}
+                    </div>
+                `);
+            } else {
+                showResult('currentVersionResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Ошибка</span>
+                        <p><strong>Ошибка:</strong> ${result.error}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            }
+        }
+
+        // Тест 3: Статистика
+        async function getStatistics() {
+            const result = await makeApiRequest('/admin/tire_data/statistics');
+
+            if (result.needAuth) {
+                showResult('statisticsResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Требуется авторизация</span>
+                        <p>Войдите как администратор для доступа к этой функции</p>
+                    </div>
+                `);
+                return;
+            }
+
+            if (result.success) {
+                const stats = result.data;
+                const totals = stats.totals || {};
+                const distributions = stats.distributions || {};
+
+                showResult('statisticsResult', `
+                    <div class="result-item">
+                        <span class="status success">✅ Статистика получена</span>
+                        <h5>Общая статистика</h5>
+                        <p><strong>Текущая версия:</strong> ${stats.current_version || 'Не определена'}</p>
+                        <p><strong>Последнее обновление:</strong> ${stats.last_updated ? new Date(stats.last_updated).toLocaleString('ru') : 'Неизвестно'}</p>
+                        
+                        <h5>Количественные показатели</h5>
+                        <p><strong>Конфигураций:</strong> ${totals.configurations || 0}</p>
+                        <p><strong>Брендов:</strong> ${totals.brands || 0}</p>
+                        <p><strong>Моделей:</strong> ${totals.models || 0}</p>
+                        <p><strong>Версий:</strong> ${totals.versions || 0}</p>
+                        
+                        <h5>Топ-5 брендов</h5>
+                        <ul>
+                            ${Object.entries(distributions.top_brands || {}).slice(0, 5).map(([brand, count]) => 
+                                `<li>${brand}: ${count} конфигураций</li>`
+                            ).join('')}
+                        </ul>
+                        
+                        ${formatJson(stats)}
+                    </div>
+                `);
+            } else {
+                showResult('statisticsResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Ошибка</span>
+                        <p><strong>Ошибка:</strong> ${result.error}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            }
+        }
+
+        // Тест 4: Обновление данных
+        async function updateData() {
+            const sourceDescription = document.getElementById('sourceDescription').value.trim();
+            const csvDirectory = document.getElementById('csvDirectory').value.trim();
+
+            if (!sourceDescription) {
+                showResult('updateResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Ошибка</span>
+                        <p>Введите описание источника данных</p>
+                    </div>
+                `);
+                return;
+            }
+
+            const body = { source_description: sourceDescription };
+            if (csvDirectory) {
+                body.csv_directory = csvDirectory;
+            }
+
+            showResult('updateResult', `
+                <div class="result-item">
+                    <span class="status warning">🔄 Обновление данных...</span>
+                    <div class="loading"></div>
+                    <p>Пожалуйста, подождите. Это может занять некоторое время.</p>
+                </div>
+            `);
+
+            const result = await makeApiRequest('/admin/tire_data/update', 'POST', body);
+
+            if (result.needAuth) {
+                showResult('updateResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Требуется авторизация</span>
+                        <p>Войдите как администратор для доступа к этой функции</p>
+                    </div>
+                `);
+                return;
+            }
+
+            if (result.success) {
+                showResult('updateResult', `
+                    <div class="result-item">
+                        <span class="status success">✅ Данные успешно обновлены</span>
+                        <p><strong>Новая версия:</strong> ${result.data.version}</p>
+                        <p><strong>Время обновления:</strong> ${new Date(result.data.imported_at).toLocaleString('ru')}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            } else {
+                showResult('updateResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Ошибка обновления</span>
+                        <p><strong>Ошибка:</strong> ${result.error}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            }
+        }
+
+        // Тест 5: Откат версии
+        async function rollbackVersion() {
+            const version = document.getElementById('rollbackVersion').value.trim();
+
+            if (!version) {
+                showResult('rollbackResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Ошибка</span>
+                        <p>Введите версию для отката</p>
+                    </div>
+                `);
+                return;
+            }
+
+            const result = await makeApiRequest(`/admin/tire_data/rollback?version=${encodeURIComponent(version)}`, 'DELETE');
+
+            if (result.needAuth) {
+                showResult('rollbackResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Требуется авторизация</span>
+                        <p>Войдите как администратор для доступа к этой функции</p>
+                    </div>
+                `);
+                return;
+            }
+
+            if (result.success) {
+                showResult('rollbackResult', `
+                    <div class="result-item">
+                        <span class="status success">✅ Откат выполнен успешно</span>
+                        <p><strong>Активная версия:</strong> ${result.data.version}</p>
+                        <p><strong>Время активации:</strong> ${new Date(result.data.activated_at).toLocaleString('ru')}</p>
+                        <p><strong>Активных конфигураций:</strong> ${result.data.configurations_count}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            } else {
+                showResult('rollbackResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Ошибка отката</span>
+                        <p><strong>Ошибка:</strong> ${result.error}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            }
+        }
+
+        // Тест 6: Очистка версий
+        async function cleanupVersions() {
+            const keepVersions = document.getElementById('keepVersions').value;
+
+            const result = await makeApiRequest('/admin/tire_data/cleanup', 'POST', { keep_versions: parseInt(keepVersions) });
+
+            if (result.needAuth) {
+                showResult('cleanupResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Требуется авторизация</span>
+                        <p>Войдите как администратор для доступа к этой функции</p>
+                    </div>
+                `);
+                return;
+            }
+
+            if (result.success) {
+                showResult('cleanupResult', `
+                    <div class="result-item">
+                        <span class="status success">✅ Очистка выполнена</span>
+                        <p><strong>Удалено версий:</strong> ${result.data.deleted_versions}</p>
+                        <p><strong>Осталось версий:</strong> ${result.data.remaining_versions}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            } else {
+                showResult('cleanupResult', `
+                    <div class="result-item">
+                        <span class="status error">❌ Ошибка очистки</span>
+                        <p><strong>Ошибка:</strong> ${result.error}</p>
+                        ${formatJson(result.data)}
+                    </div>
+                `);
+            }
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            if (authToken) {
+                updateAuthStatus('✅ Токен найден в localStorage. Проверьте авторизацию.');
+            } else {
+                updateAuthStatus('⚠️ Необходима авторизация администратора', false);
+            }
+            console.log('🏛️ Admin TireData API тест готов к работе!');
+        });
+    </script>
+</body>
+</html>

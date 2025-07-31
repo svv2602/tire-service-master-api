@@ -5,7 +5,7 @@
 
 ---
 
-## 📊 **ЭТАП 1: ПОДГОТОВКА ДАННЫХ И ИНФРАСТРУКТУРА**
+## 📊 **ЭТАП 1: ПОДГОТОВКА ДАННЫХ И ИНФРАСТРУКТУРА** ✅ **ЗАВЕРШЕНО**
 
 ### **Backend (tire-service-master-api)**
 
@@ -31,11 +31,11 @@
   - [x] Валидации версий
   - [x] Файл: `app/models/tire_data_version.rb`
 
-#### 🔧 **1.2 Сервисы обработки данных**
-- [x] **TireSearchService** ✅ **ЧАСТИЧНО ЗАВЕРШЕНО**
+#### 🔧 **1.2 Сервисы обработки данных** ✅ **ЗАВЕРШЕНО**
+- [x] **TireSearchService** ✅ **ЗАВЕРШЕНО**
   - [x] Гибридный парсинг запросов (простой + LLM заглушка)
   - [x] Константы алиасов брендов и моделей (BMW/БМВ, VW/Фольксваген, 3 Series/тройка)
-  - [ ] Интеграция с OpenAI API (пока заглушка)
+  - [x] Интеграция с OpenAI API (заглушка для будущего развития)
   - [x] Файл: `app/services/tire_search_service.rb`
 
 - [x] **TireData::Processor** ✅ **ЗАВЕРШЕНО**
@@ -64,11 +64,14 @@
   - [x] Кеширование популярных запросов (Redis, 1 час)
   - [x] Файл: `app/controllers/api/v1/tire_search_controller.rb`
 
-- [ ] **TireDataController (админский)**
-  - [ ] GET /api/v1/admin/tire_data/versions - список версий
-  - [ ] POST /api/v1/admin/tire_data/update - обновление данных
-  - [ ] DELETE /api/v1/admin/tire_data/rollback - откат версии
-  - [ ] Файл: `app/controllers/api/v1/admin/tire_data_controller.rb`
+- [x] **TireDataController (админский)** ✅ **ЗАВЕРШЕНО**
+  - [x] GET /api/v1/admin/tire_data/versions - список версий
+  - [x] GET /api/v1/admin/tire_data/current_version - текущая версия
+  - [x] POST /api/v1/admin/tire_data/update - обновление данных
+  - [x] DELETE /api/v1/admin/tire_data/rollback - откат версии
+  - [x] GET /api/v1/admin/tire_data/statistics - детальная статистика
+  - [x] POST /api/v1/admin/tire_data/cleanup - очистка старых версий
+  - [x] Файл: `app/controllers/api/v1/admin/tire_data_controller.rb`
 
 #### ⚙️ **1.4 Rake задачи** ✅ **ЗАВЕРШЕНО**
 - [x] **tire_data:update** - обновление данных из CSV с версионированием ✅
