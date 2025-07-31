@@ -593,16 +593,25 @@ Rails.application.routes.draw do
         end
       end
       
-      # Админские маршруты
-      namespace :admin do
-        # Управление данными поиска шин
-        get 'tire_data/versions', to: 'tire_data#versions'
-        get 'tire_data/current_version', to: 'tire_data#current_version'
-        post 'tire_data/update', to: 'tire_data#update'
-        delete 'tire_data/rollback', to: 'tire_data#rollback'
-        get 'tire_data/statistics', to: 'tire_data#statistics'
-        post 'tire_data/cleanup', to: 'tire_data#cleanup'
+          # Админские маршруты
+    namespace :admin do
+      # Управление данными поиска шин
+      get 'tire_data/versions', to: 'tire_data#versions'
+      get 'tire_data/current_version', to: 'tire_data#current_version'
+      post 'tire_data/update', to: 'tire_data#update'
+      delete 'tire_data/rollback', to: 'tire_data#rollback'
+      get 'tire_data/statistics', to: 'tire_data#statistics'
+      post 'tire_data/cleanup', to: 'tire_data#cleanup'
+      
+      # Системные настройки
+      resources :system_settings, param: :key, except: [:new, :edit] do
+        collection do
+          post :reset_defaults
+          get :categories
+          post :test_connection
+        end
       end
+    end
     end
   end
 end
