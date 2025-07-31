@@ -84,15 +84,15 @@
 - [x] **tire_data:search_stats** - статистика системы поиска ✅
 - [x] Файл: `lib/tasks/tire_data_management.rake`
 
-#### 📝 **1.5 Seeds файлы** ✅ **ЧАСТИЧНО ЗАВЕРШЕНО**
+#### 📝 **1.5 Seeds файлы** ✅ **ЗАВЕРШЕНО**
 - [x] **tire_configurations_test.rb** - тестовые конфигурации ✅  
   - [x] 6 конфигураций (BMW, Mercedes, Volkswagen)
   - [x] Штатные и опциональные размеры шин
   - [x] Поисковые алиасы на русском языке
-- [ ] **tire_brands_processed.rb** - обработанные бренды (из CSV)
-- [ ] **tire_models_processed.rb** - обработанные модели (из CSV)  
-- [ ] **tire_configurations_full.rb** - полные конфигурации (из CSV)
-- [ ] **tire_search_aliases.rb** - расширенные алиасы для поиска
+- [x] **tire_brands_processed.rb** - обработанные бренды (47 брендов с алиасами) ✅
+- [x] **tire_models_processed.rb** - обработанные модели (130+ моделей с алиасами) ✅  
+- [x] **tire_configurations_full.rb** - полные конфигурации (20+ популярных моделей) ✅
+- [x] **tire_search_aliases.rb** - расширенные алиасы для поиска ✅
 - [x] Папка: `db/seeds/` ✅
 
 ---
