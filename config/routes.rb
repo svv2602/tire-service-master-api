@@ -24,6 +24,15 @@ Rails.application.routes.draw do
       # Health check endpoint для Docker
       get '/health', to: 'health#index'
       
+      # Поиск шин
+      post 'tire_search', to: 'tire_search#search'
+      get 'tire_search/suggestions', to: 'tire_search#suggestions'
+      get 'tire_search/popular', to: 'tire_search#popular'
+      get 'tire_search/brands', to: 'tire_search#brands'
+      get 'tire_search/models', to: 'tire_search#models'
+      get 'tire_search/diameters', to: 'tire_search#diameters'
+      get 'tire_search/statistics', to: 'tire_search#statistics'
+      
       # Настройки системы
       get 'settings', to: 'settings#show'
       patch 'settings', to: 'settings#update'

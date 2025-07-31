@@ -5,6 +5,7 @@ class CarBrand < ApplicationRecord
   # Связи
   has_many :car_models, foreign_key: 'brand_id', dependent: :destroy
   has_many :client_cars, foreign_key: 'brand_id', dependent: :restrict_with_error
+  has_many :car_tire_configurations, foreign_key: 'brand_id', dependent: :destroy
   
   # Валидации
   validates :name, presence: true, uniqueness: true

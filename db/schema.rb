@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_30_105733) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_31_095113) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -221,6 +221,32 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_30_105733) do
     t.index ["brand_id", "name"], name: "index_car_models_on_brand_id_and_name", unique: true
     t.index ["brand_id"], name: "index_car_models_on_brand_id"
     t.index ["name_uk"], name: "index_car_models_on_name_uk"
+  end
+
+  create_table "car_tire_configurations", force: :cascade do |t|
+    t.bigint "brand_id", null: false
+    t.bigint "model_id", null: false
+    t.integer "year_from"
+    t.integer "year_to"
+    t.jsonb "tire_sizes"
+    t.jsonb "search_aliases"
+    t.text "search_tokens"
+    t.string "data_version", default: "2025.1"
+    t.string "source_file"
+    t.datetime "last_updated"
+    t.boolean "is_deprecated", default: false
+    t.boolean "is_active", default: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "to_tsvector('russian'::regconfig, search_tokens)", name: "index_car_tire_configurations_on_search_tokens_fulltext", using: :gin
+    t.index ["brand_id", "model_id"], name: "index_car_tire_configurations_on_brand_id_and_model_id"
+    t.index ["brand_id"], name: "index_car_tire_configurations_on_brand_id"
+    t.index ["data_version"], name: "index_car_tire_configurations_on_data_version"
+    t.index ["is_active"], name: "index_car_tire_configurations_on_is_active"
+    t.index ["is_deprecated"], name: "index_car_tire_configurations_on_is_deprecated"
+    t.index ["model_id"], name: "index_car_tire_configurations_on_model_id"
+    t.index ["search_aliases"], name: "index_car_tire_configurations_on_search_aliases", opclass: :jsonb_path_ops, using: :gin
+    t.index ["tire_sizes"], name: "index_car_tire_configurations_on_tire_sizes", opclass: :jsonb_path_ops, using: :gin
   end
 
   create_table "car_types", force: :cascade do |t|
@@ -1060,6 +1086,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_30_105733) do
     t.index ["user_id"], name: "index_telegram_subscriptions_on_user_id"
   end
 
+  create_table "tire_data_versions", force: :cascade do |t|
+    t.string "version", null: false
+    t.text "source_description"
+    t.jsonb "file_checksums"
+    t.jsonb "statistics"
+    t.datetime "imported_at"
+    t.boolean "is_active", default: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["imported_at"], name: "index_tire_data_versions_on_imported_at"
+    t.index ["is_active"], name: "index_tire_data_versions_on_is_active"
+    t.index ["version"], name: "index_tire_data_versions_on_version", unique: true
+  end
+
   create_table "tire_types", force: :cascade do |t|
     t.string "name", null: false
     t.text "description"
@@ -1147,6 +1187,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_30_105733) do
   add_foreign_key "bookings", "service_categories"
   add_foreign_key "bookings", "service_points"
   add_foreign_key "car_models", "car_brands", column: "brand_id"
+  add_foreign_key "car_tire_configurations", "car_brands", column: "brand_id"
+  add_foreign_key "car_tire_configurations", "car_models", column: "model_id"
   add_foreign_key "cars", "car_types"
   add_foreign_key "cars", "clients"
   add_foreign_key "cities", "regions"
