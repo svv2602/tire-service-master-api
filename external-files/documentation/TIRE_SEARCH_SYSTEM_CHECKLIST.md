@@ -9,52 +9,60 @@
 
 ### **Backend (tire-service-master-api)**
 
-#### 🗄️ **1.1 Создание новых таблиц и моделей**
-- [ ] **Миграция: car_tire_configurations** 
-  - [ ] Поля: brand_id, model_id, year_from, year_to, tire_sizes (JSON), search_aliases (JSON), search_tokens (TEXT)
-  - [ ] Индексы: GIN на tire_sizes и search_tokens, составной на brand_id+model_id
-  - [ ] Файл: `db/migrate/xxx_create_car_tire_configurations.rb`
+#### 🗄️ **1.1 Создание новых таблиц и моделей** ✅ **ЗАВЕРШЕНО**
+- [x] **Миграция: car_tire_configurations** ✅
+  - [x] Поля: brand_id, model_id, year_from, year_to, tire_sizes (JSONB), search_aliases (JSONB), search_tokens (TEXT)
+  - [x] Индексы: GIN на tire_sizes и search_tokens, составной на brand_id+model_id
+  - [x] Файл: `db/migrate/20250731095048_create_car_tire_configurations.rb`
 
-- [ ] **Миграция: tire_data_versions**
-  - [ ] Поля: version, source_description, file_checksums (JSON), statistics (JSON), imported_at, is_active
-  - [ ] Уникальный индекс на version
-  - [ ] Файл: `db/migrate/xxx_create_tire_data_versions.rb`
+- [x] **Миграция: tire_data_versions** ✅
+  - [x] Поля: version, source_description, file_checksums (JSONB), statistics (JSONB), imported_at, is_active
+  - [x] Уникальный индекс на version
+  - [x] Файл: `db/migrate/20250731095113_create_tire_data_versions.rb`
 
-- [ ] **Модель: CarTireConfiguration**
-  - [ ] Связи с CarBrand и CarModel
-  - [ ] Скоупы: search_by_query, with_diameter, for_year
-  - [ ] Валидации и методы поиска
-  - [ ] Файл: `app/models/car_tire_configuration.rb`
+- [x] **Модель: CarTireConfiguration** ✅
+  - [x] Связи с CarBrand и CarModel
+  - [x] Скоупы: search_by_query, with_diameter, for_year, for_brand, for_model, by_relevance
+  - [x] Валидации и методы поиска (search_with_filters, update_search_tokens!)
+  - [x] Файл: `app/models/car_tire_configuration.rb`
 
-- [ ] **Модель: TireDataVersion**
-  - [ ] Методы версионирования и статистики
-  - [ ] Валидации версий
-  - [ ] Файл: `app/models/tire_data_version.rb`
+- [x] **Модель: TireDataVersion** ✅
+  - [x] Методы версионирования и статистики (activate!, rollback_to_version!, cleanup_old_versions!)
+  - [x] Валидации версий
+  - [x] Файл: `app/models/tire_data_version.rb`
 
 #### 🔧 **1.2 Сервисы обработки данных**
-- [ ] **TireSearchService**
-  - [ ] Гибридный парсинг запросов (простой + LLM)
-  - [ ] Константы алиасов брендов и моделей
-  - [ ] Интеграция с OpenAI API
-  - [ ] Файл: `app/services/tire_search_service.rb`
+- [x] **TireSearchService** ✅ **ЧАСТИЧНО ЗАВЕРШЕНО**
+  - [x] Гибридный парсинг запросов (простой + LLM заглушка)
+  - [x] Константы алиасов брендов и моделей (BMW/БМВ, VW/Фольксваген, 3 Series/тройка)
+  - [ ] Интеграция с OpenAI API (пока заглушка)
+  - [x] Файл: `app/services/tire_search_service.rb`
 
-- [ ] **TireData::Processor**
-  - [ ] Обработка CSV файлов
-  - [ ] Инкрементальное обновление
-  - [ ] Версионирование данных
-  - [ ] Файл: `lib/tire_data/processor.rb`
+- [x] **TireData::Processor** ✅ **ЗАВЕРШЕНО**
+  - [x] Обработка CSV файлов с валидацией и очисткой данных
+  - [x] Инкрементальное обновление по чексуммам файлов
+  - [x] Версионирование данных с резервным копированием
+  - [x] Агрегация по диапазонам лет и объединение размеров шин
+  - [x] Файл: `lib/tire_data/processor.rb`
 
-- [ ] **TireData::Migrator**
-  - [ ] Конвертация CSV в агрегированные данные
-  - [ ] Создание алиасов и токенов поиска
-  - [ ] Файл: `lib/tire_data/migrator.rb`
+- [x] **TireData::Migrator** ✅ **ЗАВЕРШЕНО**
+  - [x] Конвертация CSV в агрегированные данные
+  - [x] Создание алиасов и токенов поиска
+  - [x] Генерация seed файлов (brands, models, configurations, aliases)
+  - [x] Поддержка образцов данных для тестирования
+  - [x] Файл: `lib/tire_data/migrator.rb`
 
-#### 🌐 **1.3 API контроллеры**
-- [ ] **TireSearchController**
-  - [ ] POST /api/v1/tire_search - основной поиск
-  - [ ] GET /api/v1/tire_search/suggestions - автодополнение
-  - [ ] Кеширование популярных запросов
-  - [ ] Файл: `app/controllers/api/v1/tire_search_controller.rb`
+#### 🌐 **1.3 API контроллеры** ✅ **ЗАВЕРШЕНО**
+- [x] **TireSearchController** ✅
+  - [x] POST /api/v1/tire_search - основной поиск
+  - [x] GET /api/v1/tire_search/suggestions - автодополнение
+  - [x] GET /api/v1/tire_search/popular - популярные запросы
+  - [x] GET /api/v1/tire_search/brands - список брендов
+  - [x] GET /api/v1/tire_search/models - модели авто
+  - [x] GET /api/v1/tire_search/diameters - доступные диаметры
+  - [x] GET /api/v1/tire_search/statistics - статистика (админы)
+  - [x] Кеширование популярных запросов (Redis, 1 час)
+  - [x] Файл: `app/controllers/api/v1/tire_search_controller.rb`
 
 - [ ] **TireDataController (админский)**
   - [ ] GET /api/v1/admin/tire_data/versions - список версий
@@ -62,20 +70,27 @@
   - [ ] DELETE /api/v1/admin/tire_data/rollback - откат версии
   - [ ] Файл: `app/controllers/api/v1/admin/tire_data_controller.rb`
 
-#### ⚙️ **1.4 Rake задачи**
-- [ ] **tire_data:update** - обновление данных из CSV
-- [ ] **tire_data:rollback** - откат к предыдущей версии
-- [ ] **tire_data:versions** - просмотр версий
-- [ ] **tire_data:cleanup** - очистка старых данных
-- [ ] **tire_data:generate_seeds** - генерация seeds файлов
-- [ ] Файл: `lib/tasks/tire_data_management.rake`
+#### ⚙️ **1.4 Rake задачи** ✅ **ЗАВЕРШЕНО**
+- [x] **tire_data:update** - обновление данных из CSV с версионированием ✅
+- [x] **tire_data:migrate** - миграция CSV в seed файлы ✅
+- [x] **tire_data:rollback** - откат к предыдущей версии ✅
+- [x] **tire_data:versions** - просмотр версий с детальной статистикой ✅
+- [x] **tire_data:cleanup** - очистка старых данных ✅
+- [x] **tire_data:generate_seeds** - генерация seeds из текущих данных ✅
+- [x] **tire_data:validate** - проверка целостности данных ✅
+- [x] **tire_data:search_stats** - статистика системы поиска ✅
+- [x] Файл: `lib/tasks/tire_data_management.rake`
 
-#### 📝 **1.5 Seeds файлы**
-- [ ] **tire_brands_processed.rb** - обработанные бренды
-- [ ] **tire_models_processed.rb** - обработанные модели  
-- [ ] **tire_configurations_base.rb** - базовые конфигурации
-- [ ] **tire_search_aliases.rb** - алиасы для поиска
-- [ ] Папка: `db/seeds/`
+#### 📝 **1.5 Seeds файлы** ✅ **ЧАСТИЧНО ЗАВЕРШЕНО**
+- [x] **tire_configurations_test.rb** - тестовые конфигурации ✅  
+  - [x] 6 конфигураций (BMW, Mercedes, Volkswagen)
+  - [x] Штатные и опциональные размеры шин
+  - [x] Поисковые алиасы на русском языке
+- [ ] **tire_brands_processed.rb** - обработанные бренды (из CSV)
+- [ ] **tire_models_processed.rb** - обработанные модели (из CSV)  
+- [ ] **tire_configurations_full.rb** - полные конфигурации (из CSV)
+- [ ] **tire_search_aliases.rb** - расширенные алиасы для поиска
+- [x] Папка: `db/seeds/` ✅
 
 ---
 
