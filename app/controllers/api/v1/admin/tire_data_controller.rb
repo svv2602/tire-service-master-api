@@ -55,6 +55,11 @@ module Api
         def import
           csv_path = params[:csv_path]
           version = params[:version] || "auto_#{Time.current.strftime('%Y%m%d_%H%M%S')}"
+          options = {
+            skip_invalid_rows: params[:skip_invalid_rows] == 'true',
+            fix_suspicious_sizes: params[:fix_suspicious_sizes] == 'true',
+            encoding_fallback: params[:encoding_fallback] || 'utf-8'
+          }
           
           unless csv_path.present?
             return render json: { status: 'error', message: 'Не указан путь к CSV файлам' }, status: :bad_request
@@ -65,7 +70,7 @@ module Api
           end
 
           begin
-            processor = TireData::Processor.new(csv_path, version)
+            processor = TireData::Processor.new(csv_path, version, options)
             result = processor.process_and_update
 
             if result[:success]
@@ -74,13 +79,16 @@ module Api
                 message: 'Данные успешно импортированы',
                 data: {
                   version: result[:version],
-                  statistics: result[:statistics]
+                  statistics: result[:statistics],
+                  warnings: result[:warnings] || [],
+                  skipped_rows: result[:skipped_rows] || 0
                 }
               }, status: :ok
             else
               render json: { 
                 status: 'error', 
-                message: result[:message] 
+                message: result[:message],
+                details: result[:details] || {}
               }, status: :unprocessable_entity
             end
           rescue => e

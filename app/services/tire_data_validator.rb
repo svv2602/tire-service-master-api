@@ -136,10 +136,19 @@ class TireDataValidator
 
     rescue CSV::MalformedCSVError => e
       result[:valid] = false
-      result[:errors] << "Ошибка формата CSV в файле #{filename}: #{e.message}"
+      line_number = extract_line_number_from_csv_error(e.message)
+      if line_number
+        result[:errors] << "Ошибка формата CSV в файле #{filename}: Некорректные данные в строке #{line_number}. Возможно, незакрытые кавычки или лишние символы."
+        result[:auto_fixable] = true
+        result[:fix_suggestion] = "Можно пропустить поврежденные строки при импорте"
+      else
+        result[:errors] << "Ошибка формата CSV в файле #{filename}: #{translate_csv_error(e.message)}"
+      end
     rescue Encoding::UndefinedConversionError => e
       result[:valid] = false
-      result[:errors] << "Ошибка кодировки в файле #{filename}: #{e.message}"
+      result[:errors] << "Ошибка кодировки в файле #{filename}: Файл содержит символы, которые не могут быть преобразованы в UTF-8"
+      result[:auto_fixable] = true
+      result[:fix_suggestion] = "Можно попробовать другую кодировку или пропустить проблемные символы"
     rescue => e
       result[:valid] = false
       result[:errors] << "Неожиданная ошибка при обработке файла #{filename}: #{e.message}"
@@ -215,17 +224,45 @@ class TireDataValidator
 
     when 'test_table_car2_kit_tyre_size.csv'
       # Проверка размеров шин
-      invalid_sizes = csv_data.select do |row|
-        width = row['width'].to_i
-        height = row['height'].to_i
-        diameter = row['diameter'].to_i
+      problem_types = {
+        zero_height: [],
+        american_sizes: [],
+        extreme_values: []
+      }
+      
+      csv_data.each_with_index do |row, idx|
+        width = row['width'].to_f
+        height = row['height'].to_f
+        diameter = row['diameter'].to_f
         
-        width < 100 || width > 400 || 
-        height < 25 || height > 100 || 
-        diameter < 10 || diameter > 30
+        # Нулевая высота профиля
+        if height == 0.0
+          problem_types[:zero_height] << idx + 2
+        end
+        
+        # Американские дюймовые размеры
+        if width < 100 && width > 6 && height > 0
+          problem_types[:american_sizes] << idx + 2
+        end
+        
+        # Экстремальные значения
+        if width < 6 || width > 400 || height > 100 || diameter < 10 || diameter > 30
+          problem_types[:extreme_values] << idx + 2
+        end
       end
       
-      result[:warnings] << "Подозрительные размеры шин: #{invalid_sizes.count} записей" if invalid_sizes.any?
+      total_problems = problem_types.values.flatten.uniq.count
+      
+      if total_problems > 0
+        warning_parts = []
+        warning_parts << "#{problem_types[:zero_height].count} записей с нулевой высотой (будет заменена на 80)" if problem_types[:zero_height].any?
+        warning_parts << "#{problem_types[:american_sizes].count} американских дюймовых размеров (сохранятся как есть)" if problem_types[:american_sizes].any?
+        warning_parts << "#{problem_types[:extreme_values].count} записей с экстремальными значениями" if problem_types[:extreme_values].any?
+        
+        result[:warnings] << "Найдены проблемы в размерах шин: #{warning_parts.join(', ')}"
+        result[:auto_fixable] = true
+        result[:fix_suggestion] = "Автоисправление: нулевая высота → 80%, американские размеры сохраняются, экстремальные значения нормализуются"
+      end
       result[:statistics][:tire_sizes] = {
         unique_combinations: csv_data.map { |row| "#{row['width']}/#{row['height']}R#{row['diameter']}" }.uniq.count,
         width_range: [csv_data.map { |row| row['width'].to_i }.min, csv_data.map { |row| row['width'].to_i }.max],
@@ -254,5 +291,71 @@ class TireDataValidator
     end
     
     result
+  end
+
+  # Извлечение номера строки из ошибки CSV
+  def extract_line_number_from_csv_error(error_message)
+    # Ищем паттерны типа "line 3310" или "строка 3310"
+    match = error_message.match(/line (\d+)/i) || error_message.match(/строка (\d+)/i)
+    match ? match[1].to_i : nil
+  end
+
+  # Перевод ошибок CSV на русский язык
+  def translate_csv_error(error_message)
+    translations = {
+      'Any value after quoted field isn\'t allowed' => 'Недопустимые символы после закрытия кавычек',
+      'Unclosed quoted field' => 'Незакрытое поле в кавычках',
+      'Illegal quoting' => 'Неправильное использование кавычек',
+      'Invalid byte sequence' => 'Недопустимая последовательность байтов'
+    }
+    
+    translations.each do |english, russian|
+      return russian if error_message.include?(english)
+    end
+    
+    error_message # Возвращаем оригинал, если перевод не найден
+  end
+
+  # Автоисправление размеров шин
+  def auto_fix_tire_size(width, height, diameter)
+    fixed_width = width.to_f
+    fixed_height = height.to_f
+    fixed_diameter = diameter.to_f
+    
+    # 1. Исправление нулевой высоты профиля
+    # Если высота 0, то подставляем 80 (стандартная высота)
+    if fixed_height == 0.0
+      fixed_height = 80.0  # 165/80R13, 175/80R14, и т.д.
+    end
+    
+    # 2. Обработка американских дюймовых размеров
+    # Размеры типа 28.0/9.0R15.0 - это американские дюймовые размеры
+    # Оставляем как есть, только убираем лишние нули
+    if fixed_width < 100 && fixed_width > 6
+      # Это дюймовые размеры - не конвертируем, просто нормализуем
+      # 28.0/9.0R15.0 → 28/9R15
+      # Ничего не меняем, это валидные американские размеры
+    elsif fixed_width < 6
+      # Слишком маленькая ширина даже для дюймовых размеров
+      fixed_width = 165.0  # минимальная метрическая ширина
+    elsif fixed_width > 400
+      fixed_width = 315.0  # максимальная стандартная ширина
+    end
+    
+    # 3. Исправление диаметра
+    if fixed_diameter < 10
+      fixed_diameter = 13.0  # минимальный стандартный диаметр
+    elsif fixed_diameter > 30
+      fixed_diameter = 22.0  # максимальный стандартный диаметр
+    end
+    
+    # 4. Исправление экстремальной высоты профиля
+    if fixed_height > 100
+      fixed_height = 80.0  # стандартная высота
+    elsif fixed_height < 25 && fixed_height > 0
+      fixed_height = 35.0  # минимальная стандартная высота
+    end
+    
+    [fixed_width, fixed_height, fixed_diameter]
   end
 end
