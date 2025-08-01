@@ -53,12 +53,15 @@ module Api
 
         # POST /api/v1/admin/tire_data/import
         def import
-          csv_path = params[:csv_path]
-          version = params[:version] || "auto_#{Time.current.strftime('%Y%m%d_%H%M%S')}"
+          # Читаем данные из JSON тела запроса
+          request_body = JSON.parse(request.body.read) rescue {}
+          
+          csv_path = request_body['csv_path'] || params[:csv_path]
+          version = request_body['version'] || params[:version] || "auto_#{Time.current.strftime('%Y%m%d_%H%M%S')}"
           options = {
-            skip_invalid_rows: params[:skip_invalid_rows] == 'true',
-            fix_suspicious_sizes: params[:fix_suspicious_sizes] == 'true',
-            encoding_fallback: params[:encoding_fallback] || 'utf-8'
+            skip_invalid_rows: request_body['skip_invalid_rows'] || (params[:skip_invalid_rows] == 'true'),
+            fix_suspicious_sizes: request_body['fix_suspicious_sizes'] || (params[:fix_suspicious_sizes] == 'true'),
+            encoding_fallback: request_body['encoding_fallback'] || params[:encoding_fallback] || 'utf-8'
           }
           
           unless csv_path.present?

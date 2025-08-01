@@ -115,7 +115,10 @@ module TireData
     
     # Получение списка CSV файлов
     def csv_files
-      @csv_files ||= Dir.glob(File.join(@csv_directory, '*.csv')).sort
+      @csv_files ||= Dir.glob(File.join(@csv_directory, '*.csv')).sort.reject do |file|
+        # Исключаем файл с размерами дисков - не нужен для размеров шин
+        File.basename(file).include?('kit_disk_size')
+      end
     end
     
     # Создание резервной копии текущих данных
@@ -142,22 +145,33 @@ module TireData
         tire_sizes: {}
       }
       
-      csv_files.each do |file_path|
-        filename = File.basename(file_path)
-        Rails.logger.info "📄 Обрабатываем файл: #{filename}"
-        
-        case filename
-        when /brand/i
-          process_brands_file(file_path)
-        when /model/i
-          process_models_file(file_path)
-        when /kit(?!.*tyre)/i # kit, но не kit_tyre
-          process_kits_file(file_path)
-        when /kit.*tyre|tyre.*size/i
-          process_tire_sizes_file(file_path)
-        else
-          Rails.logger.warn "⚠️ Неизвестный тип файла: #{filename}"
-        end
+      # Обрабатываем файлы в правильном порядке зависимостей
+      # 1. Сначала бренды
+      brand_files = csv_files.select { |f| File.basename(f) =~ /brand/i }
+      brand_files.each do |file_path|
+        Rails.logger.info "📄 Обрабатываем файл: #{File.basename(file_path)}"
+        process_brands_file(file_path)
+      end
+      
+      # 2. Затем модели (зависят от брендов)
+      model_files = csv_files.select { |f| File.basename(f) =~ /model/i }
+      model_files.each do |file_path|
+        Rails.logger.info "📄 Обрабатываем файл: #{File.basename(file_path)}"
+        process_models_file(file_path)
+      end
+      
+      # 3. Затем комплектации (зависят от моделей)
+      kit_files = csv_files.select { |f| File.basename(f) =~ /kit(?!.*tyre)/i }
+      kit_files.each do |file_path|
+        Rails.logger.info "📄 Обрабатываем файл: #{File.basename(file_path)}"
+        process_kits_file(file_path)
+      end
+      
+      # 4. Наконец размеры шин (зависят от комплектаций)
+      tire_size_files = csv_files.select { |f| File.basename(f) =~ /kit.*tyre|tyre.*size/i }
+      tire_size_files.each do |file_path|
+        Rails.logger.info "📄 Обрабатываем файл: #{File.basename(file_path)}"
+        process_tire_sizes_file(file_path)
       end
       
       validate_raw_data
@@ -189,7 +203,7 @@ module TireData
       count = 0
       safe_csv_foreach(file_path) do |row|
         model_id = row['id']&.to_i
-        brand_id = row['brand_id']&.to_i
+        brand_id = row['brand']&.to_i  # Исправлено: в CSV колонка называется 'brand', а не 'brand_id'
         model_name = row['name']&.strip
         
         next if model_id.nil? || brand_id.nil? || model_name.blank?
@@ -205,7 +219,7 @@ module TireData
       end
       
       @statistics[:models_processed] = count
-      Rails.logger.info "✅ Обработано моделей: #{count}"
+      Rails.logger.info "✅ Обработано моделей: #{count} (всего брендов: #{@raw_data[:brands].size})"
     end
     
     # Обработка файла комплектаций
@@ -213,7 +227,7 @@ module TireData
       count = 0
       safe_csv_foreach(file_path) do |row|
         kit_id = row['id']&.to_i
-        model_id = row['model_id']&.to_i
+        model_id = row['model']&.to_i  # Исправлено: в CSV колонка называется 'model', а не 'model_id'
         year = row['year']&.to_i
         kit_name = row['name']&.strip
         
@@ -230,7 +244,7 @@ module TireData
       end
       
       @statistics[:kits_processed] = count
-      Rails.logger.info "✅ Обработано комплектаций: #{count}"
+      Rails.logger.info "✅ Обработано комплектаций: #{count} (всего моделей: #{@raw_data[:models].size})"
     end
     
     # Обработка файла размеров шин
@@ -238,10 +252,10 @@ module TireData
       count = 0
       safe_csv_foreach(file_path) do |row|
         tire_id = row['id']&.to_i
-        kit_id = row['kit_id']&.to_i
-        width = row['width']&.to_i
-        height = row['height']&.to_i
-        diameter = row['diameter']&.to_i
+        kit_id = row['kit']&.to_i  # Исправлено: в CSV колонка называется 'kit', а не 'kit_id'
+        width = row['width']&.to_f&.to_i  # Конвертируем float в int
+        height = row['height']&.to_f&.to_i  # Конвертируем float в int  
+        diameter = row['diameter']&.to_f&.to_i  # Конвертируем float в int
         type = row['type']&.strip&.downcase || 'stock'
         axle = row['axle']&.strip&.downcase
         
@@ -264,7 +278,7 @@ module TireData
       end
       
       @statistics[:tire_sizes_processed] = count
-      Rails.logger.info "✅ Обработано размеров шин: #{count}"
+      Rails.logger.info "✅ Обработано размеров шин: #{count} (всего комплектаций: #{@raw_data[:kits].size})"
     end
     
     # Валидация обработанных данных
@@ -561,23 +575,89 @@ module TireData
     end
 
     # Безопасное чтение CSV с обработкой ошибок
-    def safe_csv_foreach(file_path, &block)
+        def safe_csv_foreach(file_path, &block)
       line_number = 0
-      
-      safe_csv_foreach(file_path) do |row|
-        line_number += 1
-        yield row
+
+      # Пробуем различные варианты парсинга CSV
+      csv_options = [
+        { headers: true, encoding: 'UTF-8' },
+        { headers: true, encoding: 'UTF-8', liberal_parsing: true },
+        { headers: true, encoding: 'UTF-8', quote_char: '"', liberal_parsing: true },
+        { headers: true, encoding: 'Windows-1251' },
+        { headers: true, encoding: 'Windows-1251', liberal_parsing: true }
+      ]
+
+      csv_options.each_with_index do |options, attempt|
+        begin
+          Rails.logger.info "🔄 Попытка #{attempt + 1}/#{csv_options.length} для #{File.basename(file_path)} с опциями: #{options.inspect}"
+          line_number = 0
+          processed_rows = 0
+          
+          CSV.foreach(file_path, **options) do |row|
+            line_number += 1
+            processed_rows += 1
+            yield row
+          end
+          
+          Rails.logger.info "✅ Успешно обработано #{processed_rows} строк из #{File.basename(file_path)}"
+          return # Успешно обработали файл
+          
+        rescue CSV::MalformedCSVError => e
+          Rails.logger.warn "⚠️ Попытка #{attempt + 1} не удалась для #{File.basename(file_path)}: #{e.message}"
+          
+          if attempt < csv_options.length - 1
+            next # Пробуем следующий вариант
+          end
+          
+          # Последняя попытка не удалась
+          if @options[:skip_invalid_rows]
+            Rails.logger.warn "⚠️ Все попытки стандартного парсинга не удались. Используем построчное чтение для #{File.basename(file_path)}"
+            retry_csv_reading(file_path, 1, &block)
+            return
+          else
+            Rails.logger.error "❌ Все попытки парсинга не удались: #{e.message}"
+            raise e
+          end
+          
+        rescue ArgumentError => e
+          Rails.logger.warn "⚠️ Ошибка кодировки в попытке #{attempt + 1}: #{e.message}"
+          
+          if attempt < csv_options.length - 1
+            next
+          end
+          
+          # Последняя попытка с кодировкой не удалась
+          if @options[:skip_invalid_rows]
+            Rails.logger.warn "⚠️ Ошибки кодировки. Используем построчное чтение для #{File.basename(file_path)}"
+            retry_csv_reading(file_path, 1, &block)
+            return
+          else
+            raise e
+          end
+          
+        rescue => e
+          Rails.logger.error "❌ Неожиданная ошибка в попытке #{attempt + 1}: #{e.class.name}: #{e.message}"
+          
+          if attempt < csv_options.length - 1
+            next
+          end
+          
+          # Последняя попытка - используем построчное чтение если включено
+          if @options[:skip_invalid_rows]
+            Rails.logger.warn "⚠️ Неожиданная ошибка. Используем построчное чтение для #{File.basename(file_path)}"
+            retry_csv_reading(file_path, 1, &block)
+            return
+          else
+            raise e
+          end
+        end
       end
       
-    rescue CSV::MalformedCSVError => e
+      # Если мы дошли до этой точки, значит все попытки не удались, но исключений не было
+      Rails.logger.warn "⚠️ Все попытки парсинга завершились без результата для #{File.basename(file_path)}"
       if @options[:skip_invalid_rows]
-        Rails.logger.warn "⚠️ Пропущена поврежденная строка в #{File.basename(file_path)}: #{e.message}"
-        @skipped_rows += 1
-        
-        # Пытаемся продолжить чтение с следующей строки
-        retry_csv_reading(file_path, line_number + 1, &block)
-      else
-        raise e
+        Rails.logger.warn "⚠️ Используем построчное чтение как последнюю попытку для #{File.basename(file_path)}"
+        retry_csv_reading(file_path, 1, &block)
       end
     end
 
@@ -585,29 +665,60 @@ module TireData
     def retry_csv_reading(file_path, start_line, &block)
       current_line = 0
       headers = nil
+      successful_rows = 0
       
       File.foreach(file_path, encoding: 'UTF-8') do |line|
         current_line += 1
         
         if current_line == 1
-          headers = CSV.parse_line(line)
+          begin
+            headers = CSV.parse_line(line, liberal_parsing: true)
+          rescue CSV::MalformedCSVError
+            headers = line.strip.split(',').map { |h| h.gsub(/["']/, '') }
+          end
           next
         end
         
-        next if current_line <= start_line
+        next if current_line < start_line
         
         begin
-          parsed_line = CSV.parse_line(line)
-          next if parsed_line.nil?
+          # Пробуем несколько способов парсинга строки
+          parsed_line = nil
           
-          row = CSV::Row.new(headers, parsed_line)
-          yield row
-        rescue CSV::MalformedCSVError => e
+          [
+            { liberal_parsing: true },
+            { liberal_parsing: true, quote_char: '"' },
+            { liberal_parsing: true, quote_char: "'" }
+          ].each do |options|
+            begin
+              parsed_line = CSV.parse_line(line.strip, **options)
+              break if parsed_line
+            rescue CSV::MalformedCSVError
+              next
+            end
+          end
+          
+          # Если обычный парсинг не сработал, пробуем простое разделение
+          if !parsed_line
+            parsed_line = line.strip.split(',').map { |cell| cell.gsub(/^["']|["']$/, '') }
+          end
+          
+          if parsed_line && headers && parsed_line.length >= headers.length
+            row = CSV::Row.new(headers, parsed_line[0...headers.length])
+            yield row
+            successful_rows += 1
+          else
+            Rails.logger.warn "⚠️ Пропущена строка #{current_line}: неверное количество колонок"
+            @skipped_rows += 1
+          end
+        rescue => e
           Rails.logger.warn "⚠️ Пропущена строка #{current_line}: #{e.message}"
           @skipped_rows += 1
           next
         end
       end
+      
+      Rails.logger.info "✅ Построчное чтение завершено: обработано #{successful_rows} строк, пропущено #{@skipped_rows}"
     end
   end
 end
