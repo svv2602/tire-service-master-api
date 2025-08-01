@@ -57,7 +57,8 @@ module Api
           request_body = JSON.parse(request.body.read) rescue {}
           
           csv_path = request_body['csv_path'] || params[:csv_path]
-          version = request_body['version'] || params[:version] || "auto_#{Time.current.strftime('%Y%m%d_%H%M%S')}"
+          # Генерируем версию в формате YYYY.N если не указана
+          version = request_body['version'] || params[:version] || generate_auto_version
           # Проверяем force_reload в продакшене
           force_reload = request_body['force_reload'] || (params[:force_reload] == 'true')
           if force_reload && Rails.env.production?
@@ -281,6 +282,28 @@ module Api
             Rails.logger.error "Ошибка очистки моделей: #{e.message}"
             render json: { status: 'error', message: e.message }, status: :internal_server_error
           end
+        end
+
+        private
+
+        # Генерирует автоматическую версию в формате YYYY.N
+        def generate_auto_version
+          current_year = Time.current.year
+          
+          # Находим последнюю версию для текущего года
+          last_version = TireDataVersion.where("version LIKE ?", "#{current_year}.%")
+                                       .order(:version)
+                                       .last
+          
+          if last_version
+            # Извлекаем номер версии и увеличиваем на 1
+            version_number = last_version.version.split('.').last.to_i + 1
+          else
+            # Первая версия для года
+            version_number = 1
+          end
+          
+          "#{current_year}.#{version_number}"
         end
       end
     end

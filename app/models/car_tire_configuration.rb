@@ -174,9 +174,11 @@ class CarTireConfiguration < ApplicationRecord
       errors.add(:year_to, 'должен быть больше или равен году начала')
     end
     
-    if year_to - year_from > 50
-      errors.add(:year_to, 'диапазон лет не может превышать 50 лет')
-    end
+    # Отключаем валидацию диапазона для импорта данных
+    # (исторические данные могут иметь большие диапазоны)
+    # if year_to - year_from > 100
+    #   errors.add(:year_to, 'диапазон лет не может превышать 100 лет')
+    # end
   end
   
   def tire_sizes_format
