@@ -70,8 +70,7 @@ module Api
           end
 
           begin
-            processor = TireData::Processor.new(csv_path, version)
-            # TODO: Передать опции в процессор когда будет реализована поддержка
+            processor = TireData::Processor.new(csv_path, version, options)
             result = processor.process_and_update
 
             if result[:success]

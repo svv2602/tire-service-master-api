@@ -5,12 +5,14 @@ module TireData
   class Processor
     attr_reader :csv_directory, :version, :statistics, :file_checksums
     
-    def initialize(csv_directory, version = nil)
+    def initialize(csv_directory, version = nil, options = {})
       @csv_directory = csv_directory
       @version = version || generate_version
+      @options = options || {}
       @statistics = {}
       @file_checksums = {}
       @errors = []
+      @skipped_rows = 0
     end
     
     # Основной метод обработки и обновления данных
@@ -50,6 +52,8 @@ module TireData
           success: true,
           version: @version,
           statistics: @statistics,
+          skipped_rows: @skipped_rows,
+          warnings: @skipped_rows > 0 ? ["Пропущено поврежденных строк: #{@skipped_rows}"] : [],
           message: "Данные успешно обновлены до версии #{@version}"
         }
         
@@ -162,7 +166,7 @@ module TireData
     # Обработка файла брендов
     def process_brands_file(file_path)
       count = 0
-      CSV.foreach(file_path, headers: true, encoding: 'UTF-8') do |row|
+      safe_csv_foreach(file_path) do |row|
         brand_id = row['id']&.to_i
         brand_name = row['name']&.strip
         
@@ -183,7 +187,7 @@ module TireData
     # Обработка файла моделей
     def process_models_file(file_path)
       count = 0
-      CSV.foreach(file_path, headers: true, encoding: 'UTF-8') do |row|
+      safe_csv_foreach(file_path) do |row|
         model_id = row['id']&.to_i
         brand_id = row['brand_id']&.to_i
         model_name = row['name']&.strip
@@ -207,7 +211,7 @@ module TireData
     # Обработка файла комплектаций
     def process_kits_file(file_path)
       count = 0
-      CSV.foreach(file_path, headers: true, encoding: 'UTF-8') do |row|
+      safe_csv_foreach(file_path) do |row|
         kit_id = row['id']&.to_i
         model_id = row['model_id']&.to_i
         year = row['year']&.to_i
@@ -232,7 +236,7 @@ module TireData
     # Обработка файла размеров шин
     def process_tire_sizes_file(file_path)
       count = 0
-      CSV.foreach(file_path, headers: true, encoding: 'UTF-8') do |row|
+      safe_csv_foreach(file_path) do |row|
         tire_id = row['id']&.to_i
         kit_id = row['kit_id']&.to_i
         width = row['width']&.to_i
@@ -554,6 +558,56 @@ module TireData
       ].compact.join(' ')
       
       tokens.gsub(/[^\w\s]/i, ' ').squeeze(' ').strip
+    end
+
+    # Безопасное чтение CSV с обработкой ошибок
+    def safe_csv_foreach(file_path, &block)
+      line_number = 0
+      
+      safe_csv_foreach(file_path) do |row|
+        line_number += 1
+        yield row
+      end
+      
+    rescue CSV::MalformedCSVError => e
+      if @options[:skip_invalid_rows]
+        Rails.logger.warn "⚠️ Пропущена поврежденная строка в #{File.basename(file_path)}: #{e.message}"
+        @skipped_rows += 1
+        
+        # Пытаемся продолжить чтение с следующей строки
+        retry_csv_reading(file_path, line_number + 1, &block)
+      else
+        raise e
+      end
+    end
+
+    # Попытка продолжить чтение CSV с определенной строки
+    def retry_csv_reading(file_path, start_line, &block)
+      current_line = 0
+      headers = nil
+      
+      File.foreach(file_path, encoding: 'UTF-8') do |line|
+        current_line += 1
+        
+        if current_line == 1
+          headers = CSV.parse_line(line)
+          next
+        end
+        
+        next if current_line <= start_line
+        
+        begin
+          parsed_line = CSV.parse_line(line)
+          next if parsed_line.nil?
+          
+          row = CSV::Row.new(headers, parsed_line)
+          yield row
+        rescue CSV::MalformedCSVError => e
+          Rails.logger.warn "⚠️ Пропущена строка #{current_line}: #{e.message}"
+          @skipped_rows += 1
+          next
+        end
+      end
     end
   end
 end
