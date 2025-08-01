@@ -22,7 +22,19 @@ module TireData
       # Проверяем окружение
       return skip_in_test_environment if Rails.env.test?
       
-      # Проверяем существование папки
+      # Если только очистка - выполняем её без проверок папок
+      if @options[:clear_only] && (@options[:force_reload] || @options[:clear_all])
+        Rails.logger.info "🗑️ Выполняется только очистка данных"
+        clear_all_data
+        return {
+          success: true,
+          version: @version,
+          statistics: @statistics,
+          message: "Данные успешно очищены"
+        }
+      end
+      
+      # Проверяем существование папки (только если не clear_only)
       unless Dir.exist?(@csv_directory)
         raise "Папка с CSV файлами не найдена: #{@csv_directory}"
       end
@@ -34,6 +46,11 @@ module TireData
       backup_current_data
       
       begin
+        # Полная очистка данных если требуется (но не clear_only - уже обработано выше)
+        if (@options[:force_reload] || @options[:clear_all]) && !@options[:clear_only]
+          clear_all_data
+        end
+        
         # Обрабатываем CSV файлы
         process_csv_files
         
@@ -770,6 +787,153 @@ module TireData
       end
       
       [fixed_width.to_i, fixed_height.to_i, fixed_diameter.to_i]
+    end
+
+    # Безопасная очистка данных шин (без удаления используемых брендов/моделей)
+    def clear_all_data
+      # Проверяем окружение - запрещаем в продакшене
+      if Rails.env.production?
+        raise "🚨 ОПАСНОСТЬ: Полная очистка данных запрещена в продакшене! Используйте обычное обновление."
+      end
+      
+      Rails.logger.info "🗑️ БЕЗОПАСНАЯ ОЧИСТКА ДАННЫХ ШИН"
+      Rails.logger.info "⚠️  Сохраняем бренды и модели, используемые в бронированиях"
+      
+      # Находим используемые бренды и модели
+      used_data = find_used_brands_and_models
+      
+      # Считаем что удаляем
+      stats_before = {
+        configurations: CarTireConfiguration.count,
+        models: CarModel.count,
+        brands: CarBrand.count,
+        versions: TireDataVersion.count,
+        used_brands: used_data[:used_brands].size,
+        used_models: used_data[:used_models].size
+      }
+      
+      Rails.logger.info "📊 Данные перед очисткой: #{stats_before}"
+      
+      # Удаляем только безопасные данные
+      safe_clear_data(used_data)
+      
+      # НЕ сбрасываем последовательности если есть используемые данные
+      if used_data[:used_brands].empty? && used_data[:used_models].empty?
+        reset_sequences
+        Rails.logger.info "🔄 Последовательности сброшены (нет используемых данных)"
+      else
+        Rails.logger.info "⚠️  Последовательности НЕ сброшены (есть используемые данные)"
+      end
+      
+      @statistics[:cleared_data] = stats_before
+      @statistics[:preserved_data] = used_data.transform_values(&:size)
+      Rails.logger.info "✅ Безопасная очистка завершена"
+    end
+    
+    # Находим используемые бренды и модели
+    def find_used_brands_and_models
+      used_brands = Set.new
+      used_models = Set.new
+      
+      Rails.logger.info "🔍 Поиск используемых брендов и моделей..."
+      
+      # Проверяем таблицы с потенциальными связями
+      tables_to_check = [
+        { table: 'bookings', brand_field: 'car_brand', model_field: 'car_model' },
+        { table: 'client_cars', brand_field: 'brand_id', model_field: 'model_id' },
+        { table: 'car_tire_configurations', brand_field: 'brand_id', model_field: 'model_id' }
+      ]
+      
+      tables_to_check.each do |config|
+        if ActiveRecord::Base.connection.table_exists?(config[:table])
+          # Получаем используемые бренды
+          if config[:brand_field] && ActiveRecord::Base.connection.column_exists?(config[:table], config[:brand_field])
+            brand_ids = ActiveRecord::Base.connection.execute(
+              "SELECT DISTINCT #{config[:brand_field]} FROM #{config[:table]} WHERE #{config[:brand_field]} IS NOT NULL"
+            ).map { |row| row[config[:brand_field]] }.compact
+            used_brands.merge(brand_ids)
+            Rails.logger.info "  📋 #{config[:table]}: найдено #{brand_ids.size} используемых брендов"
+          end
+          
+          # Получаем используемые модели
+          if config[:model_field] && ActiveRecord::Base.connection.column_exists?(config[:table], config[:model_field])
+            model_ids = ActiveRecord::Base.connection.execute(
+              "SELECT DISTINCT #{config[:model_field]} FROM #{config[:table]} WHERE #{config[:model_field]} IS NOT NULL"
+            ).map { |row| row[config[:model_field]] }.compact
+            used_models.merge(model_ids)
+            Rails.logger.info "  📋 #{config[:table]}: найдено #{model_ids.size} используемых моделей"
+          end
+        end
+      end
+      
+      Rails.logger.info "🎯 ИТОГО используется: #{used_brands.size} брендов, #{used_models.size} моделей"
+      
+      {
+        used_brands: used_brands.to_a,
+        used_models: used_models.to_a
+      }
+    end
+    
+    # Безопасное удаление данных
+    def safe_clear_data(used_data)
+      Rails.logger.info "🗑️ Удаляем безопасные данные..."
+      
+      # 1. Удаляем все конфигурации шин (они не критичны)
+      Rails.logger.info "  Удаляем конфигурации шин..."
+      CarTireConfiguration.delete_all
+      
+      # 2. Удаляем версии данных (они не критичны)
+      Rails.logger.info "  Удаляем версии данных..."
+      TireDataVersion.delete_all
+      
+      # 3. Удаляем только неиспользуемые модели
+      if used_data[:used_models].any?
+        unused_models = CarModel.where.not(id: used_data[:used_models])
+        unused_count = unused_models.count
+        unused_models.delete_all
+        Rails.logger.info "  Удалено неиспользуемых моделей: #{unused_count}"
+        Rails.logger.info "  Сохранено используемых моделей: #{used_data[:used_models].size}"
+      else
+        CarModel.delete_all
+        Rails.logger.info "  Удалены все модели (нет используемых)"
+      end
+      
+      # 4. Удаляем только неиспользуемые бренды
+      if used_data[:used_brands].any?
+        unused_brands = CarBrand.where.not(id: used_data[:used_brands])
+        unused_count = unused_brands.count
+        unused_brands.delete_all
+        Rails.logger.info "  Удалено неиспользуемых брендов: #{unused_count}"
+        Rails.logger.info "  Сохранено используемых брендов: #{used_data[:used_brands].size}"
+      else
+        CarBrand.delete_all
+        Rails.logger.info "  Удалены все бренды (нет используемых)"
+      end
+    end
+    
+    # Сброс последовательностей PostgreSQL
+    def reset_sequences
+      return unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"
+      
+      Rails.logger.info "🔄 Сброс последовательностей PostgreSQL..."
+      
+      sequences = %w[
+        car_brands_id_seq
+        car_models_id_seq  
+        car_tire_configurations_id_seq
+        tire_data_versions_id_seq
+      ]
+      
+      sequences.each do |sequence_name|
+        begin
+          ActiveRecord::Base.connection.execute("ALTER SEQUENCE #{sequence_name} RESTART WITH 1;")
+          Rails.logger.info "  ✅ Сброшена последовательность #{sequence_name}"
+        rescue => e
+          Rails.logger.warn "  ⚠️  Не удалось сбросить последовательность #{sequence_name}: #{e.message}"
+        end
+      end
+      
+      @statistics[:sequences_reset] = sequences.size
     end
 
     # Автоматическая очистка моделей с названиями брендов

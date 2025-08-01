@@ -436,6 +436,97 @@ namespace :tire_data do
     puts "📊 Средний диапазон лет на конфигурацию: #{year_ranges.map { |from, to| to - from + 1 }.sum.to_f / year_ranges.size}"
   end
 
+  desc "Безопасная очистка и перезагрузка данных (НЕ для продакшена)"
+  task :clear_and_reload, [:csv_path, :version] => :environment do |t, args|
+    # Проверяем окружение
+    if Rails.env.production?
+      puts "🚨 ОПАСНОСТЬ: Эта задача запрещена в продакшене!"
+      puts "💡 Используйте обычное обновление: rails tire_data:update[path,version]"
+      exit 1
+    end
+    
+    csv_path = args[:csv_path] || ENV['CSV_PATH']
+    version = args[:version] || ENV['DATA_VERSION']
+    
+    unless csv_path
+      puts "❌ Не указан путь к CSV файлам"
+      puts "Использование: rails tire_data:clear_and_reload[/path/to/csv/files,2025.2]"
+      exit 1
+    end
+    
+    unless Dir.exist?(csv_path)
+      puts "❌ Папка не найдена: #{csv_path}"
+      exit 1
+    end
+    
+    puts "🔄 БЕЗОПАСНАЯ ОЧИСТКА И ПЕРЕЗАГРУЗКА ДАННЫХ"
+    puts "⚠️  Сохраняются бренды и модели, используемые в бронированиях"
+    puts "🚫 Запрещено в продакшене для безопасности данных"
+    puts "📁 Источник: #{csv_path}"
+    puts "📋 Версия: #{version || 'автоматическая'}"
+    puts ""
+    
+    # Показываем что будет сохранено
+    puts "🔍 Проверяем используемые данные..."
+    used_bookings = 0
+    used_client_cars = 0
+    
+    begin
+      used_bookings = ActiveRecord::Base.connection.execute("SELECT COUNT(*) FROM bookings WHERE car_brand IS NOT NULL OR car_model IS NOT NULL").first['count'].to_i if ActiveRecord::Base.connection.table_exists?('bookings')
+      used_client_cars = ActiveRecord::Base.connection.execute("SELECT COUNT(*) FROM client_cars WHERE brand_id IS NOT NULL OR model_id IS NOT NULL").first['count'].to_i if ActiveRecord::Base.connection.table_exists?('client_cars')
+    rescue => e
+      puts "⚠️  Не удалось проверить используемые данные: #{e.message}"
+    end
+    
+    puts "📊 Найдено записей с автомобилями:"
+    puts "   Бронирования: #{used_bookings}"
+    puts "   Автомобили клиентов: #{used_client_cars}"
+    puts ""
+    
+    if used_bookings > 0 || used_client_cars > 0
+      puts "⚠️  ВНИМАНИЕ: Некоторые бренды и модели будут сохранены!"
+      puts "💡 Для полной очистки используйте тестовую базу данных"
+      puts ""
+    end
+    
+    begin
+      # Создаем процессор с опцией force_reload
+      processor = TireData::Processor.new(csv_path, version, { 
+        force_reload: true,
+        skip_invalid_rows: true,
+        fix_suspicious_sizes: true
+      })
+      result = processor.process_and_update
+      
+      if result[:success]
+        puts ""
+        puts "✅ Безопасная перезагрузка завершена успешно!"
+        puts "📊 Статистика:"
+        result[:statistics].each do |key, value|
+          puts "   #{key}: #{value}"
+        end
+        puts ""
+        puts "🎯 Версия данных: #{result[:version]}"
+        
+        if result[:statistics][:preserved_data]
+          puts ""
+          puts "🛡️  Сохранено используемых данных:"
+          result[:statistics][:preserved_data].each do |key, value|
+            puts "   #{key}: #{value}"
+          end
+        end
+      else
+        puts "❌ Перезагрузка не выполнена: #{result[:message]}"
+        exit 1
+      end
+      
+    rescue => e
+      puts "❌ Ошибка при перезагрузке данных:"
+      puts "   #{e.message}"
+      exit 1
+    end
+  end
+
   desc "Очистить модели с названиями брендов"
   task :clean_brand_name_models, [:force] => :environment do |t, args|
     force_mode = args[:force] == 'true' || args[:force] == 'force'

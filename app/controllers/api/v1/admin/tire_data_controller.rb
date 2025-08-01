@@ -58,17 +58,31 @@ module Api
           
           csv_path = request_body['csv_path'] || params[:csv_path]
           version = request_body['version'] || params[:version] || "auto_#{Time.current.strftime('%Y%m%d_%H%M%S')}"
+          # Проверяем force_reload в продакшене
+          force_reload = request_body['force_reload'] || (params[:force_reload] == 'true')
+          if force_reload && Rails.env.production?
+            return render json: { 
+              status: 'error', 
+              message: '🚨 ОПАСНОСТЬ: Полная очистка данных запрещена в продакшене! Используйте обычное обновление без force_reload.',
+              code: 'force_reload_forbidden_in_production'
+            }, status: :forbidden
+          end
+          
           options = {
             skip_invalid_rows: request_body['skip_invalid_rows'] || (params[:skip_invalid_rows] == 'true'),
             fix_suspicious_sizes: request_body['fix_suspicious_sizes'] || (params[:fix_suspicious_sizes] == 'true'),
-            encoding_fallback: request_body['encoding_fallback'] || params[:encoding_fallback] || 'utf-8'
+            encoding_fallback: request_body['encoding_fallback'] || params[:encoding_fallback] || 'utf-8',
+            force_reload: force_reload,
+            clear_only: request_body['clear_only'] || (params[:clear_only] == 'true')
           }
           
-          unless csv_path.present?
+          # Для clear_only путь к CSV не обязателен
+          unless csv_path.present? || options[:clear_only]
             return render json: { status: 'error', message: 'Не указан путь к CSV файлам' }, status: :bad_request
           end
 
-          unless Dir.exist?(csv_path)
+          # Проверяем существование папки только если не только очистка
+          unless options[:clear_only] || Dir.exist?(csv_path)
             return render json: { status: 'error', message: "Папка не найдена: #{csv_path}" }, status: :bad_request
           end
 
