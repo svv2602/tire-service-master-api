@@ -23,14 +23,24 @@ module Api
         # Пагинация
         page = [params[:page].to_i, 1].max  # Минимум 1
         per_page = [params[:per_page].to_i, 25].max  # Минимум 25
+        per_page = [per_page, 100].min  # Максимум 100
         offset = (page - 1) * per_page
         
         total_count = @car_brands.count
+        total_pages = (total_count.to_f / per_page).ceil
         @car_brands = @car_brands.offset(offset).limit(per_page)
         
         render json: {
           car_brands: @car_brands.map { |brand| brand_json(brand) },
-          total_items: total_count
+          total_items: total_count,
+          pagination: {
+            current_page: page,
+            per_page: per_page,
+            total_pages: total_pages,
+            total_count: total_count,
+            has_next_page: page < total_pages,
+            has_prev_page: page > 1
+          }
         }
       end
       
