@@ -92,6 +92,44 @@ class TireSearchService
       ['civic', 'цивик'] => 'Civic',
       ['accord', 'аккорд'] => 'Accord',
       ['cr-v', 'crv', 'цр-в'] => 'CR-V'
+    },
+    'Renault' => {
+      ['logan', 'логан'] => 'Logan',
+      ['duster', 'дастер'] => 'Duster',
+      ['sandero', 'сандеро'] => 'Sandero',
+      ['megane', 'меган'] => 'Megane',
+      ['fluence', 'флюенс'] => 'Fluence',
+      ['kaptur', 'каптур'] => 'Kaptur',
+      ['koleos', 'колеос'] => 'Koleos'
+    },
+    'Audi' => {
+      ['a3', 'а3'] => 'A3',
+      ['a4', 'а4'] => 'A4',
+      ['a6', 'а6'] => 'A6',
+      ['q3', 'ку3'] => 'Q3',
+      ['q5', 'ку5'] => 'Q5',
+      ['q7', 'ку7'] => 'Q7'
+    },
+    'Ford' => {
+      ['focus', 'фокус'] => 'Focus',
+      ['mondeo', 'мондео'] => 'Mondeo',
+      ['fiesta', 'фиеста'] => 'Fiesta',
+      ['kuga', 'куга'] => 'Kuga',
+      ['explorer', 'эксплорер'] => 'Explorer'
+    },
+    'Hyundai' => {
+      ['solaris', 'солярис'] => 'Solaris',
+      ['elantra', 'элантра'] => 'Elantra',
+      ['tucson', 'туксон'] => 'Tucson',
+      ['santa fe', 'санта фе'] => 'Santa Fe',
+      ['creta', 'крета'] => 'Creta'
+    },
+    'Kia' => {
+      ['rio', 'рио'] => 'Rio',
+      ['cerato', 'церато'] => 'Cerato',
+      ['sportage', 'спортейдж'] => 'Sportage',
+      ['sorento', 'соренто'] => 'Sorento',
+      ['picanto', 'пиканто'] => 'Picanto'
     }
   }.freeze
 
@@ -221,8 +259,13 @@ class TireSearchService
   end
 
   def process_insufficient_data_scenario
+    # Проверяем, есть ли пользователь ввел что-то, что не распознано
+    unrecognized_input = detect_unrecognized_input
+    
     # Персонализируем сообщение в зависимости от того, что уже найдено
-    message = if @parsed_data[:brand].present? && @parsed_data[:model].blank?
+    message = if unrecognized_input
+      "К сожалению, в нашей базе нет данных о #{unrecognized_input}. Попробуйте выбрать из предложенных вариантов или введите размер шин напрямую (например: 205/55R16)."
+    elsif @parsed_data[:brand].present? && @parsed_data[:model].blank?
       "Отлично! #{@parsed_data[:brand]} - хороший выбор. Уточните модель для точного подбора шин:"
     elsif @parsed_data[:tire_brands].present? || @parsed_data[:seasonality].present?
       "Мы поняли ваши предпочтения. Добавьте информацию об автомобиле для подбора шин:"
@@ -239,9 +282,10 @@ class TireSearchService
       car_info: {},
       query: @query,
       parsed_data: @parsed_data,
-      suggestions: generate_suggestions,
+      suggestions: unrecognized_input ? generate_alternative_suggestions : generate_suggestions,
       conversation_mode: true, # Флаг для фронтенда - показать режим уточнения
-      follow_up_questions: generate_follow_up_questions
+      follow_up_questions: unrecognized_input ? generate_alternative_questions : generate_follow_up_questions,
+      warnings: unrecognized_input ? ["Автомобиль не найден в базе данных"] : nil
     }
   end
 
@@ -667,6 +711,54 @@ class TireSearchService
     end
 
     questions.take(2) # Не более 2 вопросов за раз
+  end
+
+  def detect_unrecognized_input
+    query_words = @query.downcase.split(/\s+/)
+    
+    # Проверяем, есть ли слова, которые выглядят как автомобильные термины, но не распознаны
+    car_related_words = query_words.select do |word|
+      # Слова длиннее 3 символов, не являющиеся числами или общими словами
+      word.length > 3 && 
+      !word.match?(/^\d+$/) && 
+      !%w[шины авто автомобиль машина для на зимние летние всесезонные].include?(word)
+    end
+    
+    # Если есть нераспознанные слова и ничего не найдено
+    if car_related_words.any? && @parsed_data.values.compact.empty?
+      car_related_words.first
+    else
+      nil
+    end
+  end
+
+  def generate_alternative_suggestions
+    [
+      "BMW 3 Series",
+      "Volkswagen Tiguan", 
+      "Mercedes C-Class",
+      "Toyota Camry",
+      "Renault Logan",
+      "Введите размер шин (например: 205/55R16)",
+      "Попробуйте другой автомобиль"
+    ]
+  end
+
+  def generate_alternative_questions
+    [
+      {
+        type: "size_input",
+        question: "Введите размер шин напрямую:",
+        field: "tire_size",
+        context: { example: "205/55R16" }
+      },
+      {
+        type: "brand_selection",
+        question: "Или выберите марку из популярных:",
+        field: "brand",
+        context: {}
+      }
+    ]
   end
 
   # Класс для статистики поиска
