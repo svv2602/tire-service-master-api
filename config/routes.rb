@@ -611,6 +611,15 @@ Rails.application.routes.draw do
           post :test_connection
         end
       end
+
+      # Управление данными шин
+      scope :tire_data do
+        get :status, to: 'tire_data#status'
+        post :validate_files, to: 'tire_data#validate_files'
+        post :import, to: 'tire_data#import'
+        delete 'version/:version', to: 'tire_data#delete_version'
+        post 'rollback/:version', to: 'tire_data#rollback'
+      end
     end
     end
   end
