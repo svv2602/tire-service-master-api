@@ -435,4 +435,123 @@ namespace :tire_data do
     puts "📅 Охват по годам: #{min_year} - #{max_year}"
     puts "📊 Средний диапазон лет на конфигурацию: #{year_ranges.map { |from, to| to - from + 1 }.sum.to_f / year_ranges.size}"
   end
+
+  desc "Очистить модели с названиями брендов"
+  task :clean_brand_name_models, [:force] => :environment do |t, args|
+    force_mode = args[:force] == 'true' || args[:force] == 'force'
+    
+    puts "🧹 ОЧИСТКА МОДЕЛЕЙ С НАЗВАНИЯМИ БРЕНДОВ"
+    puts "🔧 Режим: #{force_mode ? 'ПРИНУДИТЕЛЬНЫЙ (удаляем все)' : 'БЕЗОПАСНЫЙ (только явно проблемные)'}"
+    puts ""
+    
+    # Получаем все названия брендов
+    brand_names = CarBrand.pluck(:name).map(&:strip).uniq
+    puts "📋 Всего брендов: #{brand_names.count}"
+    
+    # Находим модели, которые совпадают с названиями брендов
+    problematic_models = CarModel.joins(:brand).where(name: brand_names)
+    puts "🔍 Найдено проблемных моделей: #{problematic_models.count}"
+    
+    if problematic_models.count == 0
+      puts "✅ Проблемных моделей не найдено!"
+      return
+    end
+    
+    # Показываем детали
+    puts "\n📋 АНАЛИЗ ПРОБЛЕМНЫХ МОДЕЛЕЙ:"
+    grouped = problematic_models.includes(:brand).group_by(&:brand)
+    
+    confirmed_problematic = []
+    potentially_valid = []
+    
+    grouped.each do |brand, models|
+      models.each do |model|
+        # Проверяем, является ли название модели явно проблемным
+        if is_clearly_problematic_model?(brand.name, model.name, brand_names)
+          confirmed_problematic << model
+          puts "  ❌ #{brand.name} -> #{model.name} (УДАЛИТЬ - это бренд)"
+        else
+          potentially_valid << model
+          puts "  ⚠️  #{brand.name} -> #{model.name} (ПРОВЕРИТЬ - может быть реальной моделью)"
+        end
+      end
+    end
+    
+    puts "\n🎯 СТАТИСТИКА:"
+    puts "  Явно проблемных: #{confirmed_problematic.count}"
+    puts "  Требуют проверки: #{potentially_valid.count}"
+    
+    # Удаляем явно проблемные модели
+    if confirmed_problematic.any?
+      puts "\n🗑️  Удаляем явно проблемные модели..."
+      confirmed_problematic.each do |model|
+        puts "    Удаляем: #{model.brand.name} -> #{model.name}"
+        model.destroy
+      end
+      puts "✅ Удалено #{confirmed_problematic.count} явно проблемных моделей"
+    end
+    
+    # Обрабатываем спорные модели
+    if potentially_valid.any?
+      if force_mode
+        puts "\n🔥 ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ спорных моделей..."
+        potentially_valid.each do |model|
+          puts "    Удаляем: #{model.brand.name} -> #{model.name}"
+          model.destroy
+        end
+        puts "✅ Удалено #{potentially_valid.count} спорных моделей"
+      else
+        puts "\n⚠️  ТРЕБУЮТ РУЧНОЙ ПРОВЕРКИ:"
+        potentially_valid.each do |model|
+          puts "    #{model.brand.name} -> #{model.name}"
+        end
+        puts "\n💡 Для удаления спорных моделей используйте:"
+        puts "   rails tire_data:clean_brand_name_models[force]"
+      end
+    end
+    
+    total_removed = confirmed_problematic.count + (force_mode ? potentially_valid.count : 0)
+    puts "\n🎉 ИТОГО УДАЛЕНО: #{total_removed} моделей"
+  end
+
+  # Вспомогательная функция для определения явно проблемных моделей
+  def is_clearly_problematic_model?(brand_name, model_name, all_brand_names)
+    # Список явно проблемных случаев (дочерние бренды как модели родительских)
+    problematic_cases = {
+      'Mitsubishi' => ['Jeep'],
+      'Nissan' => ['Datsun', 'Infiniti'], 
+      'Hyundai' => ['Genesis', 'Kia'],
+      'Jiangling' => ['Landwind'],
+      'Toyota' => ['Lexus', 'Scion'],
+      'Volkswagen' => ['Audi', 'Bentley', 'Bugatti', 'Lamborghini', 'Porsche', 'Seat', 'Skoda'],
+      'General Motors' => ['Buick', 'Cadillac', 'Chevrolet', 'GMC', 'Opel', 'Vauxhall'],
+      'Ford' => ['Lincoln', 'Mercury'],
+      'Chrysler' => ['Dodge', 'Jeep', 'Ram'],
+      'BMW' => ['MINI', 'Rolls-Royce'],
+      'Tata' => ['Jaguar', 'Land Rover'],
+      'Geely' => ['Volvo', 'Lotus', 'Polestar']
+    }
+    
+    # Проверяем явные случаи дочерних брендов
+    if problematic_cases[brand_name]&.include?(model_name)
+      return true
+    end
+    
+    # Проверяем, если название модели точно совпадает с названием бренда
+    # и это не тот же бренд (например, Ford Focus vs Ford как модель Ford)
+    if all_brand_names.include?(model_name) && brand_name != model_name
+      # Исключения - модели, которые могут совпадать с брендами но являются реальными моделями
+      valid_coincidences = [
+        'Jetta',      # Реальная модель Volkswagen, хотя есть и бренд Jetta
+        'ZX',         # Реальная модель Citroen и MG
+        'Tank',       # Может быть реальной моделью Toyota
+        'Victory',    # Может быть реальной моделью
+        'Emgrand',    # Реальная модель Geely
+        'Gratour'     # Может быть реальной моделью Foton
+      ]
+      return !valid_coincidences.include?(model_name)
+    end
+    
+    false
+  end
 end

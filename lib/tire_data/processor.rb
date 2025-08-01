@@ -40,6 +40,9 @@ module TireData
         # Создаем агрегированные данные
         create_aggregated_configurations
         
+        # Автоматическая очистка проблемных моделей
+        clean_brand_name_models
+        
         # Сохраняем информацию о версии
         save_version_info
         
@@ -261,6 +264,11 @@ module TireData
         
         next if tire_id.nil? || kit_id.nil? || width.nil? || height.nil? || diameter.nil?
         next unless @raw_data[:kits][kit_id] # Пропускаем размеры без комплектации
+        
+        # Применяем автоматическое исправление размеров если включено
+        if @options[:fix_suspicious_sizes]
+          width, height, diameter = auto_fix_tire_size(width, height, diameter)
+        end
         
         # Нормализуем тип
         normalized_type = normalize_tire_type(type)
@@ -719,6 +727,114 @@ module TireData
       end
       
       Rails.logger.info "✅ Построчное чтение завершено: обработано #{successful_rows} строк, пропущено #{@skipped_rows}"
+    end
+
+    # Автоисправление размеров шин
+    def auto_fix_tire_size(width, height, diameter)
+      fixed_width = width.to_f
+      fixed_height = height.to_f
+      fixed_diameter = diameter.to_f
+      
+      # 1. Исправление нулевой высоты профиля
+      # Если высота 0, то подставляем 80 (стандартная высота)
+      if fixed_height == 0.0
+        fixed_height = 80.0  # 165/80R13, 175/80R14, и т.д.
+      end
+      
+      # 2. Обработка американских дюймовых размеров
+      # Размеры типа 28.0/9.0R15.0 - это американские дюймовые размеры
+      # Оставляем как есть, только убираем лишние нули
+      if fixed_width < 100 && fixed_width > 6
+        # Это дюймовые размеры - не конвертируем, просто нормализуем
+        # 28.0/9.0R15.0 → 28/9R15
+        # Ничего не меняем, это валидные американские размеры
+      elsif fixed_width < 6
+        # Слишком маленькая ширина даже для дюймовых размеров
+        fixed_width = 165.0  # минимальная метрическая ширина
+      elsif fixed_width > 400
+        fixed_width = 315.0  # максимальная стандартная ширина
+      end
+      
+      # 3. Исправление диаметра
+      if fixed_diameter < 10
+        fixed_diameter = 13.0  # минимальный стандартный диаметр
+      elsif fixed_diameter > 30
+        fixed_diameter = 22.0  # максимальный стандартный диаметр
+      end
+      
+      # 4. Исправление экстремальной высоты профиля
+      if fixed_height > 100
+        fixed_height = 80.0  # стандартная высота
+      elsif fixed_height < 25 && fixed_height > 0
+        fixed_height = 35.0  # минимальная стандартная высота
+      end
+      
+      [fixed_width.to_i, fixed_height.to_i, fixed_diameter.to_i]
+    end
+
+    # Автоматическая очистка моделей с названиями брендов
+    def clean_brand_name_models
+      Rails.logger.info "🧹 Автоматическая очистка проблемных моделей..."
+      
+      # Получаем все названия брендов
+      brand_names = CarBrand.pluck(:name).map(&:strip).uniq
+      
+      # Находим модели, которые совпадают с названиями брендов
+      problematic_models = CarModel.joins(:brand).where(name: brand_names)
+      
+      return if problematic_models.count == 0
+      
+      Rails.logger.info "🔍 Найдено #{problematic_models.count} проблемных моделей"
+      
+      # Список явно проблемных случаев (дочерние бренды как модели родительских)
+      problematic_cases = {
+        'Mitsubishi' => ['Jeep'],
+        'Nissan' => ['Datsun', 'Infiniti'], 
+        'Hyundai' => ['Genesis', 'Kia'],
+        'Jiangling' => ['Landwind'],
+        'Toyota' => ['Lexus', 'Scion'],
+        'Volkswagen' => ['Audi', 'Bentley', 'Bugatti', 'Lamborghini', 'Porsche', 'Seat', 'Skoda'],
+        'General Motors' => ['Buick', 'Cadillac', 'Chevrolet', 'GMC', 'Opel', 'Vauxhall'],
+        'Ford' => ['Lincoln', 'Mercury'],
+        'Chrysler' => ['Dodge', 'Jeep', 'Ram'],
+        'BMW' => ['MINI', 'Rolls-Royce'],
+        'Tata' => ['Jaguar', 'Land Rover'],
+        'Geely' => ['Volvo', 'Lotus', 'Polestar']
+      }
+      
+      # Исключения - модели, которые могут совпадать с брендами но являются реальными моделями
+      valid_coincidences = ['Jetta', 'ZX', 'Tank', 'Victory', 'Emgrand', 'Gratour']
+      
+      removed_count = 0
+      
+      problematic_models.includes(:brand).each do |model|
+        brand_name = model.brand.name
+        model_name = model.name
+        
+        # Проверяем, является ли модель явно проблемной
+        is_problematic = false
+        
+        # Проверяем явные случаи дочерних брендов
+        if problematic_cases[brand_name]&.include?(model_name)
+          is_problematic = true
+        # Проверяем совпадения с названиями брендов (исключая валидные)
+        elsif brand_names.include?(model_name) && brand_name != model_name && !valid_coincidences.include?(model_name)
+          is_problematic = true
+        end
+        
+        if is_problematic
+          Rails.logger.info "    Удаляем: #{brand_name} -> #{model_name}"
+          model.destroy
+          removed_count += 1
+        end
+      end
+      
+      if removed_count > 0
+        Rails.logger.info "✅ Удалено #{removed_count} проблемных моделей"
+        @statistics[:cleaned_models] = removed_count
+      else
+        Rails.logger.info "✅ Проблемных моделей не найдено"
+      end
     end
   end
 end

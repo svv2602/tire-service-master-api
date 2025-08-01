@@ -169,6 +169,105 @@ module Api
             render json: { status: 'error', message: e.message }, status: :internal_server_error
           end
         end
+
+        # POST /api/v1/admin/tire_data/clean_models
+        def clean_models
+          force_mode = params[:force] == 'true' || params[:force] == true
+          
+          begin
+            # Получаем все названия брендов
+            brand_names = CarBrand.pluck(:name).map(&:strip).uniq
+            
+            # Находим модели, которые совпадают с названиями брендов
+            problematic_models = CarModel.joins(:brand).where(name: brand_names)
+            
+            if problematic_models.count == 0
+              return render json: { 
+                status: 'success', 
+                message: 'Проблемных моделей не найдено',
+                data: { removed_count: 0, total_problematic: 0 }
+              }, status: :ok
+            end
+            
+            # Список явно проблемных случаев
+            problematic_cases = {
+              'Mitsubishi' => ['Jeep'],
+              'Nissan' => ['Datsun', 'Infiniti'], 
+              'Hyundai' => ['Genesis', 'Kia'],
+              'Jiangling' => ['Landwind'],
+              'Toyota' => ['Lexus', 'Scion'],
+              'Volkswagen' => ['Audi', 'Bentley', 'Bugatti', 'Lamborghini', 'Porsche', 'Seat', 'Skoda'],
+              'General Motors' => ['Buick', 'Cadillac', 'Chevrolet', 'GMC', 'Opel', 'Vauxhall'],
+              'Ford' => ['Lincoln', 'Mercury'],
+              'Chrysler' => ['Dodge', 'Jeep', 'Ram'],
+              'BMW' => ['MINI', 'Rolls-Royce'],
+              'Tata' => ['Jaguar', 'Land Rover'],
+              'Geely' => ['Volvo', 'Lotus', 'Polestar']
+            }
+            
+            valid_coincidences = ['Jetta', 'ZX', 'Tank', 'Victory', 'Emgrand', 'Gratour']
+            
+            confirmed_problematic = []
+            potentially_valid = []
+            
+            problematic_models.includes(:brand).each do |model|
+              brand_name = model.brand.name
+              model_name = model.name
+              
+              is_clearly_problematic = false
+              
+              # Проверяем явные случаи
+              if problematic_cases[brand_name]&.include?(model_name)
+                is_clearly_problematic = true
+              elsif brand_names.include?(model_name) && brand_name != model_name && !valid_coincidences.include?(model_name)
+                is_clearly_problematic = true
+              end
+              
+              if is_clearly_problematic
+                confirmed_problematic << model
+              else
+                potentially_valid << model
+              end
+            end
+            
+            removed_count = 0
+            removed_models = []
+            
+            # Удаляем явно проблемные
+            confirmed_problematic.each do |model|
+              removed_models << { brand: model.brand.name, model: model.name, reason: 'явно проблемная' }
+              model.destroy
+              removed_count += 1
+            end
+            
+            # Удаляем спорные в принудительном режиме
+            if force_mode
+              potentially_valid.each do |model|
+                removed_models << { brand: model.brand.name, model: model.name, reason: 'спорная (принудительно)' }
+                model.destroy
+                removed_count += 1
+              end
+            end
+            
+            render json: {
+              status: 'success',
+              message: "Очистка завершена. Удалено #{removed_count} моделей",
+              data: {
+                removed_count: removed_count,
+                total_problematic: problematic_models.count,
+                confirmed_problematic: confirmed_problematic.count,
+                potentially_valid: potentially_valid.count,
+                force_mode: force_mode,
+                removed_models: removed_models,
+                remaining_suspicious: force_mode ? [] : potentially_valid.map { |m| { brand: m.brand.name, model: m.name } }
+              }
+            }, status: :ok
+            
+          rescue => e
+            Rails.logger.error "Ошибка очистки моделей: #{e.message}"
+            render json: { status: 'error', message: e.message }, status: :internal_server_error
+          end
+        end
       end
     end
   end

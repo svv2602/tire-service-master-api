@@ -619,6 +619,7 @@ Rails.application.routes.draw do
         post :import, to: 'tire_data#import'
         delete 'version/:version', to: 'tire_data#delete_version'
         post 'rollback/:version', to: 'tire_data#rollback'
+        post :clean_models, to: 'tire_data#clean_models'
       end
     end
     end
