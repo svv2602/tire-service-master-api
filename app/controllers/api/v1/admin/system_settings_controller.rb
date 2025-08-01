@@ -278,7 +278,38 @@ module Api
               description: 'Модель OpenAI для обработки запросов',
               category: 'integrations',
               type: 'select',
-              options: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'],
+              options: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4', 'gpt-4o'],
+              default: true
+            },
+            'openai_max_tokens' => {
+              key: 'openai_max_tokens',
+              value: '500',
+              description: 'Максимальное количество токенов для OpenAI ответа',
+              category: 'integrations',
+              type: 'integer',
+              min_value: 100,
+              max_value: 2000,
+              default: true
+            },
+            'openai_temperature' => {
+              key: 'openai_temperature',
+              value: '0.1',
+              description: 'Температура для OpenAI (0.0-1.0, чем меньше - тем точнее)',
+              category: 'integrations',
+              type: 'float',
+              min_value: 0.0,
+              max_value: 1.0,
+              step: 0.1,
+              default: true
+            },
+            'openai_timeout' => {
+              key: 'openai_timeout',
+              value: '30',
+              description: 'Таймаут запроса к OpenAI (секунды)',
+              category: 'integrations',
+              type: 'integer',
+              min_value: 5,
+              max_value: 120,
               default: true
             },
             

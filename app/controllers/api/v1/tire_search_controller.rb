@@ -40,17 +40,18 @@ module Api
           results[:parsed_data]
         )
         
+        # Новый формат ответа для первого этапа поиска
         render json: {
+          success: results[:success],
+          message: results[:message],
+          tire_sizes: results[:tire_sizes],
+          tire_brands: results[:tire_brands],
+          seasonality: results[:seasonality],
+          car_info: results[:car_info],
           query: results[:query],
-          results: results[:results],
-          total: results[:total],
           parsed_data: results[:parsed_data],
           suggestions: results[:suggestions],
-          pagination: {
-            limit: search_options[:limit],
-            offset: search_options[:offset],
-            has_more: results[:total] > (search_options[:offset] + search_options[:limit])
-          }
+          warnings: results[:warnings]
         }
         
       rescue => e

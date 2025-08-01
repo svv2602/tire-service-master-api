@@ -43,6 +43,9 @@ gem "rack-cors"
 gem "jwt"
 gem "dotenv-rails"
 
+# OpenAI integration
+gem "ruby-openai", "~> 7.0"
+
 # Pagination
 gem "pagy"
 
