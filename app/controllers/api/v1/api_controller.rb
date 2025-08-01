@@ -68,6 +68,13 @@ module Api
         { sort => direction }
       end
       
+      # Проверка прав администратора
+      def ensure_admin!
+        unless current_user&.admin?
+          render json: { error: 'Доступ запрещен' }, status: :forbidden
+        end
+      end
+      
       # Логирование действий
       def log_action(action, resource_type, resource_id, old_value = nil, new_value = nil)
         SystemLog.create!(

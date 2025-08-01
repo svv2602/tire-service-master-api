@@ -2,19 +2,23 @@ module Api
   module V1
     class SuppliersController < ApiController
       before_action :authenticate_supplier, only: [:upload_price]
-      before_action :authenticate_admin, except: [:upload_price]
+      before_action :ensure_admin!, except: [:upload_price]
       before_action :set_supplier, only: [:show, :update, :destroy]
       
       # GET /api/v1/suppliers
       def index
-        @suppliers = Supplier.includes(:supplier_price_versions)
-                            .by_priority
-                            .page(params[:page])
-                            .per(params[:per_page] || 20)
+        @suppliers = Supplier.includes(:supplier_price_versions).by_priority
+        
+        # Фильтрация по активности
+        if params[:active_only] == 'true'
+          @suppliers = @suppliers.active
+        end
+        
+        result = paginate(@suppliers)
         
         render json: {
-          suppliers: @suppliers.map { |supplier| format_supplier(supplier) },
-          pagination: pagination_meta(@suppliers)
+          suppliers: result[:data].map { |supplier| format_supplier(supplier) },
+          pagination: result[:pagination]
         }
       end
       
@@ -120,19 +124,18 @@ module Api
       # GET /api/v1/suppliers/:id/products
       def products
         @supplier = Supplier.find(params[:id])
-        products = @supplier.supplier_tire_products
-                           .includes(:supplier)
-                           .page(params[:page])
-                           .per(params[:per_page] || 50)
+        products = @supplier.supplier_tire_products.includes(:supplier)
         
         # Фильтрация
         products = products.by_brand(params[:brand]) if params[:brand].present?
         products = products.by_season(params[:season]) if params[:season].present?
         products = products.in_stock if params[:in_stock_only] == 'true'
         
+        result = paginate(products)
+        
         render json: {
-          products: products.map { |product| format_product(product) },
-          pagination: pagination_meta(products),
+          products: result[:data].map { |product| format_product(product) },
+          pagination: result[:pagination],
           supplier: format_supplier(@supplier)
         }
       end
