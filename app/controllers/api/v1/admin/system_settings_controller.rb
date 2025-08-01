@@ -28,8 +28,20 @@ module Api
         # PUT /api/v1/admin/system_settings/:key
         def update
           key = params[:key]
-          value = params[:value]
-          description = params[:description]
+          
+          # Читаем данные из JSON body
+          begin
+            body_params = JSON.parse(request.body.read) if request.body.present?
+            request.body.rewind if request.body.respond_to?(:rewind)
+            
+            value = body_params&.dig('value') || params[:value]
+            description = body_params&.dig('description') || params[:description]
+          rescue JSON::ParserError
+            value = params[:value]
+            description = params[:description]
+          end
+          
+          Rails.logger.info "SystemSettings#update: key=#{key}, value=#{value}, description=#{description}"
           
           if update_setting(key, value, description)
             render json: { 
@@ -89,8 +101,17 @@ module Api
 
         # POST /api/v1/admin/system_settings/test_connection
         def test_connection
-          key = params[:key]
-          value = params[:value]
+          # Читаем данные из JSON body
+          begin
+            body_params = JSON.parse(request.body.read) if request.body.present?
+            request.body.rewind if request.body.respond_to?(:rewind)
+            
+            key = body_params&.dig('key') || params[:key]
+            value = body_params&.dig('value') || params[:value]
+          rescue JSON::ParserError
+            key = params[:key]
+            value = params[:value]
+          end
           
           result = test_setting_connection(key, value)
           render json: result, status: :ok
