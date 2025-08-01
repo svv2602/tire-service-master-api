@@ -141,7 +141,9 @@ module Api
         # Получить конкретную настройку
         def get_setting(key)
           all_settings = get_all_settings.values.reduce(&:merge) || {}
-          all_settings[key.to_s]
+          setting = all_settings[key.to_s]
+          Rails.logger.info "Getting setting #{key}: #{setting&.dig(:value)} (category: #{setting&.dig(:category)})"
+          setting
         end
 
         # Обновить настройку
@@ -161,7 +163,15 @@ module Api
             }
             
             redis_key = "system_settings:custom:#{key}"
-            Rails.cache.write(redis_key, setting_data.to_json, expires_in: nil)
+            
+            # Сохраняем через Redis напрямую для консистентности
+            if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+              Rails.cache.redis.set(redis_key, setting_data.to_json)
+              Rails.logger.info "Saved to Redis: #{redis_key} = #{setting_data.to_json}"
+            else
+              Rails.cache.write(redis_key, setting_data.to_json, expires_in: nil)
+              Rails.logger.info "Saved to Rails.cache: #{redis_key}"
+            end
             
             # Инвалидируем кеш
             Rails.cache.delete('system_settings:all')
@@ -170,6 +180,10 @@ module Api
             apply_runtime_setting(key, validated_value)
             
             Rails.logger.info "System setting updated: #{key} = #{validated_value}"
+            
+            # Принудительно обновляем кеш
+            Rails.cache.delete('system_settings:all')
+            
             true
           rescue => e
             Rails.logger.error "Error updating system setting #{key}: #{e.message}"
@@ -339,6 +353,7 @@ module Api
             # Проверяем, доступен ли Redis
             if Rails.cache.respond_to?(:redis) && Rails.cache.redis
               keys = Rails.cache.redis.keys('system_settings:custom:*')
+              Rails.logger.info "Loading custom settings from Redis: found #{keys.length} keys"
               
               keys.each do |redis_key|
                 setting_json = Rails.cache.redis.get(redis_key)
@@ -346,6 +361,7 @@ module Api
                 
                 setting_data = JSON.parse(setting_json, symbolize_names: true)
                 settings[setting_data[:key]] = setting_data
+                Rails.logger.info "Loaded custom setting: #{setting_data[:key]} = #{setting_data[:value]}"
               end
             else
               Rails.logger.warn "Redis не доступен, используем пустые кастомные настройки"
