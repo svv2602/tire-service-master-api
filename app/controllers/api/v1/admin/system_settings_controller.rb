@@ -158,6 +158,7 @@ module Api
               value: validated_value,
               description: description || get_setting_description(key),
               category: get_setting_category(key),
+              type: get_setting_type(key),
               updated_at: Time.current.iso8601,
               updated_by: current_user&.email || 'system'
             }
@@ -536,6 +537,11 @@ module Api
         # Получить категорию настройки
         def get_setting_category(key)
           default_settings[key]&.dig(:category) || 'general'
+        end
+
+        # Получить тип настройки
+        def get_setting_type(key)
+          default_settings[key]&.dig(:type) || 'string'
         end
       end
     end
