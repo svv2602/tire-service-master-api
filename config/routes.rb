@@ -33,6 +33,23 @@ Rails.application.routes.draw do
       get 'tire_search/diameters', to: 'tire_search#diameters'
       get 'tire_search/statistics', to: 'tire_search#statistics'
       
+      # Поиск товаров поставщиков
+      post 'supplier_products_search', to: 'supplier_products_search#search'
+      post 'supplier_products_search/grouped', to: 'supplier_products_search#grouped_search'
+      get 'supplier_products_search/filters', to: 'supplier_products_search#filters'
+      get 'supplier_products_search/product/:id', to: 'supplier_products_search#product_details'
+      
+      # Управление поставщиками
+      resources :suppliers do
+        member do
+          get :products
+          get :statistics
+        end
+        collection do
+          post :upload_price
+        end
+      end
+      
       # Настройки системы
       get 'settings', to: 'settings#show'
       patch 'settings', to: 'settings#update'

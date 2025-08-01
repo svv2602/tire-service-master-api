@@ -1,0 +1,169 @@
+class SupplierTireProduct < ApplicationRecord
+  # Связи
+  belongs_to :supplier
+  
+  # Константы для сезонности
+  SEASONS = {
+    'Зимові шини' => 'winter',
+    'Літні шини' => 'summer', 
+    'Всесезонні шини' => 'all_season'
+  }.freeze
+  
+  # Валидации
+  validates :external_id, presence: true, length: { maximum: 255 }
+  validates :brand, presence: true, length: { maximum: 100 }
+  validates :brand_normalized, presence: true, length: { maximum: 100 }
+  validates :model, presence: true, length: { maximum: 255 }
+  validates :name, presence: true, length: { maximum: 500 }
+  validates :width, presence: true, numericality: { greater_than: 0 }
+  validates :height, presence: true, numericality: { greater_than: 0 }
+  validates :diameter, presence: true, length: { maximum: 10 }
+  validates :season, presence: true, inclusion: { in: SEASONS.values }
+  validates :price_uah, numericality: { greater_than: 0 }, allow_nil: true
+  
+  # Уникальность товара у поставщика
+  validates :external_id, uniqueness: { scope: :supplier_id }
+  
+  # Скоупы
+  scope :in_stock, -> { where(in_stock: true) }
+  scope :by_brand, ->(brand) { where(brand_normalized: normalize_brand(brand)) }
+  scope :by_season, ->(season) { where(season: season) }
+  scope :by_size, ->(width, height, diameter) { 
+    where(width: width, height: height, diameter: diameter) 
+  }
+  scope :by_search_params, ->(params) {
+    query = all
+    query = query.by_brand(params[:brand]) if params[:brand].present?
+    query = query.by_season(params[:season]) if params[:season].present?
+    query = query.by_size(params[:width], params[:height], params[:diameter]) if params[:width].present?
+    query = query.in_stock if params[:in_stock_only]
+    query
+  }
+  scope :grouped_by_tire_params, -> {
+    select('brand_normalized, model, width, height, diameter, load_index, speed_index, season, 
+            COUNT(*) as suppliers_count, 
+            MIN(price_uah) as min_price, 
+            MAX(price_uah) as max_price,
+            ARRAY_AGG(DISTINCT supplier_id) as supplier_ids')
+    .where(in_stock: true)
+    .group('brand_normalized, model, width, height, diameter, load_index, speed_index, season')
+    .having('COUNT(*) > 0')
+  }
+  
+  # Колбэки
+  before_validation :normalize_brand_name
+  before_validation :normalize_season
+  before_validation :set_in_stock_status
+  before_save :update_search_tokens
+  
+  # Методы класса
+  def self.normalize_brand(brand_name)
+    return nil if brand_name.blank?
+    
+    # Нормализация популярных брендов
+    normalized = brand_name.strip.downcase
+    brand_mapping = {
+      'goodyear' => 'Goodyear',
+      'michelin' => 'Michelin',
+      'bridgestone' => 'Bridgestone',
+      'continental' => 'Continental',
+      'pirelli' => 'Pirelli',
+      'dunlop' => 'Dunlop',
+      'yokohama' => 'Yokohama',
+      'hankook' => 'Hankook',
+      'kumho' => 'Kumho',
+      'nokian' => 'Nokian'
+    }
+    
+    brand_mapping[normalized] || brand_name.strip.titleize
+  end
+  
+  def self.search_by_query(query_params)
+    # Основной поиск с группировкой
+    products = by_search_params(query_params)
+                .includes(:supplier)
+                .order(:brand_normalized, :model, :width, :height, :diameter, :price_uah)
+    
+    # Группируем по параметрам шин
+    grouped = products.group_by do |product|
+      "#{product.brand_normalized}|#{product.model}|#{product.width}/#{product.height}R#{product.diameter}|#{product.load_index}#{product.speed_index}"
+    end
+    
+    # Преобразуем в структуру для фронтенда
+    grouped.map do |tire_key, tire_products|
+      first_product = tire_products.first
+      {
+        tire_key: tire_key,
+        brand: first_product.brand_normalized,
+        model: first_product.model,
+        size: "#{first_product.width}/#{first_product.height}R#{first_product.diameter}",
+        load_speed_index: "#{first_product.load_index}#{first_product.speed_index}",
+        season: first_product.season,
+        suppliers_count: tire_products.length,
+        min_price: tire_products.map(&:price_uah).compact.min,
+        max_price: tire_products.map(&:price_uah).compact.max,
+        products: tire_products.map { |p| format_product_for_api(p) }
+      }
+    end
+  end
+  
+  def self.format_product_for_api(product)
+    {
+      id: product.id,
+      supplier_name: product.supplier.name,
+      supplier_priority: product.supplier.priority,
+      name: product.name,
+      price_uah: product.price_uah,
+      stock_status: product.stock_status,
+      image_url: product.image_url,
+      product_url: product.product_url,
+      country: product.country,
+      year_week: product.year_week
+    }
+  end
+  
+  # Методы экземпляра
+  def tire_size
+    "#{width}/#{height}R#{diameter}"
+  end
+  
+  def load_speed_indices
+    "#{load_index}#{speed_index}"
+  end
+  
+  def season_display
+    SEASONS.key(season) || season
+  end
+  
+  def formatted_price
+    return 'Цена не указана' unless price_uah
+    "#{price_uah.to_i} грн"
+  end
+  
+  private
+  
+  def normalize_brand_name
+    self.brand_normalized = self.class.normalize_brand(brand)
+  end
+  
+  def normalize_season
+    if season.present? && SEASONS.key?(season)
+      self.season = SEASONS[season]
+    end
+  end
+  
+  def set_in_stock_status
+    self.in_stock = stock_status.present? && 
+                   !stock_status.match?(/не\s*в\s*наявності|немає|відсутній/i)
+  end
+  
+  def update_search_tokens
+    tokens = [
+      brand, brand_normalized, model, name,
+      tire_size, load_speed_indices,
+      country, season_display
+    ].compact.join(' ')
+    
+    self.search_tokens = tokens
+  end
+end

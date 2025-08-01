@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_31_095113) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_01_203557) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -992,6 +992,70 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_31_095113) do
     t.index ["name_uk"], name: "index_services_on_name_uk"
   end
 
+  create_table "supplier_price_versions", force: :cascade do |t|
+    t.bigint "supplier_id", null: false
+    t.string "version", limit: 100, null: false
+    t.string "file_checksum", limit: 64
+    t.integer "products_count", default: 0
+    t.integer "processed_count", default: 0
+    t.integer "errors_count", default: 0
+    t.integer "processing_time_ms"
+    t.datetime "uploaded_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["supplier_id", "version"], name: "index_supplier_price_versions_on_supplier_id_and_version", unique: true
+    t.index ["supplier_id"], name: "index_supplier_price_versions_on_supplier_id"
+    t.index ["uploaded_at"], name: "index_supplier_price_versions_on_uploaded_at"
+  end
+
+  create_table "supplier_tire_products", force: :cascade do |t|
+    t.bigint "supplier_id", null: false
+    t.string "external_id", limit: 255, null: false
+    t.string "brand", limit: 100, null: false
+    t.string "brand_normalized", limit: 100, null: false
+    t.string "model", limit: 255, null: false
+    t.string "name", limit: 500, null: false
+    t.integer "width", null: false
+    t.integer "height", null: false
+    t.string "diameter", limit: 10, null: false
+    t.string "load_index", limit: 10
+    t.string "speed_index", limit: 10
+    t.string "season", limit: 20, null: false
+    t.decimal "price_uah", precision: 10, scale: 2
+    t.string "stock_status", limit: 50
+    t.boolean "in_stock", default: false
+    t.text "description"
+    t.string "image_url", limit: 1000
+    t.string "product_url", limit: 1000
+    t.string "country", limit: 100
+    t.string "year_week", limit: 20
+    t.text "search_tokens"
+    t.jsonb "raw_data"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "to_tsvector('russian'::regconfig, search_tokens)", name: "idx_supplier_tire_products_tokens", using: :gin
+    t.index ["brand_normalized", "width", "height", "diameter", "season", "in_stock"], name: "idx_supplier_tire_products_search"
+    t.index ["brand_normalized"], name: "index_supplier_tire_products_on_brand_normalized"
+    t.index ["in_stock"], name: "index_supplier_tire_products_on_in_stock"
+    t.index ["season"], name: "index_supplier_tire_products_on_season"
+    t.index ["supplier_id", "external_id"], name: "index_supplier_tire_products_on_supplier_id_and_external_id", unique: true
+    t.index ["supplier_id"], name: "index_supplier_tire_products_on_supplier_id"
+  end
+
+  create_table "suppliers", force: :cascade do |t|
+    t.string "firm_id", limit: 50, null: false
+    t.string "name", limit: 255, null: false
+    t.string "api_key", limit: 255, null: false
+    t.boolean "is_active", default: true
+    t.integer "priority", default: 0
+    t.datetime "last_sync_at", precision: nil
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["api_key"], name: "index_suppliers_on_api_key", unique: true
+    t.index ["firm_id"], name: "index_suppliers_on_firm_id", unique: true
+    t.index ["is_active"], name: "index_suppliers_on_is_active"
+  end
+
   create_table "system_logs", force: :cascade do |t|
     t.bigint "user_id"
     t.string "action", null: false, comment: "Тип действия (created/updated/deleted/suspended/assigned)"
@@ -1247,6 +1311,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_31_095113) do
   add_foreign_key "service_posts", "service_categories"
   add_foreign_key "service_posts", "service_points"
   add_foreign_key "services", "service_categories", column: "category_id"
+  add_foreign_key "supplier_price_versions", "suppliers"
+  add_foreign_key "supplier_tire_products", "suppliers"
   add_foreign_key "system_logs", "users"
   add_foreign_key "telegram_notifications", "bookings"
   add_foreign_key "telegram_notifications", "users"
