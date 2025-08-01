@@ -44,6 +44,7 @@ Rails.application.routes.draw do
         member do
           get :products
           get :statistics
+          post :admin_upload_price
         end
         collection do
           post :upload_price

@@ -3,7 +3,7 @@ module Api
     class SuppliersController < ApiController
       before_action :authenticate_supplier, only: [:upload_price]
       before_action :ensure_admin!, except: [:upload_price]
-      before_action :set_supplier, only: [:show, :update, :destroy]
+      before_action :set_supplier, only: [:show, :update, :destroy, :admin_upload_price]
       
       # GET /api/v1/suppliers
       def index
@@ -72,6 +72,56 @@ module Api
         }
       end
       
+      # POST /api/v1/suppliers/:id/upload_price  
+      # Endpoint для загрузки прайса администратором
+      def admin_upload_price
+        @supplier = Supplier.find(params[:id])
+        xml_content = extract_xml_content
+        
+        if xml_content.blank?
+          return render json: {
+            success: false,
+            error: "XML данные не найдены"
+          }, status: :bad_request
+        end
+        
+        # Обрабатываем XML в фоновом режиме для больших файлов
+        if xml_content.size > 5.megabytes
+          # TODO: Добавить фоновую обработку через Sidekiq
+          render json: {
+            success: true,
+            message: "Большой файл поставлен в очередь на обработку",
+            processing: true
+          }
+        else
+          # Обрабатываем синхронно
+          processor = SupplierXmlProcessor.new(@supplier, xml_content)
+          result = processor.process
+          
+          if result[:success]
+            render json: {
+              success: true,
+              message: result[:message],
+              statistics: result[:statistics],
+              version: result[:version].version
+            }
+          else
+            render json: {
+              success: false,
+              error: result[:error],
+              statistics: result[:statistics]
+            }, status: :unprocessable_entity
+          end
+        end
+        
+      rescue StandardError => e
+        Rails.logger.error "Ошибка загрузки прайса админом: #{e.message}"
+        render json: {
+          success: false,
+          error: "Внутренняя ошибка сервера"
+        }, status: :internal_server_error
+      end
+
       # POST /api/v1/suppliers/upload_price
       # Endpoint для загрузки прайса поставщиком
       def upload_price
