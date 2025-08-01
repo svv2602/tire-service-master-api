@@ -221,16 +221,27 @@ class TireSearchService
   end
 
   def process_insufficient_data_scenario
+    # Персонализируем сообщение в зависимости от того, что уже найдено
+    message = if @parsed_data[:brand].present? && @parsed_data[:model].blank?
+      "Отлично! #{@parsed_data[:brand]} - хороший выбор. Уточните модель для точного подбора шин:"
+    elsif @parsed_data[:tire_brands].present? || @parsed_data[:seasonality].present?
+      "Мы поняли ваши предпочтения. Добавьте информацию об автомобиле для подбора шин:"
+    else
+      "Помогите нам подобрать идеальные шины. Укажите марку и модель автомобиля:"
+    end
+
     {
       success: false,
-      message: "Недостаточно данных для поиска. Пожалуйста, укажите марку и модель автомобиля или размер шин.",
+      message: message,
       tire_sizes: [],
       tire_brands: @parsed_data[:tire_brands] || [],
       seasonality: @parsed_data[:seasonality],
       car_info: {},
       query: @query,
       parsed_data: @parsed_data,
-      suggestions: generate_suggestions
+      suggestions: generate_suggestions,
+      conversation_mode: true, # Флаг для фронтенда - показать режим уточнения
+      follow_up_questions: generate_follow_up_questions
     }
   end
 
@@ -580,23 +591,35 @@ class TireSearchService
   end
 
   def generate_suggestions
-    return [] if @parsed_data[:brand].present?
-
-    # Генерируем предложения на основе популярных поисков
     suggestions = []
 
+    # Если найден бренд, но нет модели - предлагаем модели этого бренда
+    if @parsed_data[:brand].present? && @parsed_data[:model].blank?
+      suggestions = generate_car_suggestions
+      
+      # Если для бренда нет моделей в алиасах, предлагаем популярные
+      if suggestions.empty?
+        suggestions = [
+          "#{@parsed_data[:brand]} 3 Series",
+          "#{@parsed_data[:brand]} 5 Series", 
+          "#{@parsed_data[:brand]} X3",
+          "#{@parsed_data[:brand]} X5"
+        ]
+      end
+    end
+
     # Если нашли только модель без бренда
-    if @parsed_data[:model].present?
-      BRAND_ALIASES.keys.flatten.sample(3).each do |brand_alias|
-        suggestions << "#{brand_alias} #{@parsed_data[:model]}"
+    if @parsed_data[:model].present? && @parsed_data[:brand].blank?
+      BRAND_ALIASES.values.sample(3).each do |brand_name|
+        suggestions << "#{brand_name} #{@parsed_data[:model]}"
       end
     end
 
     # Если вообще ничего не нашли
-    if @parsed_data.empty?
+    if @parsed_data[:brand].blank? && @parsed_data[:model].blank?
       suggestions = [
         'BMW 3 Series',
-        'Volkswagen Tiguan',
+        'Volkswagen Tiguan', 
         'Mercedes C-Class',
         'Toyota Camry',
         'Honda Civic'
@@ -604,6 +627,46 @@ class TireSearchService
     end
 
     suggestions.take(5)
+  end
+
+  def generate_follow_up_questions
+    questions = []
+
+    if @parsed_data[:brand].present? && @parsed_data[:model].blank?
+      # Есть бренд, нужна модель
+      questions << {
+        type: "model_selection",
+        question: "Какая модель #{@parsed_data[:brand]}?",
+        field: "model",
+        context: { brand: @parsed_data[:brand] }
+      }
+    end
+
+    if @parsed_data[:brand].blank?
+      # Нет бренда
+      questions << {
+        type: "brand_selection", 
+        question: "Какая марка автомобиля?",
+        field: "brand",
+        context: {}
+      }
+    end
+
+    if @parsed_data[:seasonality].blank?
+      # Не указана сезонность
+      questions << {
+        type: "seasonality_selection",
+        question: "Какие шины нужны?",
+        field: "seasonality", 
+        options: [
+          { value: "winter", label: "Зимние" },
+          { value: "summer", label: "Летние" },
+          { value: "all_season", label: "Всесезонные" }
+        ]
+      }
+    end
+
+    questions.take(2) # Не более 2 вопросов за раз
   end
 
   # Класс для статистики поиска
