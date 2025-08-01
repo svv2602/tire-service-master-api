@@ -170,7 +170,7 @@ module Api
               Rails.logger.info "Saved to Redis: #{redis_key} = #{setting_data.to_json}"
             else
               Rails.cache.write(redis_key, setting_data.to_json, expires_in: nil)
-              Rails.logger.info "Saved to Rails.cache: #{redis_key}"
+              Rails.logger.info "Saved to Rails.cache: #{redis_key} = #{setting_data.to_json}"
             end
             
             # Инвалидируем кеш
@@ -364,7 +364,20 @@ module Api
                 Rails.logger.info "Loaded custom setting: #{setting_data[:key]} = #{setting_data[:value]}"
               end
             else
-              Rails.logger.warn "Redis не доступен, используем пустые кастомные настройки"
+              Rails.logger.warn "Redis не доступен, используем Rails.cache fallback"
+              
+              # Fallback: ищем настройки через Rails.cache
+              # Поскольку мы не можем получить список ключей из Rails.cache,
+              # попробуем загрузить настройки для известных ключей
+              default_settings.keys.each do |key|
+                cache_key = "system_settings:custom:#{key}"
+                setting_json = Rails.cache.read(cache_key)
+                if setting_json
+                  setting_data = JSON.parse(setting_json, symbolize_names: true)
+                  settings[setting_data[:key]] = setting_data
+                  Rails.logger.info "Loaded custom setting from Rails.cache: #{setting_data[:key]} = #{setting_data[:value]}"
+                end
+              end
             end
           rescue => e
             Rails.logger.error "Error loading custom settings: #{e.message}"
