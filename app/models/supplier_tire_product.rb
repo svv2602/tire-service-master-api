@@ -31,6 +31,30 @@ class SupplierTireProduct < ApplicationRecord
   scope :by_size, ->(width, height, diameter) { 
     where(width: width, height: height, diameter: diameter) 
   }
+  scope :search_by_text, ->(query) {
+    return all if query.blank?
+    
+    sanitized_query = "%#{query.strip}%"
+    where(
+      'brand_normalized ILIKE ? OR model ILIKE ? OR name ILIKE ? OR external_id ILIKE ? OR description ILIKE ?',
+      sanitized_query, sanitized_query, sanitized_query, sanitized_query, sanitized_query
+    )
+  }
+  scope :updated_after, ->(date) { 
+    return all if date.blank?
+    where('updated_at >= ?', date) 
+  }
+  scope :updated_before, ->(date) { 
+    return all if date.blank?
+    where('updated_at <= ?', date) 
+  }
+  scope :updated_between, ->(start_date, end_date) {
+    return all if start_date.blank? && end_date.blank?
+    query = all
+    query = query.updated_after(start_date) if start_date.present?
+    query = query.updated_before(end_date) if end_date.present?
+    query
+  }
   scope :by_search_params, ->(params) {
     query = all
     query = query.by_brand(params[:brand]) if params[:brand].present?

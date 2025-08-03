@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<price>
+  <firmId>23951</firmId>
+  <items>
+    <item>
+      <id>TEST001</id>
+      <vendor>TestBrand</vendor>
+      <name>TestBrand Test Model 205/55R16</name>
+      <description>Тестовая шина</description>
+      <priceRUAH>2500</priceRUAH>
+      <stock>В наявності</stock>
+      <image>https://example.com/image.jpg</image>
+      <url>https://example.com/product</url>
+      <param name="Тип">Літні</param>
+      <param name="Ширина профілю шини, мм">205</param>
+      <param name="Висота профілю шини, %">55</param>
+      <param name="Внутрішній діаметр покришки, дюйми">16</param>
+      <param name="Вантажопідйомність, кг">91</param>
+      <param name="Швидкість максимальна, км/г">V</param>
+      <param name="Країна виготовлення">Польща</param>
+      <param name="Рік виготовлення">2024</param>
+    </item>
+  </items>
+</price>

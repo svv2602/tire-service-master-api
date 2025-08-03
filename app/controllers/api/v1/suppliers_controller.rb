@@ -193,6 +193,35 @@ module Api
         products = products.by_season(params[:season]) if params[:season].present?
         products = products.in_stock if params[:in_stock_only] == 'true'
         
+        # Поиск по тексту (название, бренд, модель, ID, описание)
+        products = products.search_by_text(params[:search]) if params[:search].present?
+        
+        # Фильтрация по дате обновления
+        if params[:updated_after].present?
+          begin
+            date = Date.parse(params[:updated_after])
+            products = products.updated_after(date.beginning_of_day)
+          rescue ArgumentError
+            Rails.logger.warn "Invalid date format for updated_after: #{params[:updated_after]}"
+          end
+        end
+        
+        if params[:updated_before].present?
+          begin
+            date = Date.parse(params[:updated_before])
+            products = products.updated_before(date.end_of_day)
+          rescue ArgumentError
+            Rails.logger.warn "Invalid date format for updated_before: #{params[:updated_before]}"
+          end
+        end
+        
+        # Сортировка по дате обновления (новые сначала) или по умолчанию
+        products = if params[:sort_by] == 'updated_at'
+          products.order(updated_at: :desc)
+        else
+          products.order(:brand_normalized, :model, :price_uah)
+        end
+        
         result = paginate(products)
         
         render json: {
@@ -312,16 +341,23 @@ module Api
           brand: product.brand_normalized,
           model: product.model,
           name: product.name,
+          width: product.width,
+          height: product.height,
+          diameter: product.diameter,
+          load_index: product.load_index,
+          speed_index: product.speed_index,
           size: product.tire_size,
           load_speed_index: product.load_speed_indices,
           season: product.season,
           price_uah: product.price_uah,
           stock_status: product.stock_status,
           in_stock: product.in_stock,
+          description: product.description,
           image_url: product.image_url,
           product_url: product.product_url,
           country: product.country,
-          year_week: product.year_week
+          year_week: product.year_week,
+          updated_at: product.updated_at&.strftime('%Y-%m-%d %H:%M')
         }
       end
     end
