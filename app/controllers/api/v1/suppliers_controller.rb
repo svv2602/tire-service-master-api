@@ -85,16 +85,22 @@ module Api
           }, status: :bad_request
         end
         
-        # Обрабатываем XML в фоновом режиме для больших файлов
-        if xml_content.size > 5.megabytes
-          # TODO: Добавить фоновую обработку через Sidekiq
+        # Проверяем размер файла
+        file_size_mb = (xml_content.size / 1.megabyte).round(2)
+        Rails.logger.info "📁 Загружен файл размером #{file_size_mb}MB для поставщика #{@supplier.name}"
+        
+        if xml_content.size > 25.megabytes
+          # Файл слишком большой для синхронной обработки
           render json: {
-            success: true,
-            message: "Большой файл поставлен в очередь на обработку",
-            processing: true
-          }
+            success: false,
+            error: "Файл слишком большой (#{file_size_mb}MB). Максимальный размер: 25MB",
+            file_size_mb: file_size_mb,
+            max_size_mb: 25,
+            suggestion: "Разделите прайс-лист на несколько файлов или обратитесь к администратору"
+          }, status: :payload_too_large
         else
           # Обрабатываем синхронно
+          Rails.logger.info "🔄 Начинаем синхронную обработку файла #{file_size_mb}MB"
           processor = SupplierXmlProcessor.new(@supplier, xml_content)
           result = processor.process
           
@@ -134,16 +140,22 @@ module Api
           }, status: :bad_request
         end
         
-        # Обрабатываем XML в фоновом режиме для больших файлов
-        if xml_content.size > 5.megabytes
-          # TODO: Добавить фоновую обработку через Sidekiq
+        # Проверяем размер файла
+        file_size_mb = (xml_content.size / 1.megabyte).round(2)
+        Rails.logger.info "📁 Загружен файл размером #{file_size_mb}MB от поставщика #{@current_supplier.name}"
+        
+        if xml_content.size > 25.megabytes
+          # Файл слишком большой для синхронной обработки
           render json: {
-            success: true,
-            message: "Большой файл поставлен в очередь на обработку",
-            processing: true
-          }
+            success: false,
+            error: "Файл слишком большой (#{file_size_mb}MB). Максимальный размер: 25MB",
+            file_size_mb: file_size_mb,
+            max_size_mb: 25,
+            suggestion: "Разделите прайс-лист на несколько файлов или обратитесь к администратору"
+          }, status: :payload_too_large
         else
           # Обрабатываем синхронно
+          Rails.logger.info "🔄 Начинаем синхронную обработку файла #{file_size_mb}MB"
           processor = SupplierXmlProcessor.new(@current_supplier, xml_content)
           result = processor.process
           
