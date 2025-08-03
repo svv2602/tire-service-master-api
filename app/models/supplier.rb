@@ -50,6 +50,11 @@ class Supplier < ApplicationRecord
     end
   end
   
+  def regenerate_api_key!
+    generate_api_key
+    save!
+  end
+  
   private
   
   def generate_api_key

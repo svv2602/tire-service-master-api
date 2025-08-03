@@ -3,7 +3,7 @@ module Api
     class SuppliersController < ApiController
       before_action :authenticate_supplier, only: [:upload_price]
       before_action :ensure_admin!, except: [:upload_price]
-      before_action :set_supplier, only: [:show, :update, :destroy, :admin_upload_price]
+      before_action :set_supplier, only: [:show, :update, :destroy, :admin_upload_price, :regenerate_api_key, :price_versions]
       
       # GET /api/v1/suppliers
       def index
@@ -255,6 +255,42 @@ module Api
         render json: { statistics: stats }
       end
       
+      # PATCH /api/v1/suppliers/:id/regenerate_api_key
+      def regenerate_api_key
+        begin
+          old_api_key = @supplier.api_key
+          @supplier.regenerate_api_key!
+          
+          Rails.logger.info "API ключ поставщика #{@supplier.name} (ID: #{@supplier.id}) регенерирован. Старый: #{old_api_key[0..8]}..., Новый: #{@supplier.api_key[0..8]}..."
+          
+          render json: {
+            success: true,
+            supplier: format_supplier_detailed(@supplier),
+            message: "API ключ успешно регенерирован"
+          }
+        rescue StandardError => e
+          Rails.logger.error "Ошибка регенерации API ключа для поставщика ID #{@supplier.id}: #{e.message}"
+          
+          render json: {
+            success: false,
+            message: "Ошибка при регенерации API ключа",
+            error: e.message
+          }, status: :internal_server_error
+        end
+      end
+      
+      # GET /api/v1/suppliers/:id/price_versions
+      def price_versions
+        versions = @supplier.supplier_price_versions.order(uploaded_at: :desc)
+        
+        result = paginate(versions)
+        
+        render json: {
+          data: result[:data].map { |version| format_price_version(version) },
+          meta: result[:pagination]
+        }
+      end
+      
       private
       
       def authenticate_supplier
@@ -359,6 +395,40 @@ module Api
           year_week: product.year_week,
           updated_at: product.updated_at&.strftime('%Y-%m-%d %H:%M')
         }
+      end
+      
+      def format_price_version(version)
+        processing_time_seconds = if version.processing_time_ms
+          (version.processing_time_ms / 1000.0).round(2)
+        else
+          nil
+        end
+        
+        success_rate = if version.products_count && version.products_count > 0
+          ((version.processed_count || 0).to_f / version.products_count * 100).round(2)
+        else
+          0.0
+        end
+        
+        {
+          id: version.id,
+          version: version.version,
+          uploaded_at: version.uploaded_at&.strftime('%Y-%m-%d %H:%M:%S'),
+          file_checksum: version.file_checksum,
+          products_count: version.products_count || 0,
+          processed_count: version.processed_count || 0,
+          errors_count: version.errors_count || 0,
+          success_rate: success_rate,
+          status: determine_version_status(version),
+          processing_time_seconds: processing_time_seconds
+        }
+      end
+      
+      def determine_version_status(version)
+        return 'pending' if version.processed_count == 0 && version.errors_count == 0
+        return 'failed' if version.errors_count > 0 && version.processed_count == 0
+        return 'completed' if version.processed_count > 0
+        'processing'
       end
     end
   end

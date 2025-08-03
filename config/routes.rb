@@ -44,7 +44,9 @@ Rails.application.routes.draw do
         member do
           get :products
           get :statistics
+          get :price_versions
           post :admin_upload_price
+          patch :regenerate_api_key
         end
         collection do
           post :upload_price
