@@ -12,6 +12,13 @@ class Supplier < ApplicationRecord
   # Скоупы
   scope :active, -> { where(is_active: true) }
   scope :by_priority, -> { order(:priority, :name) }
+  scope :search, ->(query) do
+    return all if query.blank?
+    
+    query_downcase = query.downcase
+    where("LOWER(name) LIKE ? OR LOWER(firm_id) LIKE ?", 
+          "%#{query_downcase}%", "%#{query_downcase}%")
+  end
   
   # Колбэки
   before_validation :generate_api_key, on: :create, if: -> { api_key.blank? }

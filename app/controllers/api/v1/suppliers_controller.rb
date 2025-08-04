@@ -14,6 +14,11 @@ module Api
           @suppliers = @suppliers.active
         end
         
+        # Поиск по названию и firm_id (без учета регистра)
+        if params[:search].present?
+          @suppliers = @suppliers.search(params[:search])
+        end
+        
         result = paginate(@suppliers)
         
         render json: {
