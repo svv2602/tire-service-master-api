@@ -246,6 +246,11 @@ module Api
         products = products.by_season(params[:season]) if params[:season].present?
         products = products.in_stock if params[:in_stock_only] == 'true'
         
+        # Фильтрация по размерам
+        products = products.where(width: params[:width]) if params[:width].present?
+        products = products.where(height: params[:height]) if params[:height].present?
+        products = products.where(diameter: params[:diameter]) if params[:diameter].present?
+        
         # Поиск по тексту (название, бренд, модель, ID, описание)
         products = products.search_by_text(params[:search]) if params[:search].present?
         
