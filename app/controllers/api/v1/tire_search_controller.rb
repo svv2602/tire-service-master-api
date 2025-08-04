@@ -43,13 +43,11 @@ module Api
         cache_key = generate_cache_key(query, search_options)
         Rails.logger.info "TireSearchController: Cache key: #{cache_key}"
         
-        results = Rails.cache.fetch(cache_key, expires_in: 1.hour) do
-          Rails.logger.info "Creating TireSearchService with query: '#{query}', options: #{search_options.inspect}"
-          service = TireSearchService.new(query, search_options)
-          result = service.search
-          Rails.logger.info "Service returned: total=#{result[:total]}, parsed_data=#{result[:parsed_data].inspect}"
-          result
-        end
+        # Временно отключаем кэширование для тестирования
+        Rails.logger.info "Creating TireSearchService with query: '#{query}', options: #{search_options.inspect}"
+        service = TireSearchService.new(query, search_options)
+        results = service.search
+        Rails.logger.info "Service returned: total=#{results[:total]}, parsed_data=#{results[:parsed_data].inspect}"
         
         # Записываем статистику
         TireSearchService::SearchStats.record_search(

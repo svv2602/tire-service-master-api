@@ -233,9 +233,13 @@ class TireSearchService
   def process_search_scenario
     car_identified = @parsed_data[:brand].present? && @parsed_data[:model].present?
     brand_with_diameter = @parsed_data[:brand].present? && @parsed_data[:model].blank? && @parsed_data[:diameter].present?
+    full_tire_size = @parsed_data[:width].present? && @parsed_data[:height].present? && @parsed_data[:diameter].present?
+    
+
     
     # Если LLM использовался, но не смог распарсить бренд (например: "лада на 14") - переходим в диалог
-    if @llm_was_used && @parsed_data[:brand].blank? && @parsed_data[:diameter].present?
+    # НО исключаем случаи, когда у нас есть полный размер шины
+    if @llm_was_used && @parsed_data[:brand].blank? && @parsed_data[:diameter].present? && !full_tire_size
       Rails.logger.info "LLM использовался, но не распарсил бренд для запроса '#{@query}' - переходим в conversational режим"
       return process_insufficient_data_scenario
     end
@@ -246,7 +250,7 @@ class TireSearchService
     elsif brand_with_diameter
       # Бренд + диаметр без модели - запрос уточнения модели
       process_brand_diameter_scenario
-    elsif @parsed_data[:tire_size].present? || @parsed_data[:diameter].present?
+    elsif @parsed_data[:tire_size].present? || full_tire_size || @parsed_data[:diameter].present?
       # Есть размер шин, но авто не определено
       process_tire_size_only_scenario
     else
@@ -323,12 +327,36 @@ class TireSearchService
       message = "Найден размер шин, но автомобиль не определен. Рекомендуем указать марку и модель для более точного подбора."
     elsif @parsed_data[:diameter].present?
       # Случай когда найден только диаметр (например "R18")
+      # Переходим в conversational режим для уточнения
       message = I18n.with_locale(@locale) do
         I18n.t('tire_search.messages.diameter_only', diameter: @parsed_data[:diameter])
       end
-      tire_sizes << {
-        diameter: @parsed_data[:diameter],
-        display: "R#{@parsed_data[:diameter]}"
+      
+      return {
+        success: false,
+        conversation_mode: true,
+        message: message,
+        tire_sizes: [{
+          diameter: @parsed_data[:diameter],
+          display: "R#{@parsed_data[:diameter]}"
+        }],
+        tire_brands: @parsed_data[:tire_brands] || [],
+        seasonality: @parsed_data[:seasonality],
+        car_info: {},
+        query: @query,
+        parsed_data: @parsed_data,
+        suggestions: generate_car_brand_suggestions,
+        follow_up_questions: [{
+          type: "partial_size_completion",
+          diameter: @parsed_data[:diameter],
+          field: "tire_size"
+        }],
+        # Контекст для следующего шага диалога
+        context: {
+          diameter: @parsed_data[:diameter],
+          tire_brands: @parsed_data[:tire_brands],
+          seasonality: @parsed_data[:seasonality]
+        }.compact
       }
     end
 
@@ -1133,7 +1161,70 @@ class TireSearchService
       end
     end
     
+    # Логика для частичных размеров шин в контексте диаметра
+    if @context[:diameter].present?
+      # Если в контексте есть диаметр, попробуем дополнить размер из текущего запроса
+      partial_size = parse_partial_tire_size(@query, @context[:diameter])
+      if partial_size.present?
+        @parsed_data.merge!(partial_size)
+        Rails.logger.info "TireSearchService: Parsed partial tire size: #{partial_size}"
+      end
+    end
+    
     Rails.logger.info "TireSearchService: Final merged data: #{@parsed_data}"
+  end
+
+  # Парсинг частичных размеров шин в контексте диаметра
+  def parse_partial_tire_size(query, context_diameter)
+    # Убираем лишние слова и оставляем только числа
+    numbers = query.scan(/\d+/).map(&:to_i)
+    
+    case numbers.length
+    when 2
+      # Два числа: ширина и высота (например: "205 55")
+      # Используем диаметр из контекста
+      width, height = numbers
+      if valid_tire_dimensions?(width, height, context_diameter)
+        return {
+          width: width,
+          height: height,
+          diameter: context_diameter,
+          tire_size: {
+            width: width,
+            height: height,
+            diameter: context_diameter,
+            full_size: "#{width}/#{height}R#{context_diameter}"
+          }
+        }
+      end
+    when 3
+      # Три числа: ширина, высота, диаметр (например: "195 55 15")
+      # Обновляем диаметр из запроса
+      width, height, diameter = numbers
+      if valid_tire_dimensions?(width, height, diameter)
+        return {
+          width: width,
+          height: height,
+          diameter: diameter,
+          tire_size: {
+            width: width,
+            height: height,
+            diameter: diameter,
+            full_size: "#{width}/#{height}R#{diameter}"
+          }
+        }
+      end
+    end
+    
+    nil
+  end
+  
+  # Валидация размеров шин
+  def valid_tire_dimensions?(width, height, diameter)
+    # Проверяем разумные диапазоны для размеров шин
+    width.between?(125, 355) &&    # Ширина от 125 до 355 мм
+    height.between?(25, 85) &&     # Высота от 25% до 85%
+    diameter.between?(12, 24)      # Диаметр от 12 до 24 дюймов
   end
 
   # Поиск модели в контексте определенного бренда
