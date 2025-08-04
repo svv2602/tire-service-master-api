@@ -153,6 +153,16 @@ class TireSearchService
       ['model y', 'модель y', 'модель игрек'] => 'Model Y',
       ['roadster', 'родстер'] => 'Roadster'
     },
+    'Mazda' => {
+      ['2', 'мазда 2'] => '2',
+      ['3', 'мазда 3'] => '3',
+      ['6', 'мазда 6'] => '6',
+      ['cx-3', 'cx3'] => 'CX-3',
+      ['cx-5', 'cx5'] => 'CX-5',
+      ['cx-7', 'cx7'] => 'CX-7',
+      ['cx-9', 'cx9'] => 'CX-9',
+      ['mx-5', 'mx5', 'miata'] => 'MX-5'
+    },
     'Brilliance' => {
       ['h530', '530'] => 'H530',
       ['h330', '330'] => 'H330',
@@ -171,7 +181,10 @@ class TireSearchService
     @parsed_data = {}
     @use_llm = options[:use_llm] != false
     @locale = options[:locale] || 'ru'
-    Rails.logger.info "TireSearchService: Initialized with locale: #{@locale}"
+    
+    # Контекст из предыдущих шагов диалога
+    @context = options[:context] || {}
+    Rails.logger.info "TireSearchService: Initialized with locale: #{@locale}, context: #{@context}"
   end
 
   def search
@@ -179,6 +192,9 @@ class TireSearchService
 
     # Шаг 1: Простой парсинг
     @parsed_data = parse_simple_query
+    
+    # Шаг 1.5: Объединяем с контекстом из предыдущих шагов диалога
+    merge_with_context
 
     # Шаг 2: Если простой парсинг неполный и включен LLM - используем LLM
     if needs_llm_parsing? && @use_llm
@@ -372,7 +388,14 @@ class TireSearchService
         brand: @parsed_data[:brand],
         field: "model",
         diameter: @parsed_data[:diameter]
-      }]
+      }],
+      # Контекст для следующего шага диалога
+      context: {
+        brand: @parsed_data[:brand],
+        diameter: @parsed_data[:diameter],
+        tire_brands: @parsed_data[:tire_brands],
+        seasonality: @parsed_data[:seasonality]
+      }.compact
     }
   end
 
@@ -1062,6 +1085,51 @@ class TireSearchService
             .order(:name)
             .limit(10)
             .pluck(:name)
+  end
+
+  # Объединение текущих данных с контекстом из предыдущих шагов диалога
+  def merge_with_context
+    return if @context.blank?
+    
+    Rails.logger.info "TireSearchService: Merging context #{@context} with parsed data #{@parsed_data}"
+    
+    # Сохраняем контекст, если новые данные не перезаписывают его
+    @context.each do |key, value|
+      if value.present? && @parsed_data[key].blank?
+        @parsed_data[key] = value
+        Rails.logger.info "TireSearchService: Preserved from context: #{key} = #{value}"
+      end
+    end
+    
+    # Особая логика для tire_brands и seasonality - объединяем массивы
+    if @context[:tire_brands].present?
+      @parsed_data[:tire_brands] = (@parsed_data[:tire_brands] || []) | @context[:tire_brands]
+    end
+    
+    # Если есть бренд из контекста и модель не найдена, попробуем найти модель в контексте бренда
+    if @parsed_data[:brand].present? && @parsed_data[:model].blank?
+      model = find_model_in_brand_context(@query.downcase, @parsed_data[:brand])
+      if model.present?
+        @parsed_data[:model] = model
+        Rails.logger.info "TireSearchService: Found model in brand context: #{model}"
+      end
+    end
+    
+    Rails.logger.info "TireSearchService: Final merged data: #{@parsed_data}"
+  end
+
+  # Поиск модели в контексте определенного бренда
+  def find_model_in_brand_context(query_lower, brand_name)
+    return nil unless MODEL_ALIASES[brand_name]
+    
+    MODEL_ALIASES[brand_name].each do |aliases, model_name|
+      if aliases.any? { |alias_name| query_lower.match?(/\b#{Regexp.escape(alias_name)}\b/) }
+        return model_name
+      end
+    end
+    
+    # Поиск с учетом расширений двигателей
+    find_model_with_engine_extensions(query_lower, brand_name)
   end
 
   # Поиск модели с учетом расширений двигателей (i, d, cdi, tdi и т.д.)

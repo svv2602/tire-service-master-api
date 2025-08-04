@@ -29,7 +29,8 @@ module Api
           limit: [params[:limit].to_i, 50].min.positive? ? [params[:limit].to_i, 50].min : 20,
           offset: [params[:offset].to_i, 0].max,
           use_llm: params[:use_llm] != 'false',
-          locale: locale
+          locale: locale,
+          context: params[:context] || {}
         }
         
         # Кешируем популярные запросы (включаем локаль в ключ кеша)
@@ -170,6 +171,9 @@ module Api
       private
       
       def generate_cache_key(query, options)
+        # Include context in cache key if present
+        context_hash = options[:context].present? ? Digest::MD5.hexdigest(options[:context].to_json) : 'no_context'
+        
         key_parts = [
           'tire_search',
           Digest::MD5.hexdigest(query.downcase),
@@ -177,6 +181,7 @@ module Api
           options[:offset],
           options[:use_llm] ? 'llm' : 'simple',
           options[:locale] || 'ru',
+          context_hash,
           TireDataVersion.current&.version || 'default'
         ]
         
