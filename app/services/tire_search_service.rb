@@ -268,7 +268,12 @@ class TireSearchService
     message = if unrecognized_input
       "К сожалению, в нашей базе нет данных о #{unrecognized_input}. Попробуйте выбрать из предложенных вариантов или введите размер шин напрямую (например: 205/55R16)."
     elsif @parsed_data[:brand].present? && @parsed_data[:model].blank?
-      "Отлично! #{@parsed_data[:brand]} - хороший выбор. Уточните модель для точного подбора шин:"
+      # Проверяем есть ли модели для этого бренда в нашей базе
+      if MODEL_ALIASES[@parsed_data[:brand]] && MODEL_ALIASES[@parsed_data[:brand]].any?
+        "Отлично! #{@parsed_data[:brand]} - хороший выбор. Уточните модель для точного подбора шин:"
+      else
+        "К сожалению, в нашей базе нет данных о #{@parsed_data[:brand]}. Попробуйте выбрать из предложенных вариантов или введите размер шин напрямую (например: 205/55R16)."
+      end
     elsif @parsed_data[:tire_brands].present? || @parsed_data[:seasonality].present?
       "Мы поняли ваши предпочтения. Добавьте информацию об автомобиле для подбора шин:"
     else
@@ -651,13 +656,13 @@ class TireSearchService
     if @parsed_data[:brand].present? && @parsed_data[:model].blank?
       suggestions = generate_car_suggestions
       
-      # Если для бренда нет моделей в алиасах, предлагаем популярные
+      # Если для бренда нет моделей в алиасах - НЕ предлагаем фейковые модели
+      # Вместо этого предлагаем альтернативные действия
       if suggestions.empty?
         suggestions = [
-          "#{@parsed_data[:brand]} 3 Series",
-          "#{@parsed_data[:brand]} 5 Series", 
-          "#{@parsed_data[:brand]} X3",
-          "#{@parsed_data[:brand]} X5"
+          "Введите размер шин (например: 205/55R16)",
+          "Попробуйте другой автомобиль",
+          "Выберите из популярных: BMW 3 Series, Toyota Camry, Volkswagen Golf"
         ]
       end
     end
