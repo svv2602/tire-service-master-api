@@ -22,7 +22,7 @@ class TireSearchService
     ['volvo', 'вольво'] => 'Volvo',
     ['mitsubishi', 'митсубиси'] => 'Mitsubishi',
     ['tesla', 'тесла', 'теслу'] => 'Tesla',
-    ['brilliance', 'бриллианс'] => 'Brilliance',
+    ['brilliance', 'бриллианс', 'брилансе', 'брилианс', 'бриланс'] => 'Brilliance',
     # ТОП бренды по конфигурациям шин
     ['chevrolet', 'шевроле', 'шеви'] => 'Chevrolet',
     ['mercedes', 'мерседес', 'мерс'] => 'Mercedes',
@@ -977,15 +977,31 @@ class TireSearchService
     # LLM может перезаписывать brand и model если:
     # 1. LLM нашел более полную информацию
     # 2. Комбинация LLM существует в БД, а простого парсинга - нет
+    # 3. В запросе есть явное указание на бренд (пользователь хочет конкретный бренд)
     
     if llm_data[:brand].present? && llm_data[:model].present?
       # Проверяем какая комбинация лучше
       simple_car_exists = car_exists_in_database?(simple_data[:brand], simple_data[:model])
       llm_car_exists = car_exists_in_database?(llm_data[:brand], llm_data[:model])
       
-      # Если LLM нашел существующий автомобиль, а простой парсинг - нет
+      # Проверяем есть ли в запросе явное указание на бренд LLM
+      query_lower = @query.downcase
+      llm_brand_mentioned = query_lower.include?(llm_data[:brand].downcase) ||
+                           brand_mentioned_in_query?(llm_data[:brand], query_lower)
+      
+      should_use_llm = false
+      reason = ""
+      
       if llm_car_exists && !simple_car_exists
-        Rails.logger.info "LLM исправляет: #{simple_data[:brand]} #{simple_data[:model]} → #{llm_data[:brand]} #{llm_data[:model]}"
+        should_use_llm = true
+        reason = "LLM найден в БД, простой парсинг - нет"
+      elsif llm_car_exists && simple_car_exists && llm_brand_mentioned
+        should_use_llm = true
+        reason = "пользователь явно указал бренд #{llm_data[:brand]}"
+      end
+      
+      if should_use_llm
+        Rails.logger.info "LLM исправляет (#{reason}): #{simple_data[:brand]} #{simple_data[:model]} → #{llm_data[:brand]} #{llm_data[:model]}"
         result[:brand] = llm_data[:brand]
         result[:model] = llm_data[:model]
       end
@@ -998,6 +1014,17 @@ class TireSearchService
     end
 
     result
+  end
+
+  # Проверяет упоминается ли бренд в запросе (включая алиасы)
+  def brand_mentioned_in_query?(brand_name, query_lower)
+    # Проверяем алиасы бренда
+    BRAND_ALIASES.each do |aliases, alias_brand|
+      if alias_brand == brand_name
+        return aliases.any? { |alias_name| query_lower.include?(alias_name) }
+      end
+    end
+    false
   end
 
   # Класс для статистики поиска
