@@ -4,18 +4,14 @@ class OpenaiService
   TIRE_SEARCH_PROMPT = <<~PROMPT
     Ты - эксперт по автомобильным шинам. Твоя задача - извлечь из пользовательского запроса следующие параметры:
 
-    1. **Бренд автомобиля** - популярные бренды включают:
-       - Европейские: BMW, Mercedes, Audi, Volkswagen, Volvo, Renault, Peugeot
-       - Японские: Toyota, Honda, Mazda, Nissan, Subaru, Lexus
-       - Американские: Ford, Chevrolet, Cadillac, Jeep
-       - Китайские: BYD, Geely, Great Wall, Chery, JAC, SAIC
-       - Корейские: Hyundai, Kia, Genesis
+    1. **Бренд автомобиля** - основные категории:
+       - Европейские: BMW, Mercedes, Audi, Volkswagen, Volvo
+       - Японские: Toyota, Honda, Mazda, Nissan
+       - Американские: Ford, Chevrolet, Cadillac
+       - Китайские: BYD, Geely, Chery, Brilliance
+       - Корейские: Hyundai, Kia
 
-    2. **Модель автомобиля** - примеры популярных моделей:
-       - BMW: 3 Series, 5 Series, X3, X5
-       - BYD: Dolphin, Seal, Tang, Han, Song
-       - Toyota: Camry, Corolla, RAV4, Prius
-       - Volkswagen: Golf, Passat, Tiguan, Polo
+    2. **Модель автомобиля** - любые буквенно-цифровые обозначения
 
     3. **Год выпуска** (2015-2025)
     4. **Размер шин** (ширина/высота/диаметр, например 225/50R17)
@@ -40,8 +36,6 @@ class OpenaiService
     ВАЖНЫЕ ПРАВИЛА:
     - ПРИОРИТЕТ: сначала ищи бренд и модель АВТОМОБИЛЯ, потом производителя шин
     - Если слово может быть и автомобилем и шиной - это АВТОМОБИЛЬ
-    - "Dolphin" = модель автомобиля BYD, НЕ бренд шин
-    - "Tang", "Seal", "Han" = модели BYD, НЕ бренды шин
     - Если параметр не найден, не включай его в ответ
     - Используй стандартные английские названия брендов
     - Размер шин указывай в стандартном формате

@@ -20,7 +20,20 @@ class TireSearchService
     ['seat', 'сеат'] => 'SEAT',
     ['fiat', 'фиат'] => 'Fiat',
     ['volvo', 'вольво'] => 'Volvo',
-    ['mitsubishi', 'митсубиси'] => 'Mitsubishi'
+    ['mitsubishi', 'митсубиси'] => 'Mitsubishi',
+    ['tesla', 'тесла', 'теслу'] => 'Tesla',
+    ['brilliance', 'бриллианс'] => 'Brilliance',
+    # ТОП бренды по конфигурациям шин
+    ['chevrolet', 'шевроле', 'шеви'] => 'Chevrolet',
+    ['mercedes', 'мерседес', 'мерс'] => 'Mercedes',
+    ['dongfeng', 'донгфенг'] => 'Dongfeng',
+    ['chery', 'чери'] => 'Chery',
+    ['daihatsu', 'дайхатцу'] => 'Daihatsu',
+    ['suzuki', 'сузуки'] => 'Suzuki',
+    ['geely', 'джили'] => 'Geely',
+    ['ferrari', 'феррари'] => 'Ferrari',
+    ['jac'] => 'JAC',
+    ['faw'] => 'FAW'
   }.freeze
 
   # Константы производителей шин (топ-100)
@@ -132,6 +145,23 @@ class TireSearchService
       ['sportage', 'спортейдж'] => 'Sportage',
       ['sorento', 'соренто'] => 'Sorento',
       ['picanto', 'пиканто'] => 'Picanto'
+    },
+    'Tesla' => {
+      ['model 3', 'модель 3', 'третья модель'] => 'Model 3',
+      ['model s', 'модель s', 'модель с'] => 'Model S', 
+      ['model x', 'модель x', 'модель икс'] => 'Model X',
+      ['model y', 'модель y', 'модель игрек'] => 'Model Y',
+      ['roadster', 'родстер'] => 'Roadster'
+    },
+    'Brilliance' => {
+      ['h530', '530'] => 'H530',
+      ['h330', '330'] => 'H330',
+      ['h220', '220'] => 'H220',
+      ['h320', '320'] => 'H320',
+      ['bs4', 'v4'] => 'BS4',
+      ['bs6', 'v6'] => 'BS6',
+      ['v3'] => 'V3',
+      ['v5'] => 'V5'
     }
   }.freeze
 
@@ -151,7 +181,11 @@ class TireSearchService
     # Шаг 2: Если простой парсинг неполный и включен LLM - используем LLM
     if needs_llm_parsing? && @use_llm
       llm_result = parse_with_llm
-      @parsed_data = @parsed_data.merge(llm_result) if llm_result.present?
+      if llm_result.present?
+        # LLM может исправлять результаты простого парсинга если они неточные
+        # Приоритет: LLM перезаписывает простой парсинг для brand и model
+        @parsed_data = smart_merge_results(@parsed_data, llm_result)
+      end
     end
 
     # Шаг 3: Определяем сценарий поиска и обрабатываем
@@ -196,9 +230,18 @@ class TireSearchService
     car_configurations = find_car_configurations
     
     if car_configurations.empty?
+      # Проверяем существует ли автомобиль в нашей БД брендов/моделей
+      car_exists = car_exists_in_database?(@parsed_data[:brand], @parsed_data[:model])
+      
+      message = if car_exists
+        "Для #{@parsed_data[:brand]} #{@parsed_data[:model]} пока нет данных о размерах шин. Уточните год выпуска или укажите размер шин напрямую (например: 205/55R16)."
+      else
+        "Уточните свой запрос - недостаточно данных для поиска или укажите размер шин напрямую (например: 205/55R16)."
+      end
+      
       return {
         success: false,
-        message: "Автомобиль #{@parsed_data[:brand]} #{@parsed_data[:model]} не найден в базе данных",
+        message: message,
         tire_sizes: [],
         tire_brands: @parsed_data[:tire_brands] || [],
         seasonality: @parsed_data[:seasonality],
@@ -267,12 +310,22 @@ class TireSearchService
     # Персонализируем сообщение в зависимости от того, что уже найдено
     message = if unrecognized_input
       "К сожалению, в нашей базе нет данных о #{unrecognized_input}. Попробуйте выбрать из предложенных вариантов или введите размер шин напрямую (например: 205/55R16)."
+    elsif @parsed_data[:brand].present? && @parsed_data[:model].present?
+      # Проверяем существует ли такой автомобиль в БД
+      if car_exists_in_database?(@parsed_data[:brand], @parsed_data[:model])
+        "Отлично! #{@parsed_data[:brand]} #{@parsed_data[:model]} - хороший выбор. Уточните модель для точного подбора шин:"
+      else
+        "Уточните свой запрос - недостаточно данных для поиска или укажите размер шин напрямую (например: 205/55R16)."
+      end
     elsif @parsed_data[:brand].present? && @parsed_data[:model].blank?
-      # Проверяем есть ли модели для этого бренда в нашей базе
-      if MODEL_ALIASES[@parsed_data[:brand]] && MODEL_ALIASES[@parsed_data[:brand]].any?
+      # Проверяем есть ли модели для этого бренда в нашей базе (через алиасы или БД)
+      has_models = (MODEL_ALIASES[@parsed_data[:brand]] && MODEL_ALIASES[@parsed_data[:brand]].any?) || 
+                   find_models_for_brand(@parsed_data[:brand]).any?
+      
+      if has_models
         "Отлично! #{@parsed_data[:brand]} - хороший выбор. Уточните модель для точного подбора шин:"
       else
-        "К сожалению, в нашей базе нет данных о #{@parsed_data[:brand]}. Попробуйте выбрать из предложенных вариантов или введите размер шин напрямую (например: 205/55R16)."
+        "Уточните свой запрос - недостаточно данных для поиска или укажите размер шин напрямую (например: 205/55R16)."
       end
     elsif @parsed_data[:tire_brands].present? || @parsed_data[:seasonality].present?
       "Мы поняли ваши предпочтения. Добавьте информацию об автомобиле для подбора шин:"
@@ -329,6 +382,12 @@ class TireSearchService
       end
     end
 
+    # Если бренд не найден в алиасах - ищем динамически в БД
+    if result[:brand].blank?
+      dynamic_brand = find_brand_in_database(query_lower)
+      result[:brand] = dynamic_brand if dynamic_brand.present?
+    end
+
     # Поиск модели (если найден бренд)
     if result[:brand] && MODEL_ALIASES[result[:brand]]
       MODEL_ALIASES[result[:brand]].each do |aliases, model_name|
@@ -340,7 +399,8 @@ class TireSearchService
     end
 
     # Поиск модели без бренда (для уникальных моделей)
-    if result[:model].blank?
+    # ТОЛЬКО если бренд НЕ найден - иначе не перезаписываем уже найденный бренд
+    if result[:model].blank? && result[:brand].blank?
       MODEL_ALIASES.each do |brand, models|
         models.each do |aliases, model_name|
           if aliases.any? { |alias_name| query_lower.match?(/\b#{Regexp.escape(alias_name)}\b/) }
@@ -468,10 +528,20 @@ class TireSearchService
     # Предложения похожих автомобилей
     suggestions = []
     if @parsed_data[:brand].present?
-      # Предлагаем другие модели того же бренда
+      # Сначала пробуем статические алиасы (для быстрого доступа к ТОП-брендам)
       if MODEL_ALIASES[@parsed_data[:brand]]
         MODEL_ALIASES[@parsed_data[:brand]].each do |aliases, model_name|
           suggestions << "#{@parsed_data[:brand]} #{model_name}"
+        end
+      end
+      
+      # Если статических предложений мало - дополняем из БД
+      if suggestions.length < 5
+        dynamic_models = find_models_for_brand(@parsed_data[:brand])
+        dynamic_models.each do |model_name|
+          suggestion = "#{@parsed_data[:brand]} #{model_name}"
+          suggestions << suggestion unless suggestions.include?(suggestion)
+          break if suggestions.length >= 5
         end
       end
     end
@@ -774,6 +844,160 @@ class TireSearchService
         context: {}
       }
     ]
+  end
+
+  # Динамический поиск брендов в БД с транслитерацией
+  def find_brand_in_database(query_lower)
+    # Убираем стоп-слова и извлекаем потенциальные бренды
+    words = extract_brand_words(query_lower)
+    
+    words.each do |word|
+      # 1. Поиск с транслитерацией кириллицы
+      transliterated_word = transliterate_to_latin(word)
+      
+      # 2. Поиск точного совпадения
+      brand = find_exact_brand_match(transliterated_word)
+      return brand.name if brand
+      
+      # 3. Поиск по началу названия
+      brand = find_brand_by_prefix(transliterated_word)
+      return brand.name if brand
+      
+      # 4. Поиск по содержанию (менее точный)
+      brand = find_brand_by_partial_match(transliterated_word)
+      return brand.name if brand
+    end
+    
+    nil
+  end
+
+  # Извлечение слов-кандидатов на бренды
+  def extract_brand_words(query_lower)
+    words = query_lower.split(/[\s\+]+/)
+    # Убираем стоп-слова
+    stop_words = ['шины', 'на', 'для', 'под', 'авто', 'автомобиль', 'машину', 'тачку', 'тачка']
+    words.reject { |w| stop_words.include?(w) || w.length < 2 }
+  end
+
+  # Транслитерация кириллицы в латиницу
+  def transliterate_to_latin(cyrillic_word)
+    transliteration_map = {
+      'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g', 'д' => 'd', 'е' => 'e', 'ё' => 'e',
+      'ж' => 'zh', 'з' => 'z', 'и' => 'i', 'й' => 'y', 'к' => 'k', 'л' => 'l', 'м' => 'm',
+      'н' => 'n', 'о' => 'o', 'п' => 'p', 'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u',
+      'ф' => 'f', 'х' => 'h', 'ц' => 'ts', 'ч' => 'ch', 'ш' => 'sh', 'щ' => 'sch',
+      'ъ' => '', 'ы' => 'y', 'ь' => '', 'э' => 'e', 'ю' => 'yu', 'я' => 'ya'
+    }
+    
+    # Специальные случаи для брендов
+    brand_specific_map = {
+      'теслу' => 'tesla', 'тесла' => 'tesla',
+      'бмв' => 'bmw', 'бэмвэ' => 'bmw',
+      'мерседес' => 'mercedes', 'мерс' => 'mercedes',
+      'вольво' => 'volvo', 'волво' => 'volvo',
+      'ауди' => 'audi',
+      'тойота' => 'toyota', 'тойоту' => 'toyota',
+      'хонда' => 'honda', 'хонду' => 'honda',
+      'ниссан' => 'nissan', 'нисан' => 'nissan',
+      'мазда' => 'mazda', 'мазду' => 'mazda',
+      'хёндай' => 'hyundai', 'хундай' => 'hyundai',
+      'киа' => 'kia', 'кию' => 'kia',
+      'шкода' => 'skoda', 'шкоду' => 'skoda',
+      'фольксваген' => 'volkswagen', 'фольцваген' => 'volkswagen'
+    }
+    
+    # Сначала проверяем специальные случаи
+    normalized_word = cyrillic_word.gsub(/[^\w]/, '').downcase
+    return brand_specific_map[normalized_word] if brand_specific_map[normalized_word]
+    
+    # Общая транслитерация
+    result = normalized_word
+    transliteration_map.each { |cyrillic, latin| result = result.gsub(cyrillic, latin) }
+    result
+  end
+
+  # Поиск точного совпадения бренда
+  def find_exact_brand_match(word)
+    return nil if word.blank? || word.length < 2
+    
+    CarBrand.where(is_active: true)
+           .where('LOWER(name) = ?', word.downcase)
+           .first
+  end
+
+  # Поиск по началу названия (более точный)
+  def find_brand_by_prefix(word)
+    return nil if word.blank? || word.length < 3
+    
+    CarBrand.where(is_active: true)
+           .where('LOWER(name) LIKE ?', "#{word.downcase}%")
+           .order(:name)
+           .first
+  end
+
+  # Поиск по частичному совпадению (менее точный)
+  def find_brand_by_partial_match(word)
+    return nil if word.blank? || word.length < 3
+    
+    CarBrand.where(is_active: true)
+           .where('LOWER(name) LIKE ?', "%#{word.downcase}%")
+           .order(:name)
+           .first
+  end
+
+  # Динамический поиск моделей для найденного бренда
+  def find_models_for_brand(brand_name)
+    brand = CarBrand.find_by(name: brand_name, is_active: true)
+    return [] unless brand
+    
+    CarModel.where(brand_id: brand.id, is_active: true)
+            .order(:name)
+            .limit(10)
+            .pluck(:name)
+  end
+
+  # Проверка существования автомобиля в БД
+  def car_exists_in_database?(brand_name, model_name)
+    return false if brand_name.blank? || model_name.blank?
+    
+    brand = CarBrand.find_by(name: brand_name, is_active: true)
+    return false unless brand
+    
+    CarModel.exists?(
+      brand_id: brand.id, 
+      name: model_name, 
+      is_active: true
+    )
+  end
+
+  # Умное объединение результатов простого парсинга и LLM
+  def smart_merge_results(simple_data, llm_data)
+    result = simple_data.dup
+
+    # LLM может перезаписывать brand и model если:
+    # 1. LLM нашел более полную информацию
+    # 2. Комбинация LLM существует в БД, а простого парсинга - нет
+    
+    if llm_data[:brand].present? && llm_data[:model].present?
+      # Проверяем какая комбинация лучше
+      simple_car_exists = car_exists_in_database?(simple_data[:brand], simple_data[:model])
+      llm_car_exists = car_exists_in_database?(llm_data[:brand], llm_data[:model])
+      
+      # Если LLM нашел существующий автомобиль, а простой парсинг - нет
+      if llm_car_exists && !simple_car_exists
+        Rails.logger.info "LLM исправляет: #{simple_data[:brand]} #{simple_data[:model]} → #{llm_data[:brand]} #{llm_data[:model]}"
+        result[:brand] = llm_data[:brand]
+        result[:model] = llm_data[:model]
+      end
+    end
+
+    # Для остальных полей - обычное слияние (LLM дополняет, не перезаписывает)
+    llm_data.each do |key, value|
+      next if [:brand, :model].include?(key) # brand и model обработаны выше
+      result[key] = value if value.present? && result[key].blank?
+    end
+
+    result
   end
 
   # Класс для статистики поиска
