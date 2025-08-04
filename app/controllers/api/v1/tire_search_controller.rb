@@ -25,16 +25,23 @@ module Api
         Rails.logger.info "TireSearchController: Accept-Language header: #{request.headers['Accept-Language']}"
         
         # Опции поиска
+        context = params[:context].present? ? params[:context].permit!.to_h.symbolize_keys : {}
+        
         search_options = {
           limit: [params[:limit].to_i, 50].min.positive? ? [params[:limit].to_i, 50].min : 20,
           offset: [params[:offset].to_i, 0].max,
           use_llm: params[:use_llm] != 'false',
           locale: locale,
-          context: params[:context] || {}
+          context: context
         }
         
-        # Кешируем популярные запросы (включаем локаль в ключ кеша)
+        Rails.logger.info "TireSearchController: Context param: #{params[:context].inspect}"
+        Rails.logger.info "TireSearchController: Converted context: #{context.inspect}"
+        Rails.logger.info "TireSearchController: Search options: #{search_options.inspect}"
+        
+        # Кешируем популярные запросы (включаем контекст в ключ кеша)
         cache_key = generate_cache_key(query, search_options)
+        Rails.logger.info "TireSearchController: Cache key: #{cache_key}"
         
         results = Rails.cache.fetch(cache_key, expires_in: 1.hour) do
           Rails.logger.info "Creating TireSearchService with query: '#{query}', options: #{search_options.inspect}"
@@ -62,7 +69,10 @@ module Api
           query: results[:query],
           parsed_data: results[:parsed_data],
           suggestions: results[:suggestions],
-          warnings: results[:warnings]
+          warnings: results[:warnings],
+          context: results[:context],
+          conversation_mode: results[:conversation_mode],
+          follow_up_questions: results[:follow_up_questions]
         }
         
       rescue => e
