@@ -342,6 +342,7 @@ module Api
           'users',
           params[:role],
           params[:active],
+          params[:is_suspended],
           params[:query],
           params[:page],
           params[:per_page],
@@ -355,7 +356,7 @@ module Api
       end
 
       def build_users_response
-        @users = User.includes(:role).all
+        @users = User.includes(:role, :suspended_by).all
         
         # Фильтрация по роли
         @users = @users.with_role(params[:role]) if params[:role].present?
@@ -363,6 +364,11 @@ module Api
         # Фильтрация по активности
         if params[:active].present?
           @users = @users.where(is_active: params[:active] == 'true')
+        end
+        
+        # Фильтрация по статусу блокировки
+        if params[:is_suspended].present?
+          @users = @users.where(is_suspended: params[:is_suspended] == 'true')
         end
         
         # Поиск по email, имени или номеру телефона
