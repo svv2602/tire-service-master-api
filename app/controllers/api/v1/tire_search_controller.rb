@@ -8,21 +8,31 @@ module Api
         query = params[:query].to_s.strip
         
         if query.blank?
-          render json: { 
-            error: 'Запрос не может быть пустым',
-            suggestions: TireSearchService::SearchStats.popular_queries
-          }, status: :bad_request
+          locale = detect_locale
+          I18n.with_locale(locale) do
+            render json: { 
+              error: I18n.t('tire_search.messages.empty_query'),
+              suggestions: TireSearchService::SearchStats.popular_queries
+            }, status: :bad_request
+          end
           return
         end
+        
+        # Определяем локаль из заголовков или параметров
+        locale = detect_locale
+        Rails.logger.info "TireSearchController: Detected locale: #{locale}"
+        Rails.logger.info "TireSearchController: Request params: #{params.inspect}"
+        Rails.logger.info "TireSearchController: Accept-Language header: #{request.headers['Accept-Language']}"
         
         # Опции поиска
         search_options = {
           limit: [params[:limit].to_i, 50].min.positive? ? [params[:limit].to_i, 50].min : 20,
           offset: [params[:offset].to_i, 0].max,
-          use_llm: params[:use_llm] != 'false'
+          use_llm: params[:use_llm] != 'false',
+          locale: locale
         }
         
-        # Кешируем популярные запросы
+        # Кешируем популярные запросы (включаем локаль в ключ кеша)
         cache_key = generate_cache_key(query, search_options)
         
         results = Rails.cache.fetch(cache_key, expires_in: 1.hour) do
@@ -166,6 +176,7 @@ module Api
           options[:limit],
           options[:offset],
           options[:use_llm] ? 'llm' : 'simple',
+          options[:locale] || 'ru',
           TireDataVersion.current&.version || 'default'
         ]
         
@@ -220,6 +231,32 @@ module Api
           return false
         end
         true
+      end
+      
+      def detect_locale
+        # Приоритет: параметр locale, заголовок Accept-Language, язык пользователя, по умолчанию
+        locale = params[:locale]
+        
+        if locale.blank?
+          # Проверяем заголовок Accept-Language
+          accept_language = request.headers['Accept-Language']
+          if accept_language.present?
+            # Ищем поддерживаемые локали (uk, ru)
+            if accept_language.include?('uk')
+              locale = 'uk'
+            elsif accept_language.include?('ru')
+              locale = 'ru'
+            end
+          end
+        end
+        
+        # Если есть авторизованный пользователь, используем его предпочтения
+        if locale.blank? && current_user&.language.present?
+          locale = current_user.language
+        end
+        
+        # По умолчанию русский
+        locale.presence || 'ru'
       end
     end
   end

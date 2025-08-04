@@ -170,6 +170,8 @@ class TireSearchService
     @options = options
     @parsed_data = {}
     @use_llm = options[:use_llm] != false
+    @locale = options[:locale] || 'ru'
+    Rails.logger.info "TireSearchService: Initialized with locale: #{@locale}"
   end
 
   def search
@@ -323,14 +325,26 @@ class TireSearchService
                    find_models_for_brand(@parsed_data[:brand]).any?
       
       if has_models
-        "Отлично! #{@parsed_data[:brand]} - хороший выбор. Уточните модель для точного подбора шин:"
+        message = I18n.with_locale(@locale) do
+          I18n.t('tire_search.messages.excellent_choice', brand: @parsed_data[:brand])
+        end
+        Rails.logger.info "TireSearchService: Generated message with locale #{@locale}: #{message}"
+        message
       else
-        "Уточните свой запрос - недостаточно данных для поиска или укажите размер шин напрямую (например: 205/55R16)."
+        message = I18n.with_locale(@locale) do
+          I18n.t('tire_search.messages.insufficient_data')
+        end
+        Rails.logger.info "TireSearchService: Generated message with locale #{@locale}: #{message}"
+        message
       end
     elsif @parsed_data[:tire_brands].present? || @parsed_data[:seasonality].present?
-      "Мы поняли ваши предпочтения. Добавьте информацию об автомобиле для подбора шин:"
+      I18n.with_locale(@locale) do
+        I18n.t('tire_search.messages.preferences_understood')
+      end
     else
-      "Помогите нам подобрать идеальные шины. Укажите марку и модель автомобиля:"
+      I18n.with_locale(@locale) do
+        I18n.t('tire_search.messages.help_select')
+      end
     end
 
     {
