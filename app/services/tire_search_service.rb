@@ -72,12 +72,12 @@ class TireSearchService
   # Константы алиасов для моделей по брендам
   MODEL_ALIASES = {
     'BMW' => {
-      ['3', '320', '330', 'тройка', '3 series', 'третья серия'] => '3 Series',
-      ['5', '520', '530', 'пятерка', '5 series', 'пятая серия'] => '5 Series',
-      ['7', '730', '740', 'семерка', '7 series', 'седьмая серия'] => '7 Series',
-      ['x3', 'икс3', 'x 3'] => 'X3',
-      ['x5', 'икс5', 'x 5'] => 'X5',
-      ['x1', 'икс1', 'x 1'] => 'X1'
+      ['3', '320', '320i', '320d', '320cdi', '325', '325i', '330', '330i', '330d', 'тройка', '3 series', 'третья серия'] => '3 Series',
+      ['5', '520', '520i', '520d', '525', '525i', '530', '530i', '530d', 'пятерка', '5 series', 'пятая серия'] => '5 Series',
+      ['7', '730', '730i', '730d', '740', '740i', '740d', 'семерка', '7 series', 'седьмая серия'] => '7 Series',
+      ['x3', 'икс3', 'x 3', 'x3 20i', 'x3 20d', 'x3 25i', 'x3 30i'] => 'X3',
+      ['x5', 'икс5', 'x 5', 'x5 25i', 'x5 30i', 'x5 35i', 'x5 40i'] => 'X5',
+      ['x1', 'икс1', 'x 1', 'x1 18i', 'x1 20i', 'x1 25i'] => 'X1'
     },
     'Volkswagen' => {
       ['tiguan', 'тигуан'] => 'Tiguan',
@@ -409,6 +409,11 @@ class TireSearchService
           result[:model] = model_name
           break
         end
+      end
+      
+      # Если модель не найдена точно, попробуем найти с учетом расширений двигателей
+      if result[:model].blank?
+        result[:model] = find_model_with_engine_extensions(query_lower, result[:brand])
       end
     end
 
@@ -968,6 +973,36 @@ class TireSearchService
             .order(:name)
             .limit(10)
             .pluck(:name)
+  end
+
+  # Поиск модели с учетом расширений двигателей (i, d, cdi, tdi и т.д.)
+  def find_model_with_engine_extensions(query_lower, brand_name)
+    return nil unless MODEL_ALIASES[brand_name]
+    
+    # Список распространенных расширений двигателей
+    engine_extensions = %w[i d cdi tdi tfsi tsi dci hdi bluemotion xdrive quattro]
+    
+    MODEL_ALIASES[brand_name].each do |aliases, model_name|
+      aliases.each do |alias_name|
+        # Проверяем, есть ли в запросе базовая модель с расширением
+        engine_extensions.each do |extension|
+          # Паттерны для поиска: "320i", "320 i", "320-i"
+          patterns = [
+            "#{alias_name}#{extension}",           # 320i
+            "#{alias_name} #{extension}",          # 320 i  
+            "#{alias_name}-#{extension}",          # 320-i
+            "#{alias_name}_#{extension}"           # 320_i
+          ]
+          
+          if patterns.any? { |pattern| query_lower.match?(/\b#{Regexp.escape(pattern)}\b/) }
+            Rails.logger.info "TireSearchService: Найдена модель с расширением: #{alias_name}#{extension} → #{model_name}"
+            return model_name
+          end
+        end
+      end
+    end
+    
+    nil
   end
 
   # Проверка существования автомобиля в БД
