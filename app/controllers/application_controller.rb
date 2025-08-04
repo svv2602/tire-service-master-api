@@ -73,6 +73,14 @@ class ApplicationController < ActionController::API
     refresh_token = cookies[:refresh_token]
     return false if refresh_token.blank?
 
+    # Защита от зацикливания - проверяем, не пытались ли мы уже обновить токен недавно
+    if session[:last_refresh_attempt] && Time.current - session[:last_refresh_attempt] < 5.seconds
+      Rails.logger.warn("Token refresh attempt too frequent, skipping to prevent loop")
+      return false
+    end
+    
+    session[:last_refresh_attempt] = Time.current
+
     begin
       new_access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
       
@@ -86,12 +94,15 @@ class ApplicationController < ActionController::API
         path: '/'
       }
       
-      Rails.logger.info("Token auto-refreshed successfully")
+      Rails.logger.info("Token auto-refreshed successfully for user session")
+      # Сбрасываем счетчик попыток после успешного обновления
+      session[:last_refresh_attempt] = nil
       return true
     rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
       # Удаляем недействительные cookies
       cookies.delete(:access_token)
       cookies.delete(:refresh_token)
+      session[:last_refresh_attempt] = nil
       Rails.logger.info("Failed to refresh token: #{e.message}")
       return false
     end
