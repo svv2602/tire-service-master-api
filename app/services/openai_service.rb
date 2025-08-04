@@ -143,7 +143,20 @@ class OpenaiService
 
   # Вспомогательный метод для чтения настроек
   def get_system_setting(key)
-    # Сначала проверяем кастомные настройки
+    # Сначала читаем из базы данных (основной источник истины)
+    begin
+      if defined?(SystemSetting)
+        db_setting = SystemSetting.find_by(key: key)
+        if db_setting
+          Rails.logger.debug "Found setting in DB: #{key} = #{db_setting.value}"
+          return db_setting.typed_value
+        end
+      end
+    rescue => e
+      Rails.logger.error "Error reading system setting from DB #{key}: #{e.message}"
+    end
+    
+    # Fallback к кэшу (для обратной совместимости)
     custom_key = "system_settings:custom:#{key}"
     
     begin
@@ -155,10 +168,11 @@ class OpenaiService
       
       if setting_json
         setting_data = JSON.parse(setting_json, symbolize_names: true)
+        Rails.logger.debug "Found setting in cache: #{key} = #{setting_data[:value]}"
         return setting_data[:value]
       end
     rescue => e
-      Rails.logger.error "Error reading system setting #{key}: #{e.message}"
+      Rails.logger.error "Error reading system setting from cache #{key}: #{e.message}"
     end
     
     # Fallback к дефолтным значениям
@@ -171,7 +185,9 @@ class OpenaiService
       'tire_search_enable_llm' => 'false'
     }
     
-    default_values[key]
+    default_value = default_values[key]
+    Rails.logger.debug "Using default value for #{key}: #{default_value}"
+    default_value
   end
 
   def validate_and_clean_result(result)

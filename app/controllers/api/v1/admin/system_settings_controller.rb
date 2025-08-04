@@ -70,6 +70,46 @@ module Api
           end
         end
 
+        # POST /api/v1/admin/system_settings/sync_llm_settings
+        def sync_llm_settings
+          begin
+            # Принудительная синхронизация настроек LLM
+            Rails.logger.info "Starting LLM settings synchronization..."
+            
+            llm_settings = {
+              'tire_search_enable_llm' => 'true',
+              'openai_model' => 'gpt-4o-mini',
+              'openai_max_tokens' => '500',
+              'openai_temperature' => '0.1',
+              'openai_timeout' => '30'
+            }
+            
+            # Добавляем API ключ если он есть в параметрах
+            if params[:openai_api_key].present?
+              llm_settings['openai_api_key'] = params[:openai_api_key]
+            end
+            
+            synced_count = 0
+            llm_settings.each do |key, value|
+              if force_sync_setting(key, value)
+                synced_count += 1
+                Rails.logger.info "Synced setting: #{key}"
+              end
+            end
+            
+            render json: { 
+              message: "Синхронизировано #{synced_count} настроек LLM",
+              synced_settings: llm_settings.keys,
+              llm_available: OpenaiService.available?,
+              llm_configured: OpenaiService.configured?
+            }, status: :ok
+            
+          rescue => e
+            Rails.logger.error "Error syncing LLM settings: #{e.message}"
+            render json: { error: "Ошибка синхронизации настроек LLM: #{e.message}" }, status: :internal_server_error
+          end
+        end
+
         # DELETE /api/v1/admin/system_settings/:key
         def destroy
           key = params[:key]
@@ -140,10 +180,60 @@ module Api
 
         # Получить конкретную настройку
         def get_setting(key)
+          # Сначала пытаемся найти в БД
+          db_setting = SystemSetting.find_by(key: key.to_s)
+          
+          if db_setting
+            setting = {
+              key: db_setting.key,
+              value: db_setting.value,
+              description: db_setting.description,
+              category: db_setting.category,
+              type: db_setting.setting_type,
+              default_value: db_setting.default_value,
+              updated_at: db_setting.updated_at.iso8601,
+              updated_by: db_setting.updated_by
+            }
+            Rails.logger.info "Found setting in DB: #{key} = #{setting[:value]} (category: #{setting[:category]})"
+            return setting
+          end
+          
+          # Fallback к кэшу/default настройкам
           all_settings = get_all_settings.values.reduce(&:merge) || {}
           setting = all_settings[key.to_s]
-          Rails.logger.info "Getting setting #{key}: #{setting&.dig(:value)} (category: #{setting&.dig(:category)})"
+          Rails.logger.info "Getting setting from cache/defaults: #{key}: #{setting&.dig(:value)} (category: #{setting&.dig(:category)})"
           setting
+        end
+
+        # Принудительная синхронизация настройки (без валидации)
+        def force_sync_setting(key, value)
+          begin
+            setting_data = {
+              key: key,
+              value: value.to_s,
+              description: get_setting_description(key) || 'Auto-synced setting',
+              category: get_setting_category(key),
+              type: get_setting_type(key),
+              updated_at: Time.current.iso8601,
+              updated_by: 'sync_service'
+            }
+            
+            redis_key = "system_settings:custom:#{key}"
+            
+            if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+              Rails.cache.redis.set(redis_key, setting_data.to_json)
+            else
+              Rails.cache.write(redis_key, setting_data.to_json, expires_in: nil)
+            end
+            
+            # Инвалидируем кеш
+            Rails.cache.delete('system_settings:all')
+            
+            true
+          rescue => e
+            Rails.logger.error "Error force syncing setting #{key}: #{e.message}"
+            false
+          end
         end
 
         # Обновить настройку
@@ -152,26 +242,34 @@ module Api
             # Валидируем значение
             validated_value = validate_setting_value(key, value)
             
-            # Сохраняем в Redis
+            # Сохраняем в базу данных (основной источник истины)
+            setting = SystemSetting.find_or_initialize_by(key: key)
+            setting.value = validated_value
+            setting.description = description || setting.description || get_setting_description(key)
+            setting.category = setting.category || get_setting_category(key)
+            setting.setting_type = setting.setting_type || get_setting_type(key)
+            setting.updated_by = current_user&.email || 'admin'
+            setting.save!
+            
+            Rails.logger.info "System setting saved to DB: #{key} = #{validated_value}"
+            
+            # Дублируем в Redis для обратной совместимости и быстрого доступа
             setting_data = {
               key: key,
               value: validated_value,
-              description: description || get_setting_description(key),
-              category: get_setting_category(key),
-              type: get_setting_type(key),
-              updated_at: Time.current.iso8601,
-              updated_by: current_user&.email || 'system'
+              description: setting.description,
+              category: setting.category,
+              type: setting.setting_type,
+              updated_at: setting.updated_at.iso8601,
+              updated_by: setting.updated_by
             }
             
             redis_key = "system_settings:custom:#{key}"
             
-            # Сохраняем через Redis напрямую для консистентности
             if Rails.cache.respond_to?(:redis) && Rails.cache.redis
               Rails.cache.redis.set(redis_key, setting_data.to_json)
-              Rails.logger.info "Saved to Redis: #{redis_key} = #{setting_data.to_json}"
             else
               Rails.cache.write(redis_key, setting_data.to_json, expires_in: nil)
-              Rails.logger.info "Saved to Rails.cache: #{redis_key} = #{setting_data.to_json}"
             end
             
             # Инвалидируем кеш
@@ -180,14 +278,12 @@ module Api
             # Применяем настройку в runtime (если нужно)
             apply_runtime_setting(key, validated_value)
             
-            Rails.logger.info "System setting updated: #{key} = #{validated_value}"
-            
-            # Принудительно обновляем кеш
-            Rails.cache.delete('system_settings:all')
+            Rails.logger.info "System setting updated and cached: #{key} = #{validated_value}"
             
             true
           rescue => e
             Rails.logger.error "Error updating system setting #{key}: #{e.message}"
+            Rails.logger.error e.backtrace.join("\n")
             false
           end
         end

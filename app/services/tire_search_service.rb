@@ -100,7 +100,9 @@ class TireSearchService
       ['megane', 'меган'] => 'Megane',
       ['fluence', 'флюенс'] => 'Fluence',
       ['kaptur', 'каптур'] => 'Kaptur',
-      ['koleos', 'колеос'] => 'Koleos'
+      ['koleos', 'колеос'] => 'Koleos',
+      ['laguna', 'лагуна'] => 'Laguna',
+      ['dokker', 'доккер', 'докер'] => 'Dokker'
     },
     'Audi' => {
       ['a3', 'а3'] => 'A3',

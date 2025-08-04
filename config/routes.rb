@@ -629,6 +629,7 @@ Rails.application.routes.draw do
           post :reset_defaults
           get :categories
           post :test_connection
+          post :sync_llm_settings
         end
       end
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_01_203557) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_04_015821) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1084,6 +1084,22 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_01_203557) do
     t.index ["user_id", "created_at"], name: "idx_system_logs_user_created"
     t.index ["user_id", "created_at"], name: "index_system_logs_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_system_logs_on_user_id"
+  end
+
+  create_table "system_settings", force: :cascade do |t|
+    t.string "key", null: false
+    t.text "value"
+    t.text "description"
+    t.string "category", default: "general"
+    t.string "setting_type", default: "string"
+    t.text "default_value"
+    t.string "updated_by"
+    t.boolean "is_encrypted", default: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category", "setting_type"], name: "index_system_settings_on_category_and_setting_type"
+    t.index ["category"], name: "index_system_settings_on_category"
+    t.index ["key"], name: "index_system_settings_on_key", unique: true
   end
 
   create_table "telegram_booking_sessions", force: :cascade do |t|
