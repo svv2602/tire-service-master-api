@@ -163,11 +163,55 @@ module Api
         def get_all_settings
           begin
             settings = Rails.cache.fetch('system_settings:all', expires_in: 5.minutes) do
-              default_settings.merge(custom_settings)
+              # Сначала загружаем базовые настройки
+              base_settings = default_settings.merge(custom_settings)
+              
+              # Загружаем из БД и объединяем с сохранением metadata
+              if defined?(SystemSetting)
+                SystemSetting.all.each do |setting|
+                  # Получаем базовую настройку (если есть) для сохранения options, min_value, max_value и т.д.
+                  base_setting = base_settings[setting.key] || {}
+                  
+                  # Создаем финальную настройку, объединяя БД данные с базовыми метаданными
+                  base_settings[setting.key] = base_setting.merge({
+                    key: setting.key,
+                    value: setting.value,
+                    description: setting.description,
+                    category: setting.category,
+                    type: setting.setting_type,
+                    default_value: setting.default_value,
+                    updated_at: setting.updated_at.iso8601,
+                    updated_by: setting.updated_by
+                  })
+                end
+              end
+              
+              base_settings
             end
           rescue => e
-            Rails.logger.error "Error caching settings, using direct access: #{e.message}"
-            settings = default_settings.merge(custom_settings)
+            Rails.logger.error "Error loading settings: #{e.message}"
+            # Fallback - пытаемся загрузить из БД напрямую
+            begin
+              base_settings = default_settings.merge(custom_settings)
+              
+              SystemSetting.all.each do |setting|
+                # Получаем базовую настройку для сохранения options
+                base_setting = base_settings[setting.key] || {}
+                
+                # Объединяем БД данные с базовыми метаданными
+                base_settings[setting.key] = base_setting.merge({
+                  key: setting.key,
+                  value: setting.value,
+                  description: setting.description,
+                  category: setting.category,
+                  type: setting.setting_type
+                })
+              end
+              settings = base_settings
+            rescue => db_error
+              Rails.logger.error "DB fallback failed: #{db_error.message}"
+              settings = default_settings.merge(custom_settings)
+            end
           end
           
           # Группируем по категориям
@@ -374,7 +418,14 @@ module Api
               description: 'Модель OpenAI для обработки запросов',
               category: 'integrations',
               type: 'select',
-              options: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4', 'gpt-4o'],
+              options: [
+                'gpt-4o-mini',
+                'gpt-4o', 
+                'gpt-4-turbo',
+                'gpt-4',
+                'gpt-3.5-turbo',
+                'gpt-3.5-turbo-16k'
+              ],
               default: true
             },
             'openai_max_tokens' => {

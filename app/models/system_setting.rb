@@ -105,13 +105,14 @@ class SystemSetting < ApplicationRecord
   def encrypt_value(plain_value)
     # Для демонстрации - простое base64 кодирование
     # В продакшене использовать Rails.application.credentials.secret_key_base
-    Base64.encode64(plain_value)
+    Base64.encode64(plain_value.to_s).strip.force_encoding('UTF-8')
   end
 
   # Простая расшифровка
   def decrypt_value(encrypted_value)
-    Base64.decode64(encrypted_value)
-  rescue
-    encrypted_value # Fallback если расшифровка не удалась
+    Base64.decode64(encrypted_value.to_s).force_encoding('UTF-8')
+  rescue => e
+    Rails.logger.error "Decrypt error: #{e.message}"
+    encrypted_value.to_s.force_encoding('UTF-8') # Fallback если расшифровка не удалась
   end
 end
