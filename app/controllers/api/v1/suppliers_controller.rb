@@ -2,7 +2,7 @@ module Api
   module V1
     class SuppliersController < ApiController
       before_action :authenticate_supplier, only: [:upload_price]
-      before_action :ensure_admin!, except: [:upload_price]
+      before_action :ensure_admin!, except: [:upload_price, :all_products]
       before_action :set_supplier, only: [:show, :update, :destroy, :admin_upload_price, :regenerate_api_key, :price_versions]
       
       # GET /api/v1/suppliers
@@ -236,6 +236,60 @@ module Api
         }
       end
       
+      # GET /api/v1/suppliers/products/all
+      # Получение товаров всех поставщиков (для клиентов)
+      def all_products
+        products = SupplierTireProduct.includes(:supplier)
+        
+        # Фильтрация
+        products = products.by_brand(params[:brand]) if params[:brand].present?
+        products = products.by_season(params[:season]) if params[:season].present?
+        products = products.in_stock if params[:in_stock_only] == 'true'
+        
+        # Поиск по тексту (название, бренд, модель, ID, описание)
+        products = products.search_by_text(params[:search]) if params[:search].present?
+        
+        # Фильтрация по дате обновления
+        if params[:updated_after].present?
+          begin
+            date = Date.parse(params[:updated_after])
+            products = products.updated_after(date.beginning_of_day)
+          rescue ArgumentError
+            Rails.logger.warn "Invalid date format for updated_after: #{params[:updated_after]}"
+          end
+        end
+        
+        if params[:updated_before].present?
+          begin
+            date = Date.parse(params[:updated_before])
+            products = products.updated_before(date.end_of_day)
+          rescue ArgumentError
+            Rails.logger.warn "Invalid date format for updated_before: #{params[:updated_before]}"
+          end
+        end
+        
+        # Сортировка
+        products = case params[:sort_by]
+                   when 'price_asc'
+                     products.order(Arel.sql('price_uah ASC NULLS LAST'))
+                   when 'price_desc'
+                     products.order(Arel.sql('price_uah DESC NULLS LAST'))
+                   when 'updated_at'
+                     products.order(updated_at: :desc)
+                   when 'supplier_name'
+                     products.joins(:supplier).order('suppliers.name ASC')
+                   else
+                     products.order(:brand_normalized, :model, :price_uah)
+                   end
+        
+        result = paginate(products)
+        
+        render json: {
+          products: result[:data].map { |product| format_product_with_supplier(product) },
+          pagination: result[:pagination]
+        }
+      end
+
       # GET /api/v1/suppliers/:id/statistics
       def statistics
         @supplier = Supplier.find(params[:id])
@@ -399,6 +453,40 @@ module Api
           country: product.country,
           year_week: product.year_week,
           updated_at: product.updated_at&.strftime('%Y-%m-%d %H:%M')
+        }
+      end
+
+      def format_product_with_supplier(product)
+        {
+          id: product.id,
+          external_id: product.external_id,
+          brand: product.brand_normalized,
+          model: product.model,
+          name: product.name,
+          width: product.width,
+          height: product.height,
+          diameter: product.diameter,
+          load_index: product.load_index,
+          speed_index: product.speed_index,
+          size: product.tire_size,
+          load_speed_index: product.load_speed_indices,
+          season: product.season,
+          price_uah: product.price_uah,
+          stock_status: product.stock_status,
+          in_stock: product.in_stock,
+          description: product.description,
+          image_url: product.image_url,
+          product_url: product.product_url,
+          country: product.country,
+          year_week: product.year_week,
+          updated_at: product.updated_at&.strftime('%Y-%m-%d %H:%M'),
+          supplier: {
+            id: product.supplier.id,
+            name: product.supplier.name,
+            firm_id: product.supplier.firm_id,
+            priority: product.supplier.priority,
+            is_active: product.supplier.is_active
+          }
         }
       end
       
