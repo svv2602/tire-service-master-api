@@ -2,7 +2,7 @@ class TireSearchService
   # Константы алиасов для брендов
   BRAND_ALIASES = {
     ['bmw', 'бмв', 'бэмв', 'бмдабльвэ'] => 'BMW',
-    ['volkswagen', 'vw', 'фольксваген', 'фольц', 'вольксваген'] => 'Volkswagen',
+    ['volkswagen', 'vw', 'фольксваген', 'фольскваген', 'фольц', 'вольксваген'] => 'Volkswagen',
     ['mercedes', 'мерседес', 'мерс', 'mercedes-benz', 'мерседес-бенц'] => 'Mercedes-Benz',
     ['toyota', 'тойота'] => 'Toyota',
     ['honda', 'хонда'] => 'Honda',
@@ -214,10 +214,14 @@ class TireSearchService
 
   def process_search_scenario
     car_identified = @parsed_data[:brand].present? && @parsed_data[:model].present?
+    brand_with_diameter = @parsed_data[:brand].present? && @parsed_data[:model].blank? && @parsed_data[:diameter].present?
     
     if car_identified
       # Сценарии 1-3: Автомобиль определен
       process_car_identified_scenario
+    elsif brand_with_diameter
+      # Бренд + диаметр без модели - запрос уточнения модели
+      process_brand_diameter_scenario
     elsif @parsed_data[:tire_size].present? || @parsed_data[:diameter].present?
       # Есть размер шин, но авто не определено
       process_tire_size_only_scenario
@@ -281,20 +285,32 @@ class TireSearchService
   def process_tire_size_only_scenario
     # Указан размер шин, но автомобиль не определен
     tire_sizes = []
+    message = ""
     
     if @parsed_data[:tire_size].present?
       tire_sizes << @parsed_data[:tire_size]
+      message = "Найден размер шин, но автомобиль не определен. Рекомендуем указать марку и модель для более точного подбора."
     elsif @parsed_data[:width].present? && @parsed_data[:height].present? && @parsed_data[:diameter].present?
       tire_sizes << {
         width: @parsed_data[:width],
         height: @parsed_data[:height],
         diameter: @parsed_data[:diameter]
       }
+      message = "Найден размер шин, но автомобиль не определен. Рекомендуем указать марку и модель для более точного подбора."
+    elsif @parsed_data[:diameter].present?
+      # Случай когда найден только диаметр (например "R18")
+      message = I18n.with_locale(@locale) do
+        I18n.t('tire_search.messages.diameter_only', diameter: @parsed_data[:diameter])
+      end
+      tire_sizes << {
+        diameter: @parsed_data[:diameter],
+        display: "R#{@parsed_data[:diameter]}"
+      }
     end
 
     {
       success: true,
-      message: "Найден размер шин, но автомобиль не определен. Рекомендуем указать марку и модель для более точного подбора.",
+      message: message,
       tire_sizes: tire_sizes,
       tire_brands: @parsed_data[:tire_brands] || [],
       seasonality: @parsed_data[:seasonality],
@@ -302,6 +318,61 @@ class TireSearchService
       query: @query,
       parsed_data: @parsed_data,
       suggestions: generate_car_brand_suggestions
+    }
+  end
+
+  def process_brand_diameter_scenario
+    # Бренд найден, диаметр найден, но модель не указана
+    # Нужно запросить уточнение модели с учетом диаметра
+    
+    message = I18n.with_locale(@locale) do
+      I18n.t('tire_search.messages.brand_diameter_specify_model', 
+             brand: @parsed_data[:brand], 
+             diameter: @parsed_data[:diameter])
+    end
+
+    # Генерируем предложения моделей для данного бренда
+    model_suggestions = []
+    
+    # Из алиасов
+    if MODEL_ALIASES[@parsed_data[:brand]]
+      MODEL_ALIASES[@parsed_data[:brand]].each do |aliases, model_name|
+        model_suggestions << "#{@parsed_data[:brand]} #{model_name}"
+      end
+    end
+    
+    # Из БД (динамические модели)
+    dynamic_models = find_models_for_brand(@parsed_data[:brand])
+    dynamic_models.each do |model_name|
+      suggestion = "#{@parsed_data[:brand]} #{model_name}"
+      model_suggestions << suggestion unless model_suggestions.include?(suggestion)
+    end
+    
+    # Ограничиваем количество предложений
+    model_suggestions = model_suggestions.first(8)
+
+    {
+      success: false,
+      conversation_mode: true,
+      message: message,
+      tire_sizes: [{
+        diameter: @parsed_data[:diameter],
+        display: "R#{@parsed_data[:diameter]}"
+      }],
+      tire_brands: @parsed_data[:tire_brands] || [],
+      seasonality: @parsed_data[:seasonality],
+      car_info: {
+        brand: @parsed_data[:brand]
+      },
+      query: @query,
+      parsed_data: @parsed_data,
+      suggestions: model_suggestions,
+      follow_up_questions: [{
+        type: "model_selection",
+        brand: @parsed_data[:brand],
+        field: "model",
+        diameter: @parsed_data[:diameter]
+      }]
     }
   end
 
@@ -385,6 +456,18 @@ class TireSearchService
           diameter: diameter,
           full_size: "#{width}/#{height}R#{diameter}"
         }
+      end
+    end
+
+    # Поиск отдельного диаметра (например, "R18", "18", "диаметр 18")
+    if result[:tire_size].blank?
+      diameter_matches = @query.scan(/\b(?:r|диаметр\s*)?(\d{2})\b/i)
+      if diameter_matches.any?
+        diameter = diameter_matches.last.first.to_i
+        if diameter >= 13 && diameter <= 24
+          result[:diameter] = diameter
+          Rails.logger.info "TireSearchService: Найден диаметр: R#{diameter}"
+        end
       end
     end
 
@@ -628,8 +711,14 @@ class TireSearchService
 
   def needs_llm_parsing?
     # Используем LLM если простой парсинг НЕ нашел brand ИЛИ model
-    # Это основной случай - когда нужна помощь в распознавании
+    # Но НЕ используем LLM если найден только диаметр без бренда/модели - это нормальный случай
     if @parsed_data[:brand].blank? || @parsed_data[:model].blank?
+      # Если найден только диаметр без бренда/модели - LLM не нужна
+      if @parsed_data[:diameter].present? && @parsed_data[:brand].blank? && @parsed_data[:model].blank?
+        Rails.logger.info "LLM НЕ нужен: найден только диаметр R#{@parsed_data[:diameter]}"
+        return false
+      end
+      
       Rails.logger.info "LLM нужен: brand=#{@parsed_data[:brand].inspect}, model=#{@parsed_data[:model].inspect}"
       return true
     end
