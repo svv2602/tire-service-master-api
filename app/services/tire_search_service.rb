@@ -599,6 +599,11 @@ class TireSearchService
     tire_sizes = []
     configurations.each do |config|
       config.tire_sizes.each do |size|
+        # Фильтруем по диаметру если он указан в parsed_data
+        if @parsed_data[:diameter].present?
+          next unless size['diameter'] == @parsed_data[:diameter]
+        end
+        
         tire_sizes << {
           width: size['width'],
           height: size['height'],
