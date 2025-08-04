@@ -378,7 +378,26 @@ module Api
                                "%#{query_downcase}%", "%#{query_downcase}%", "%#{query_downcase}%", "%#{params[:query]}%")
         end
         
-        paginate(@users.order(created_at: :desc))
+        result = paginate(@users.order(created_at: :desc))
+        
+        # Применяем сериализацию для каждого пользователя
+        result[:data] = result[:data].map do |user|
+          user_data = user.as_json(
+            include: {
+              role: { only: [:name] },
+              suspended_by: { only: [:first_name, :last_name] }
+            }
+          )
+          
+          # Добавляем computed поля
+          user_data['suspended_by_name'] = user.suspended_by&.full_name
+          user_data['full_name'] = "#{user.first_name} #{user.last_name}".strip
+          user_data['role'] = user.role.name
+          
+          user_data
+        end
+        
+        result
       end
     end
   end
