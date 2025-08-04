@@ -533,21 +533,29 @@ class TireSearchService
   end
 
   def needs_llm_parsing?
-    # Не используем LLM если простой парсинг дал хорошие результаты
-    if @parsed_data[:brand].present? && @parsed_data[:model].present?
-      return false
+    # Используем LLM если простой парсинг НЕ нашел brand ИЛИ model
+    # Это основной случай - когда нужна помощь в распознавании
+    if @parsed_data[:brand].blank? || @parsed_data[:model].blank?
+      Rails.logger.info "LLM нужен: brand=#{@parsed_data[:brand].inspect}, model=#{@parsed_data[:model].inspect}"
+      return true
     end
 
-    # Используем LLM если:
+    # Дополнительно используем LLM для сложных случаев даже если brand/model найдены
     complex_patterns = [
-      @parsed_data[:brand].nil? && @query.split.length > 3, # Не нашли бренд в сложном запросе
       @query.match?(/какие|посоветуйте|подойдет|нужны|помогите|скажите|подскажите/i), # Вопросительная форма
       @query.match?(/поменял|купил|заменил|установил|ищу|хочу/i), # Контекстные слова
       @query.split.length > 8,                     # Очень сложный запрос
       @query.match?(/не знаю|не уверен|не помню/i) # Неопределенность
     ]
 
-    complex_patterns.any?
+    if complex_patterns.any?
+      Rails.logger.info "LLM нужен: сложный запрос с паттернами"
+      return true
+    end
+
+    # Если brand И model найдены и запрос простой - LLM не нужен
+    Rails.logger.info "LLM НЕ нужен: простой запрос с найденными brand=#{@parsed_data[:brand]}, model=#{@parsed_data[:model]}"
+    false
   end
 
   def parse_with_llm
