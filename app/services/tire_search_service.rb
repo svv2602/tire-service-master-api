@@ -197,7 +197,9 @@ class TireSearchService
     merge_with_context
 
     # Шаг 2: Если простой парсинг неполный и включен LLM - используем LLM
+    @llm_was_used = false
     if needs_llm_parsing? && @use_llm
+      @llm_was_used = true
       llm_result = parse_with_llm
       if llm_result.present?
         # LLM может исправлять результаты простого парсинга если они неточные
@@ -231,6 +233,12 @@ class TireSearchService
   def process_search_scenario
     car_identified = @parsed_data[:brand].present? && @parsed_data[:model].present?
     brand_with_diameter = @parsed_data[:brand].present? && @parsed_data[:model].blank? && @parsed_data[:diameter].present?
+    
+    # Если LLM использовался, но не смог распарсить бренд (например: "лада на 14") - переходим в диалог
+    if @llm_was_used && @parsed_data[:brand].blank? && @parsed_data[:diameter].present?
+      Rails.logger.info "LLM использовался, но не распарсил бренд для запроса '#{@query}' - переходим в conversational режим"
+      return process_insufficient_data_scenario
+    end
     
     if car_identified
       # Сценарии 1-3: Автомобиль определен
@@ -739,15 +747,20 @@ class TireSearchService
 
   def needs_llm_parsing?
     # Используем LLM если простой парсинг НЕ нашел brand ИЛИ model
-    # Но НЕ используем LLM если найден только диаметр без бренда/модели - это нормальный случай
+    # Но НЕ используем LLM если найден только диаметр без других слов - это нормальный случай
     if @parsed_data[:brand].blank? || @parsed_data[:model].blank?
-      # Если найден только диаметр без бренда/модели - LLM не нужна
-      if @parsed_data[:diameter].present? && @parsed_data[:brand].blank? && @parsed_data[:model].blank?
-        Rails.logger.info "LLM НЕ нужен: найден только диаметр R#{@parsed_data[:diameter]}"
+      # Если найден только диаметр без других слов (например: "R16", "шины 18") - LLM не нужна
+      # Но если есть другие слова кроме диаметра (например: "лада на 14") - нужен LLM
+      diameter_only_query = @query.strip.match?(/^(шины\s+)?(r?\d{2,3}|на\s+\d{2,3})$/i)
+      
+
+      
+      if @parsed_data[:diameter].present? && @parsed_data[:brand].blank? && @parsed_data[:model].blank? && diameter_only_query
+        Rails.logger.info "LLM НЕ нужен: найден только диаметр R#{@parsed_data[:diameter]} без других слов"
         return false
       end
       
-      Rails.logger.info "LLM нужен: brand=#{@parsed_data[:brand].inspect}, model=#{@parsed_data[:model].inspect}"
+      Rails.logger.info "LLM нужен: brand=#{@parsed_data[:brand].inspect}, model=#{@parsed_data[:model].inspect}, query='#{@query}'"
       return true
     end
 
