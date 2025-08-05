@@ -10,6 +10,8 @@ class SupplierXmlProcessor
     @statistics = {
       total_items: 0,
       processed_items: 0,
+      updated_items: 0,
+      created_items: 0,
       skipped_items: 0,
       error_items: 0,
       processing_time_ms: 0
@@ -104,12 +106,22 @@ class SupplierXmlProcessor
   def process_items(version)
     Rails.logger.info "🔄 Обрабатываем товары..."
     
-    # Удаляем старые товары поставщика
-    supplier.supplier_tire_products.delete_all
+    # Сначала обнуляем цены и убираем наличие у всех существующих товаров поставщика
+    Rails.logger.info "💰 Обнуляем цены и убираем наличие у существующих товаров поставщика #{supplier.name}..."
+    supplier.supplier_tire_products.update_all(
+      price_uah: nil,
+      in_stock: false,
+      stock_status: 'out_of_stock',
+      updated_at: Time.current
+    )
+    
+    # Создаем хеш для быстрого поиска существующих товаров по external_id
+    existing_products = supplier.supplier_tire_products.index_by(&:external_id)
+    Rails.logger.info "📦 Найдено #{existing_products.size} существующих товаров для обновления"
     
     @doc.xpath('//item').each_with_index do |item_node, index|
       begin
-        process_single_item(item_node, version)
+        process_single_item(item_node, version, existing_products)
         @statistics[:processed_items] += 1
         
         # Логируем прогресс каждые 1000 товаров
@@ -131,7 +143,7 @@ class SupplierXmlProcessor
     end
   end
   
-  def process_single_item(item_node, version)
+  def process_single_item(item_node, version, existing_products)
     # Извлекаем основные поля
     item_data = extract_item_data(item_node)
     
@@ -144,8 +156,8 @@ class SupplierXmlProcessor
     # Пропускаем товары с некорректными размерами
     return unless valid_tire_size?(item_data)
     
-    # Создаем товар
-    create_tire_product(item_data, item_node)
+    # Обновляем существующий товар или создаем новый
+    update_or_create_tire_product(item_data, item_node, existing_products)
   end
   
   def extract_item_data(item_node)
@@ -200,12 +212,12 @@ class SupplierXmlProcessor
     width_valid && height_valid && diameter_valid
   end
   
-  def create_tire_product(data, item_node)
+  def update_or_create_tire_product(data, item_node, existing_products)
     # Извлекаем модель из названия (простая эвристика)
     model = extract_model_from_name(data[:name], data[:vendor])
     
-    supplier.supplier_tire_products.create!(
-      external_id: data[:external_id],
+    # Подготавливаем атрибуты для обновления/создания
+    attributes = {
       brand: data[:vendor],
       model: model,
       name: data[:name],
@@ -217,13 +229,32 @@ class SupplierXmlProcessor
       season: normalize_season(data[:tire_type]),
       price_uah: data[:price_uah],
       stock_status: data[:stock_status],
+      in_stock: true, # товар в новом прайсе = в наличии
       description: data[:description],
       image_url: data[:image_url],
       product_url: data[:product_url],
       country: data[:country],
       year_week: data[:year_week],
-      raw_data: item_node.to_h # сохраняем исходные данные
-    )
+      raw_data: item_node.to_h, # сохраняем исходные данные
+      updated_at: Time.current
+    }
+    
+    # Проверяем, существует ли товар с таким external_id
+    existing_product = existing_products[data[:external_id]]
+    
+    if existing_product
+      # Обновляем существующий товар
+      existing_product.update!(attributes)
+      @statistics[:updated_items] += 1
+      Rails.logger.debug "🔄 Обновлен товар: #{data[:external_id]} - #{data[:name]}"
+    else
+      # Создаем новый товар
+      supplier.supplier_tire_products.create!(
+        attributes.merge(external_id: data[:external_id])
+      )
+      @statistics[:created_items] += 1
+      Rails.logger.debug "➕ Создан новый товар: #{data[:external_id]} - #{data[:name]}"
+    end
   end
   
   def extract_model_from_name(name, brand)
@@ -265,6 +296,6 @@ class SupplierXmlProcessor
     )
     
     Rails.logger.info "✅ Обработка завершена за #{processing_time}мс"
-    Rails.logger.info "📊 Статистика: обработано #{@statistics[:processed_items]}, ошибок #{@statistics[:error_items]}"
+    Rails.logger.info "📊 Статистика: обработано #{@statistics[:processed_items]} (обновлено #{@statistics[:updated_items]}, создано #{@statistics[:created_items]}), ошибок #{@statistics[:error_items]}"
   end
 end
