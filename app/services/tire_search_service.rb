@@ -96,11 +96,208 @@ class TireSearchService
       ['jetta', 'джетта'] => 'Jetta'
     },
     'Mercedes' => {
-      ['c class', 'c-class', 'с класс', 'c200', 'c220'] => 'C-Class',
-      ['e class', 'e-class', 'е класс', 'e200', 'e220'] => 'E-Class',
-      ['s class', 's-class', 'с класс', 's500'] => 'S-Class',
-      ['glc', 'глс'] => 'GLC-Class',
-      ['gle', 'гле'] => 'GLE'
+      # A-Class (порядок важен: специфичные варианты сначала)
+      ['a class amg', 'a-class amg', 'а класс amg'] => 'A-Class AMG',
+      ['a class', 'a-class', 'а класс', 'a200', 'a180'] => 'A-Class',
+      ['a class w168', 'a-class w168'] => 'A-Class W168',
+      ['a class w169', 'a-class w169'] => 'A-Class W169',
+      ['a class w176', 'a-class w176'] => 'A-Class W176',
+      
+      # B-Class
+      ['b class', 'b-class', 'б класс', 'b200', 'b180'] => 'B-Class',
+      ['b class w245', 'b-class w245'] => 'B-Class W245',
+      ['b class w246', 'b-class w246'] => 'B-Class W246',
+      
+      # C-Class
+      ['c class amg', 'c-class amg', 'с класс amg'] => 'C-Class AMG',
+      ['c class', 'c-class', 'с класс', 'c200', 'c220', 'c300'] => 'C-Class',
+      ['c class w202', 'c-class w202'] => 'C-Class W202 S202',
+      ['c class w203', 'c-class w203'] => 'C-Class W203 CL203 S203',
+      ['c class w204', 'c-class w204'] => 'C-Class W204 S204',
+      ['c class w205', 'c-class w205'] => 'C-Class W205',
+      
+      # E-Class
+      ['e class amg', 'e-class amg', 'е класс amg'] => 'E-Class AMG',
+      ['e class', 'e-class', 'е класс', 'e200', 'e220', 'e300'] => 'E-Class',
+      ['e class cabriolet', 'e-class cabriolet'] => 'E-Class Cabriolet',
+      ['e class coupe', 'e-class coupe'] => 'E-Class Coupe',
+      ['e class all-terrain', 'e-class all terrain'] => 'E-Class All-Terrain',
+      ['e class w210', 'e-class w210'] => 'E-Class W210 S210',
+      ['e class w211', 'e-class w211'] => 'E-Class W211 S211',
+      ['e class w212', 'e-class w212'] => 'E-Class W212 S212',
+      ['e class w213', 'e-class w213'] => 'E-Class W213 C207',
+      
+      # S-Class
+      ['s class cabrio amg', 's-class cabrio amg'] => 'S-Class Cabrio AMG',
+      ['s class coupe amg', 's-class coupe amg'] => 'S-Class Coupe AMG',
+      ['s class amg', 's-class amg', 'с класс amg'] => 'S-Class AMG',
+      ['s class cabrio', 's-class cabrio'] => 'S-Class Cabrio',
+      ['s class coupe', 's-class coupe'] => 'S-Class Coupe',
+      ['s class', 's-class', 'с класс', 's500', 's400', 's600'] => 'S-Class',
+      ['s class w140', 's-class w140'] => 'S-Class W140 C140',
+      ['s class w220', 's-class w220'] => 'S-Class W220',
+      ['s class w221', 's-class w221'] => 'S-Class W221',
+      ['s class w222', 's-class w222'] => 'S-Class W222',
+      
+      # GLC
+      ['glc coupe amg', 'glc-class coupe amg'] => 'GLC-Class Coupe AMG',
+      ['glc amg', 'glc-class amg'] => 'GLC-Class AMG',
+      ['glc coupe', 'glc-class coupe'] => 'GLC-Class Coupe',
+      ['glc', 'глс', 'glc class', 'glc-class'] => 'GLC-Class',
+      ['glc x253', 'glc-class x253'] => 'GLC-ClassX253',
+      
+      # GLE  
+      ['gle coupe amg', 'gle-class coupe amg'] => 'GLE-Class Coupe AMG',
+      ['gle class amg', 'gle-class amg'] => 'GLE-Class AMG',
+      ['gle amg'] => 'GLE AMG',
+      ['gle coupe', 'gle-class coupe'] => 'GLE-Class Coupe',
+      ['gle', 'гле', 'gle class', 'gle-class'] => 'GLE-Class',
+      ['gle w166', 'gle-class w166'] => 'GLE-ClassW166',
+      ['gle coupe c292'] => 'GLE CoupeC292',
+      
+      # GLA
+      ['gla', 'gla class', 'gla-class'] => 'GLA-Class',
+      ['gla amg', 'gla-class amg'] => 'GLA-Class AMG',
+      ['gla x156', 'gla-class x156'] => 'GLA-Class X156',
+      
+      # GLB
+      ['glb', 'glb class', 'glb-class'] => 'GLB-Class',
+      ['glb amg', 'glb-class amg'] => 'GLB-Class AMG',
+      
+      # GLS
+      ['gls', 'gls class', 'gls-class'] => 'GLS-Class',
+      ['gls amg', 'gls-class amg'] => 'GLS-Class AMG',
+      
+      # GL-Class (старая линейка)
+      ['gl class', 'gl-class'] => 'GL-Class',
+      ['gl class amg', 'gl-class amg'] => 'GL-Class AMG',
+      ['gl x164', 'gl-class x164'] => 'GL-Class X164',
+      ['gl x166', 'gl-class x166'] => 'GL-Class X166',
+      
+      # GLK
+      ['glk', 'glk class', 'glk-class'] => 'GLK-Class',
+      ['glk x204', 'glk-class x204'] => 'GLK-Class X204',
+      
+      # M-Class (старая линейка, сейчас GLE)
+      ['m class', 'm-class'] => 'M-Class',
+      ['m class amg', 'm-class amg'] => 'M-Class AMG',
+      ['m class w163', 'm-class w163'] => 'M-Class W163',
+      ['m class w164', 'm-class w164'] => 'M-Class W164',
+      ['m class w166', 'm-class w166'] => 'M-Class W166',
+      
+      # G-Class
+      ['g class', 'g-class', 'g wagon', 'g вагон', 'гелендваген'] => 'G-Class',
+      ['g class amg', 'g-class amg'] => 'G-Class AMG',
+      ['g class w463', 'g-class w463'] => 'G-Class W463',
+      
+      # CLA
+      ['cla', 'cla class', 'cla-class'] => 'CLA-Class',
+      ['cla amg', 'cla-class amg'] => 'CLA-Class AMG',
+      ['cla c117', 'cla-class c117'] => 'CLA-Class C117',
+      
+      # CLS
+      ['cls', 'cls class', 'cls-class'] => 'CLS-Class',
+      ['cls amg', 'cls-class amg'] => 'CLS-Class AMG',
+      ['cls c218', 'cls-class c218'] => 'CLS-Class C218 X218',
+      ['cls c219', 'cls-class c219'] => 'CLS-Class C219',
+      
+      # CL-Class
+      ['cl class', 'cl-class'] => 'CL-Class',
+      ['cl class amg', 'cl-class amg'] => 'CL-Class AMG',
+      ['cl c215', 'cl-class c215'] => 'CL-Class C215',
+      ['cl c216', 'cl-class c216'] => 'CL-Class C216',
+      
+      # CLK
+      ['clk', 'clk class', 'clk-class'] => 'CLK-Class',
+      ['clk amg', 'clk-class amg'] => 'CLK-Class AMG',
+      ['clk c208', 'clk-class c208'] => 'CLK-Class C208 A208',
+      ['clk c209', 'clk-class c209'] => 'CLK-Class C209 A209',
+      
+      # CLC
+      ['clc', 'clc class', 'clc-class'] => 'CLC-Class',
+      
+      # SL
+      ['sl', 'sl class', 'sl-class'] => 'SL-Class',
+      ['sl amg', 'sl-class amg'] => 'SL-Class AMG',
+      ['sl r230', 'sl-class r230'] => 'SL-Class R230',
+      ['sl r231', 'sl-class r231'] => 'SL-Class R231',
+      
+      # SLK
+      ['slk', 'slk class', 'slk-class'] => 'SLK-Class',
+      ['slk amg', 'slk-class amg'] => 'SLK-Class AMG',
+      ['slk r170', 'slk-class r170'] => 'SLK-Class R170',
+      ['slk r171', 'slk-class r171'] => 'SLK-Class R171',
+      ['slk r172', 'slk-class r172'] => 'SLK-Class R172',
+      
+      # SLC
+      ['slc', 'slc class', 'slc-class'] => 'SLC-Class',
+      ['slc amg', 'slc-class amg'] => 'SLC-Class AMG',
+      
+      # SLR
+      ['slr', 'slr class', 'slr-class'] => 'SLR-Class',
+      ['slr r199', 'slr-class r199'] => 'SLR-Class R199',
+      
+      # SLS
+      ['sls', 'sls class', 'sls-class'] => 'SLS-Class AMG',
+      ['sls amg', 'sls-class amg'] => 'SLS-Class AMG',
+      ['sls a197', 'sls amg a197'] => 'SLS AMG A197 C197',
+      
+      # AMG GT
+      ['amg gt', 'gt amg'] => 'AMG GT',
+      ['amg gt-4', 'gt-4 amg'] => 'AMG GT-4',
+      
+      # R-Class
+      ['r class', 'r-class'] => 'R-Class',
+      ['r class amg', 'r-class amg'] => 'R-Class AMG',
+      ['r class w251', 'r-class w251'] => 'R-Class W251',
+      
+      # V-Class / Viano
+      ['v class', 'v-class'] => 'V-Class',
+      ['v class w447', 'v-class w447'] => 'V-Class W447',
+      ['viano', 'виано'] => 'Viano',
+      ['viano w639'] => 'Viano W639',
+      
+      # Vito
+      ['vito', 'вито'] => 'Vito',
+      ['vito w638'] => 'Vito W638',
+      
+      # Sprinter
+      ['sprinter', 'спринтер'] => 'Sprinter',
+      
+      # Citan
+      ['citan', 'цитан'] => 'Citan',
+      
+      # Metris
+      ['metris', 'метрис'] => 'Metris',
+      
+      # Marco Polo
+      ['marco polo', 'марко поло'] => 'Marco Polo',
+      
+      # T-Class
+      ['t class', 't-class'] => 'T-Class',
+      
+      # X-Class
+      ['x class', 'x-class'] => 'X-Class',
+      
+      # EQA/EQB/EQC/EQE/EQS (электромобили)
+      ['eqa'] => 'EQA',
+      ['eqb'] => 'EQB', 
+      ['eqc'] => 'EQC',
+      ['eqe'] => 'EQE',
+      ['eqe amg'] => 'EQE AMG',
+      ['eqs'] => 'EQS',
+      ['eqs amg'] => 'EQS AMG',
+      ['eqt'] => 'EQT',
+      ['eqv'] => 'EQV',
+      
+      # Старые модели
+      ['190', 'w201'] => '190',
+      ['w123'] => 'W123',
+      ['w124'] => 'W124',
+      ['vaneo', 'ванео'] => 'Vaneo',
+      ['vaneo w414'] => 'Vaneo W414',
+      ['t1'] => 'T1',
+      ['t2'] => 'T2'
     },
     'Toyota' => {
       ['camry', 'камри'] => 'Camry',
