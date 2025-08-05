@@ -60,6 +60,43 @@ module Api
         }, status: :not_found
       end
       
+      # GET /api/v1/supplier_products_search/available_sizes/:diameter
+      # Получение доступных размеров шин по диаметру из прайсов поставщиков
+      # Поддержка фильтрации по конкретным размерам из результатов поиска
+      def available_sizes_by_diameter
+        diameter = params[:diameter]&.strip
+        
+        if diameter.blank?
+          return render json: {
+            success: false,
+            error: 'Диаметр не указан',
+            sizes: []
+          }, status: :bad_request
+        end
+        
+        # Нормализуем диаметр (убираем R если есть)
+        normalized_diameter = diameter.gsub(/[^0-9]/, '')
+        
+        # Получаем фильтры размеров из параметров (если переданы)
+        filter_sizes = extract_size_filters
+        
+        cache_key = generate_sizes_cache_key(normalized_diameter, filter_sizes)
+        
+        results = Rails.cache.fetch(cache_key, expires_in: 1.hour) do
+          get_available_sizes_by_diameter(normalized_diameter, filter_sizes)
+        end
+        
+        render json: results
+        
+      rescue StandardError => e
+        Rails.logger.error "Available sizes by diameter error: #{e.message}"
+        render json: {
+          success: false,
+          error: 'Произошла ошибка при получении размеров',
+          sizes: []
+        }, status: :internal_server_error
+      end
+      
       # POST /api/v1/supplier_products_search/grouped
       # Поиск с группировкой по параметрам шин (для аккордиона)
       def grouped_search
@@ -332,6 +369,104 @@ module Api
         # TODO: Интеграция с системой настроек из админки
         # SystemSetting.get(key, default_value)
         default_value
+      end
+      
+      def get_available_sizes_by_diameter(diameter, filter_sizes = [])
+        # Базовый запрос для размеров шин поставщиков
+        query = SupplierTireProduct
+                 .in_stock
+                 .where(diameter: diameter)
+                 .select(:width, :height, :diameter)
+        
+        # Применяем фильтрацию по конкретным размерам, если переданы
+        if filter_sizes.present?
+          size_conditions = filter_sizes.map do |size|
+            "( width = #{size[:width]} AND height = #{size[:height]} )"
+          end.join(' OR ')
+          
+          query = query.where(size_conditions) if size_conditions.present?
+        end
+        
+        sizes_data = query.distinct.order(:width, :height)
+        
+        # Группируем и форматируем размеры
+        unique_sizes = sizes_data.map do |product|
+          {
+            width: product.width,
+            height: product.height,
+            diameter: product.diameter.to_i,
+            display: "#{product.width}/#{product.height}R#{product.diameter}",
+            size_key: "#{product.width}/#{product.height}R#{product.diameter}"
+          }
+        end
+        
+        # Убираем возможные дубли
+        unique_sizes = unique_sizes.uniq { |size| size[:size_key] }
+        
+        {
+          success: true,
+          diameter: "R#{diameter}",
+          sizes: unique_sizes,
+          total_sizes: unique_sizes.count,
+          data_source: filter_sizes.present? ? 'supplier_prices_filtered' : 'supplier_prices',
+          filter_applied: filter_sizes.present?,
+          original_sizes_count: filter_sizes.count
+        }
+      end
+      
+      def extract_size_filters
+        sizes_param = params[:sizes]
+        return [] if sizes_param.blank?
+        
+        # Поддержка разных форматов: JSON строка или comma-separated список
+        if sizes_param.is_a?(String)
+          if sizes_param.start_with?('[') || sizes_param.start_with?('{')
+            # JSON формат: [{"width":205,"height":55},{"width":215,"height":60}]
+            begin
+              JSON.parse(sizes_param).map do |size|
+                {
+                  width: size['width']&.to_i,
+                  height: size['height']&.to_i
+                }
+              end.compact.select { |s| s[:width] && s[:height] }
+            rescue JSON::ParserError
+              []
+            end
+          else
+            # Comma-separated формат: "205/55,215/60,225/50"
+            sizes_param.split(',').map do |size|
+              parts = size.strip.split('/')
+              next unless parts.size == 2
+              
+              {
+                width: parts[0].to_i,
+                height: parts[1].to_i
+              }
+            end.compact.select { |s| s[:width] > 0 && s[:height] > 0 }
+          end
+        elsif sizes_param.is_a?(Array)
+          # Массив хешей из параметров
+          sizes_param.map do |size|
+            {
+              width: size[:width]&.to_i || size['width']&.to_i,
+              height: size[:height]&.to_i || size['height']&.to_i
+            }
+          end.compact.select { |s| s[:width] && s[:height] }
+        else
+          []
+        end
+      end
+      
+      def generate_sizes_cache_key(diameter, filter_sizes)
+        base_key = "supplier_sizes_by_diameter:#{diameter}"
+        
+        if filter_sizes.present?
+          sizes_hash = Digest::MD5.hexdigest(filter_sizes.sort_by { |s| [s[:width], s[:height]] }.to_s)
+          base_key += ":filtered:#{sizes_hash}"
+        end
+        
+        version = SupplierPriceVersion.maximum(:updated_at)&.to_i || 0
+        "#{base_key}:#{version}"
       end
     end
   end

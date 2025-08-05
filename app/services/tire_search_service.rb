@@ -3,7 +3,7 @@ class TireSearchService
   BRAND_ALIASES = {
     ['bmw', 'бмв', 'бэмв', 'бмдабльвэ'] => 'BMW',
     ['volkswagen', 'vw', 'фольксваген', 'фольскваген', 'фольц', 'вольксваген'] => 'Volkswagen',
-    ['mercedes', 'мерседес', 'мерс', 'mercedes-benz', 'мерседес-бенц'] => 'Mercedes-Benz',
+    ['mercedes', 'мерседес', 'мерс', 'mercedes-benz', 'мерседес-бенц'] => 'Mercedes',
     ['toyota', 'тойота'] => 'Toyota',
     ['honda', 'хонда'] => 'Honda',
     ['audi', 'ауди'] => 'Audi',
@@ -25,7 +25,6 @@ class TireSearchService
     ['brilliance', 'бриллианс', 'брилансе', 'брилианс', 'бриланс'] => 'Brilliance',
     # ТОП бренды по конфигурациям шин
     ['chevrolet', 'шевроле', 'шеви'] => 'Chevrolet',
-    ['mercedes', 'мерседес', 'мерс'] => 'Mercedes',
     ['dongfeng', 'донгфенг'] => 'Dongfeng',
     ['chery', 'чери'] => 'Chery',
     ['daihatsu', 'дайхатцу'] => 'Daihatsu',
@@ -96,11 +95,11 @@ class TireSearchService
       ['touareg', 'туарег'] => 'Touareg',
       ['jetta', 'джетта'] => 'Jetta'
     },
-    'Mercedes-Benz' => {
+    'Mercedes' => {
       ['c class', 'c-class', 'с класс', 'c200', 'c220'] => 'C-Class',
       ['e class', 'e-class', 'е класс', 'e200', 'e220'] => 'E-Class',
       ['s class', 's-class', 'с класс', 's500'] => 'S-Class',
-      ['glc', 'глс'] => 'GLC',
+      ['glc', 'глс'] => 'GLC-Class',
       ['gle', 'гле'] => 'GLE'
     },
     'Toyota' => {

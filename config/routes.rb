@@ -38,6 +38,7 @@ Rails.application.routes.draw do
       post 'supplier_products_search/grouped', to: 'supplier_products_search#grouped_search'
       get 'supplier_products_search/filters', to: 'supplier_products_search#filters'
       get 'supplier_products_search/product/:id', to: 'supplier_products_search#product_details'
+      get 'supplier_products_search/available_sizes/:diameter', to: 'supplier_products_search#available_sizes_by_diameter'
       
       # Управление поставщиками
       resources :suppliers do
