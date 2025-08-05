@@ -64,9 +64,18 @@ class TireSearchService
 
   # Константы сезонности
   SEASONALITY_ALIASES = {
-    ['зимние', 'зима', 'winter', 'зимняя резина', 'зимняя', 'snow'] => 'winter',
-    ['летние', 'лето', 'summer', 'летняя резина', 'летняя'] => 'summer',
-    ['всесезонные', 'всесезон', 'all season', 'всесезонная', 'круглогодичные'] => 'all_season'
+    # Зимние шины - русский и украинский
+    ['зимние', 'зима', 'зимняя', 'зимних', 'зимой', 'winter', 'зимняя резина', 'snow',
+     'зимові', 'зимова', 'зимовые', 'взимку', 'зимові шини'] => 'winter',
+    
+    # Летние шины - русский и украинский  
+    ['летние', 'лето', 'летняя', 'летних', 'летом', 'summer', 'летняя резина',
+     'літні', 'літо', 'літня', 'влітку', 'літні шини'] => 'summer',
+     
+    # Всесезонные шины - русский и украинский
+    ['всесезонные', 'всесезон', 'всесезонная', 'всесезонка', 'круглогодичные', 'круглый год',
+     'all season', 'all-season', 'всесезонная резина',
+     'всесезонні', 'цілорічні', 'всесезонна', 'всесезонні шини'] => 'all_season'
   }.freeze
 
   # Константы алиасов для моделей по брендам
@@ -244,17 +253,22 @@ class TireSearchService
       return process_insufficient_data_scenario
     end
     
-    if car_identified
-      # Сценарии 1-3: Автомобиль определен
+    # ПРИОРИТЕТ: Если распарсен полный размер шин (ширина + высота + диаметр), 
+    # то игнорируем автомобиль и ищем сразу по размеру
+    if @parsed_data[:tire_size].present? || full_tire_size
+      Rails.logger.info "TireSearchService: Найден полный размер шин, игнорируем автомобиль и переходим к поиску по размеру"
+      process_tire_size_only_scenario
+    elsif car_identified
+      # Сценарии 1-3: Автомобиль определен (только если НЕТ полного размера)
       process_car_identified_scenario
     elsif brand_with_diameter
       # Бренд + диаметр без модели - запрос уточнения модели
       process_brand_diameter_scenario
-    elsif @parsed_data[:tire_size].present? || full_tire_size || @parsed_data[:diameter].present? ||
+    elsif @parsed_data[:diameter].present? ||
           (@parsed_data[:width].present? && @parsed_data[:height].present?) ||
-          (@parsed_data[:width].present? && @parsed_data[:diameter].present?) ||
+          (@parsed_data[:width].present? && @parsed_data[:diameter].present()) ||
           (@parsed_data[:height].present? && @parsed_data[:diameter].present?)
-      # Есть размер шин (полный или частичный), но авто не определено
+      # Есть размер шин (частичный), но авто не определено
       process_tire_size_only_scenario
     else
       # Недостаточно данных
@@ -627,6 +641,12 @@ class TireSearchService
     if tire_size_matches.empty?
       dash_matches = @query.scan(/\b(\d{3})-(\d{2})-(\d{2})\b/)
       tire_size_matches = dash_matches if dash_matches.any?
+    end
+    
+    # Формат 5: 175/70 р13 (с пробелом перед R)
+    if tire_size_matches.empty?
+      space_r_matches = @query.scan(/\b(\d{3})\/(\d{2})\s+р?(\d{2})\b/i)
+      tire_size_matches = space_r_matches if space_r_matches.any?
     end
     
     if tire_size_matches.any?
