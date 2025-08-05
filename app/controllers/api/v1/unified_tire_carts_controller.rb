@@ -1,4 +1,4 @@
-class Api::V1::UnifiedTireCartController < ApplicationController
+class Api::V1::UnifiedTireCartsController < ApplicationController
   before_action :authenticate_request!
   before_action :set_cart, only: [:show, :add_item, :update_item, :remove_item, :clear]
   before_action :set_cart_item, only: [:update_item, :remove_item]
