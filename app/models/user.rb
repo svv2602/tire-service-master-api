@@ -29,6 +29,7 @@ class User < ApplicationRecord
   
   # Заказы шин
   has_many :tire_orders, dependent: :destroy
+  has_one :tire_cart, dependent: :destroy
   
   # Push уведомления
   has_many :push_subscriptions, dependent: :destroy

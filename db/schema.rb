@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_05_071615) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_05_084505) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1166,6 +1166,25 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_071615) do
     t.index ["user_id"], name: "index_telegram_subscriptions_on_user_id"
   end
 
+  create_table "tire_cart_items", force: :cascade do |t|
+    t.bigint "tire_cart_id", null: false
+    t.bigint "supplier_tire_product_id", null: false
+    t.integer "quantity", null: false
+    t.decimal "price_at_add", precision: 10, scale: 2, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["supplier_tire_product_id"], name: "index_tire_cart_items_on_supplier_tire_product_id"
+    t.index ["tire_cart_id", "supplier_tire_product_id"], name: "index_tire_cart_items_unique", unique: true
+    t.index ["tire_cart_id"], name: "index_tire_cart_items_on_tire_cart_id"
+  end
+
+  create_table "tire_carts", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_tire_carts_on_user_id", unique: true
+  end
+
   create_table "tire_data_versions", force: :cascade do |t|
     t.string "version", null: false
     t.text "source_description"
@@ -1362,6 +1381,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_071615) do
   add_foreign_key "telegram_notifications", "bookings"
   add_foreign_key "telegram_notifications", "users"
   add_foreign_key "telegram_subscriptions", "users"
+  add_foreign_key "tire_cart_items", "supplier_tire_products"
+  add_foreign_key "tire_cart_items", "tire_carts"
+  add_foreign_key "tire_carts", "users"
   add_foreign_key "tire_order_items", "supplier_tire_products"
   add_foreign_key "tire_order_items", "tire_orders"
   add_foreign_key "tire_orders", "suppliers"

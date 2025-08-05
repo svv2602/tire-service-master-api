@@ -241,6 +241,15 @@ Rails.application.routes.draw do
         end
       end
       
+      # Новая единая корзина
+      resource :unified_tire_cart, only: [:show] do
+        post 'add_item'
+        put 'update_item/:item_id', to: 'unified_tire_cart#update_item'
+        delete 'remove_item/:item_id', to: 'unified_tire_cart#remove_item'
+        delete 'clear'
+        post 'create_orders'
+      end
+      
       resources :tire_orders, only: [:index, :show, :create] do
         member do
           patch :cancel

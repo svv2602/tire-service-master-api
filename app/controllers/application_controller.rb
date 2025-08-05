@@ -66,8 +66,16 @@ class ApplicationController < ActionController::API
     rescue ActiveRecord::RecordNotFound => e
       render json: { error: 'Пользователь не найден' }, status: :unauthorized
     end
-  end
+    end
 
+  # Строгая аутентификация (вызывает исключение при ошибке)
+  def authenticate_request!
+    authenticate_request
+    if @current_user.nil?
+      raise Pundit::NotAuthorizedError, "Требуется аутентификация"
+    end
+  end
+  
   # Попытка автоматического обновления токена
   def try_refresh_token
     refresh_token = cookies[:refresh_token]
