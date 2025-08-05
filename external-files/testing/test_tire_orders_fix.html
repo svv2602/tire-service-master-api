@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест списка заказов шин</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; max-height: 400px; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 3px; width: 200px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Тест списка заказов шин (TireOrders)</h1>
+        
+        <div class="test-section info">
+            <h3>Параметры запроса</h3>
+            <div class="form-group">
+                <label>Страница:</label>
+                <input type="number" id="page" value="1" min="1">
+            </div>
+            <div class="form-group">
+                <label>Элементов на странице:</label>
+                <input type="number" id="perPage" value="50" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <label>Статус (необязательно):</label>
+                <select id="status">
+                    <option value="">Все статусы</option>
+                    <option value="submitted">Отправлен</option>
+                    <option value="confirmed">Подтвержден</option>
+                    <option value="processing">В обработке</option>
+                    <option value="completed">Выполнен</option>
+                    <option value="cancelled">Отменен</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Тестирование API</h3>
+            <button onclick="loginAdmin()">1. Авторизоваться как админ</button>
+            <button onclick="getTireOrders()">2. Получить список заказов</button>
+            <button onclick="getTireOrdersAll()">3. Получить все заказы (админ)</button>
+            <button onclick="checkLastCreatedOrder()">4. Проверить последний созданный заказ</button>
+            <button onclick="clearResults()">Очистить результаты</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let authToken = '';
+
+        function addResult(title, content, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-section ${type}`;
+            resultDiv.innerHTML = `
+                <h4>${title}</h4>
+                <pre>${typeof content === 'object' ? JSON.stringify(content, null, 2) : content}</pre>
+            `;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function loginAdmin() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@test.com',
+                        password: 'admin123'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.access_token) {
+                    authToken = data.access_token;
+                    addResult('✅ Авторизация успешна', {
+                        status: response.status,
+                        user: data.user?.email,
+                        role: data.user?.user_role?.name,
+                        token: data.access_token.substring(0, 20) + '...'
+                    }, 'success');
+                } else {
+                    addResult('❌ Ошибка авторизации', data, 'error');
+                }
+            } catch (error) {
+                addResult('❌ Ошибка авторизации', error.message, 'error');
+            }
+        }
+
+        async function getTireOrders() {
+            if (!authToken) {
+                addResult('❌ Сначала авторизуйтесь', '', 'error');
+                return;
+            }
+
+            const page = document.getElementById('page').value;
+            const perPage = document.getElementById('perPage').value;
+            const status = document.getElementById('status').value;
+
+            try {
+                let url = `${API_BASE}/tire_orders?page=${page}&per_page=${perPage}`;
+                if (status) {
+                    url += `&status=${status}`;
+                }
+
+                addResult('📤 Отправка запроса', {
+                    url: url,
+                    method: 'GET'
+                }, 'info');
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('✅ Список заказов получен', {
+                        status: response.status,
+                        orders_count: data.orders?.length || 0,
+                        pagination: data.pagination,
+                        orders: data.orders?.map(order => ({
+                            id: order.id,
+                            status: order.status,
+                            status_display: order.status_display,
+                            supplier: order.supplier?.name,
+                            client_name: order.client_name,
+                            items_count: order.items_count,
+                            total_amount: order.total_amount,
+                            created_at: order.created_at
+                        })) || []
+                    }, 'success');
+                } else {
+                    addResult('❌ Ошибка получения заказов', {
+                        status: response.status,
+                        error: data.error || data.message,
+                        details: data
+                    }, 'error');
+                }
+            } catch (error) {
+                addResult('❌ Ошибка получения заказов', error.message, 'error');
+            }
+        }
+
+        async function getTireOrdersAll() {
+            if (!authToken) {
+                addResult('❌ Сначала авторизуйтесь', '', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/tire_orders/all`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('✅ Все заказы получены (админ)', {
+                        status: response.status,
+                        orders_count: data.orders?.length || 0,
+                        pagination: data.pagination,
+                        recent_orders: data.orders?.slice(0, 3).map(order => ({
+                            id: order.id,
+                            status: order.status,
+                            supplier: order.supplier?.name,
+                            client_name: order.client_name,
+                            total_amount: order.total_amount,
+                            created_at: order.created_at
+                        })) || []
+                    }, 'success');
+                } else {
+                    addResult('❌ Ошибка получения всех заказов', {
+                        status: response.status,
+                        error: data.error || data.message,
+                        details: data
+                    }, 'error');
+                }
+            } catch (error) {
+                addResult('❌ Ошибка получения всех заказов', error.message, 'error');
+            }
+        }
+
+        async function checkLastCreatedOrder() {
+            if (!authToken) {
+                addResult('❌ Сначала авторизуйтесь', '', 'error');
+                return;
+            }
+
+            try {
+                // Получаем последние заказы
+                const response = await fetch(`${API_BASE}/tire_orders?page=1&per_page=5`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.orders && data.orders.length > 0) {
+                    const lastOrder = data.orders[0]; // Первый заказ - самый новый
+                    
+                    addResult('✅ Последний созданный заказ', {
+                        id: lastOrder.id,
+                        status: lastOrder.status,
+                        status_display: lastOrder.status_display,
+                        supplier: lastOrder.supplier,
+                        client_name: lastOrder.client_name,
+                        client_phone: lastOrder.client_phone,
+                        comment: lastOrder.comment,
+                        items_count: lastOrder.items_count,
+                        total_amount: lastOrder.total_amount,
+                        formatted_total: lastOrder.formatted_total,
+                        created_at: lastOrder.created_at,
+                        updated_at: lastOrder.updated_at
+                    }, 'success');
+                } else if (response.ok) {
+                    addResult('ℹ️ Заказы не найдены', 'У пользователя нет заказов', 'info');
+                } else {
+                    addResult('❌ Ошибка проверки заказов', data, 'error');
+                }
+            } catch (error) {
+                addResult('❌ Ошибка проверки заказов', error.message, 'error');
+            }
+        }
+
+        // Автоматическая авторизация при загрузке страницы
+        window.onload = function() {
+            addResult('🚀 Тест загружен', 'Готов к тестированию API заказов шин', 'info');
+        };
+    </script>
+</body>
+</html>

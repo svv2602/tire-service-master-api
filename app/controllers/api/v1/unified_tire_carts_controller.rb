@@ -1,7 +1,7 @@
 class Api::V1::UnifiedTireCartsController < ApplicationController
   skip_before_action :authenticate_request  # Отключаем обязательную аутентификацию
   before_action :optional_authenticate_request
-  before_action :set_cart, only: [:show, :add_item, :update_item, :remove_item, :clear]
+  before_action :set_cart, only: [:show, :add_item, :update_item, :remove_item, :clear, :create_orders, :create_supplier_order]
   before_action :set_cart_item, only: [:update_item, :remove_item]
 
   # GET /api/v1/unified_tire_cart
@@ -125,6 +125,82 @@ class Api::V1::UnifiedTireCartsController < ApplicationController
 
     rescue ActiveRecord::RecordInvalid => e
       render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
+  # Создать заказ для конкретного поставщика
+  def create_supplier_order
+    return render json: { error: 'Корзина пуста' }, status: :unprocessable_entity if @cart.tire_cart_items.empty?
+
+    # Параметры запроса
+    supplier_id = params[:supplier_id]&.to_i
+    client_name = params[:client_name]&.strip
+    client_phone = params[:client_phone]&.strip
+    comment = params[:comment]&.strip
+
+    # Валидация
+    return render json: { error: 'Не указан поставщик' }, status: :unprocessable_entity unless supplier_id
+    return render json: { error: 'Не указано имя клиента' }, status: :unprocessable_entity if client_name.blank?
+    return render json: { error: 'Не указан телефон клиента' }, status: :unprocessable_entity if client_phone.blank?
+
+    # Найти товары для указанного поставщика
+    supplier_items = @cart.tire_cart_items.joins(:supplier_tire_product)
+                          .where(supplier_tire_products: { supplier_id: supplier_id })
+
+    return render json: { error: 'Нет товаров от указанного поставщика' }, status: :unprocessable_entity if supplier_items.empty?
+
+    begin
+      # Найти поставщика
+      supplier = Supplier.find_by(id: supplier_id)
+      return render json: { error: 'Поставщик не найден' }, status: :unprocessable_entity unless supplier
+
+      ActiveRecord::Base.transaction do
+        # Создать заказ для поставщика
+        order = TireOrder.create!(
+          client_name: client_name,
+          client_phone: client_phone,
+          comment: comment.presence,
+          status: 'submitted',
+          user: current_user,
+          supplier: supplier
+        )
+
+        # Добавить товары в заказ
+        supplier_items.each do |cart_item|
+          product = cart_item.supplier_tire_product
+          
+          Rails.logger.info "Создание TireOrderItem: quantity=#{cart_item.quantity}, price=#{cart_item.current_price}"
+
+          order_item = TireOrderItem.new(
+            tire_order: order,
+            supplier_tire_product: product,
+            quantity: cart_item.quantity,
+            price_at_order: cart_item.current_price
+          )
+          
+          Rails.logger.info "TireOrderItem перед сохранением: quantity=#{order_item.quantity}, price_at_order=#{order_item.price_at_order}"
+          
+          order_item.save!
+        end
+
+        # Удалить товары поставщика из корзины
+        supplier_items.destroy_all
+
+        # Обновить корзину если она стала пустой
+        @cart.reload
+
+        render json: {
+          message: 'Заказ успешно создан',
+          orders: [format_order(order)],
+          cart: format_unified_cart(@cart)
+        }, status: :created
+      end
+    rescue ActiveRecord::RecordInvalid => e
+      Rails.logger.error("Ошибка создания заказа поставщика: #{e.message}")
+      render json: { error: 'Ошибка создания заказа' }, status: :unprocessable_entity
+    rescue => e
+      Rails.logger.error("Неожиданная ошибка создания заказа поставщика: #{e.message}")
+      render json: { error: 'Произошла ошибка при создании заказа' }, status: :internal_server_error
     end
   end
 
@@ -304,67 +380,4 @@ class Api::V1::UnifiedTireCartsController < ApplicationController
   end
 
   # Создать заказ для конкретного поставщика
-  def create_supplier_order
-    return render json: { error: 'Корзина пуста' }, status: :unprocessable_entity if @cart.tire_cart_items.empty?
-
-    # Параметры запроса
-    supplier_id = params[:supplier_id]&.to_i
-    client_name = params[:client_name]&.strip
-    client_phone = params[:client_phone]&.strip
-    comment = params[:comment]&.strip
-
-    # Валидация
-    return render json: { error: 'Не указан поставщик' }, status: :unprocessable_entity unless supplier_id
-    return render json: { error: 'Не указано имя клиента' }, status: :unprocessable_entity if client_name.blank?
-    return render json: { error: 'Не указан телефон клиента' }, status: :unprocessable_entity if client_phone.blank?
-
-    # Найти товары для указанного поставщика
-    supplier_items = @cart.tire_cart_items.joins(:supplier_tire_product)
-                          .where(supplier_tire_products: { supplier_id: supplier_id })
-
-    return render json: { error: 'Нет товаров от указанного поставщика' }, status: :unprocessable_entity if supplier_items.empty?
-
-    begin
-      ActiveRecord::Base.transaction do
-        # Создать заказ для поставщика
-        order = TireOrder.create!(
-          client_name: client_name,
-          client_phone: client_phone,
-          comment: comment.presence,
-          status: 'pending',
-          user: current_user
-        )
-
-        # Добавить товары в заказ
-        supplier_items.each do |cart_item|
-          product = cart_item.supplier_tire_product
-
-          TireOrderItem.create!(
-            tire_order: order,
-            supplier_tire_product: product,
-            quantity: cart_item.quantity,
-            price_at_order: cart_item.current_price
-          )
-        end
-
-        # Удалить товары поставщика из корзины
-        supplier_items.destroy_all
-
-        # Обновить корзину если она стала пустой
-        @cart.reload
-
-        render json: {
-          message: 'Заказ успешно создан',
-          orders: [format_order_info(order)],
-          cart: format_unified_cart
-        }, status: :created
-      end
-    rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Ошибка создания заказа поставщика: #{e.message}")
-      render json: { error: 'Ошибка создания заказа' }, status: :unprocessable_entity
-    rescue => e
-      Rails.logger.error("Неожиданная ошибка создания заказа поставщика: #{e.message}")
-      render json: { error: 'Произошла ошибка при создании заказа' }, status: :internal_server_error
-    end
-  end
 end

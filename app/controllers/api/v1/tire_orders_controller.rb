@@ -1,15 +1,25 @@
 class Api::V1::TireOrdersController < ApplicationController
-  before_action :authenticate_request!
-  before_action :set_order, only: [:show, :update, :cancel, :archive]
-  before_action :ensure_admin!, only: [:index_all, :confirm, :start_processing, :complete, :admin_cancel]
+  before_action :authenticate_request
+  before_action :set_order, only: [:show, :cancel, :archive]
+  before_action :ensure_admin!, only: [:index_all, :confirm, :start_processing, :complete]
 
   # GET /api/v1/tire_orders
   # Получение заказов текущего пользователя
   def index
-    @orders = current_user.tire_orders
-                         .where.not(status: 'draft')
-                         .includes(:supplier, tire_order_items: :supplier_tire_product)
-                         .recent
+    Rails.logger.info "🔍 TireOrdersController#index: Начало выполнения"
+    Rails.logger.info "🔍 Current user: #{current_user&.email} (ID: #{current_user&.id})"
+    
+    begin
+      @orders = current_user.tire_orders
+                           .where.not(status: 'draft')
+                           .includes(:supplier, tire_order_items: :supplier_tire_product)
+                           .recent
+      Rails.logger.info "🔍 Найдено заказов: #{@orders.count}"
+    rescue => e
+      Rails.logger.error "❌ Ошибка в TireOrdersController#index: #{e.message}"
+      Rails.logger.error "❌ Backtrace: #{e.backtrace.first(5).join('\n')}"
+      raise e
+    end
     
     # Фильтрация по статусу
     @orders = @orders.by_status(params[:status]) if params[:status].present?
@@ -237,6 +247,7 @@ class Api::V1::TireOrdersController < ApplicationController
         firm_id: order.supplier.firm_id
       },
       items_count: order.items_count,
+      items: order.tire_order_items.map { |item| format_order_item(item) },
       total_amount: order.total_amount.to_f,
       formatted_total: order.formatted_total,
       client_name: order.client_name,
@@ -274,7 +285,7 @@ class Api::V1::TireOrdersController < ApplicationController
       total_price: item.total_price.to_f,
       formatted_price: item.formatted_price_at_order,
       formatted_total: item.formatted_total_price,
-      product: {
+      supplier_tire_product: {
         id: product.id,
         name: product.name,
         brand: product.brand,

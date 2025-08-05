@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест создания заказа поставщика</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 3px; width: 200px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛒 Тест создания заказа поставщика</h1>
+        
+        <div class="test-section info">
+            <h3>Параметры запроса</h3>
+            <div class="form-group">
+                <label>Supplier ID:</label>
+                <input type="number" id="supplierId" value="6" min="1">
+            </div>
+            <div class="form-group">
+                <label>Имя клиента:</label>
+                <input type="text" id="clientName" value="Тестовый пользователь">
+            </div>
+            <div class="form-group">
+                <label>Телефон клиента:</label>
+                <input type="text" id="clientPhone" value="+380672220000">
+            </div>
+            <div class="form-group">
+                <label>Комментарий:</label>
+                <input type="text" id="comment" value="Тестовый заказ через API">
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Тестирование API</h3>
+            <button onclick="loginAdmin()">1. Авторизоваться как админ</button>
+            <button onclick="getCart()">2. Получить корзину</button>
+            <button onclick="createSupplierOrder()">3. Создать заказ поставщика</button>
+            <button onclick="clearResults()">Очистить результаты</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let authToken = '';
+
+        function addResult(title, content, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-section ${type}`;
+            resultDiv.innerHTML = `
+                <h4>${title}</h4>
+                <pre>${typeof content === 'object' ? JSON.stringify(content, null, 2) : content}</pre>
+            `;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function loginAdmin() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@test.com',
+                        password: 'admin123'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.access_token) {
+                    authToken = data.access_token;
+                    addResult('✅ Авторизация успешна', {
+                        status: response.status,
+                        user: data.user?.email,
+                        role: data.user?.user_role?.name,
+                        token: data.access_token.substring(0, 20) + '...'
+                    }, 'success');
+                } else {
+                    addResult('❌ Ошибка авторизации', data, 'error');
+                }
+            } catch (error) {
+                addResult('❌ Ошибка авторизации', error.message, 'error');
+            }
+        }
+
+        async function getCart() {
+            if (!authToken) {
+                addResult('❌ Сначала авторизуйтесь', '', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/unified_tire_cart`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('✅ Корзина получена', {
+                        status: response.status,
+                        total_items: data.cart?.total_items_count || 0,
+                        suppliers_count: data.cart?.suppliers?.length || 0,
+                        suppliers: data.cart?.suppliers?.map(s => ({
+                            id: s.id,
+                            name: s.name,
+                            items_count: s.items_count
+                        })) || []
+                    }, 'success');
+                } else {
+                    addResult('❌ Ошибка получения корзины', data, 'error');
+                }
+            } catch (error) {
+                addResult('❌ Ошибка получения корзины', error.message, 'error');
+            }
+        }
+
+        async function createSupplierOrder() {
+            if (!authToken) {
+                addResult('❌ Сначала авторизуйтесь', '', 'error');
+                return;
+            }
+
+            const supplierId = document.getElementById('supplierId').value;
+            const clientName = document.getElementById('clientName').value;
+            const clientPhone = document.getElementById('clientPhone').value;
+            const comment = document.getElementById('comment').value;
+
+            try {
+                const requestData = {
+                    supplier_id: parseInt(supplierId),
+                    client_name: clientName,
+                    client_phone: clientPhone,
+                    comment: comment
+                };
+
+                addResult('📤 Отправка запроса', {
+                    url: `${API_BASE}/unified_tire_cart/create_supplier_order`,
+                    method: 'POST',
+                    data: requestData
+                }, 'info');
+
+                const response = await fetch(`${API_BASE}/unified_tire_cart/create_supplier_order`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('✅ Заказ поставщика создан', {
+                        status: response.status,
+                        message: data.message,
+                        orders_created: data.orders?.length || 0,
+                        orders: data.orders,
+                        cart_updated: !!data.cart
+                    }, 'success');
+                } else {
+                    addResult('❌ Ошибка создания заказа', {
+                        status: response.status,
+                        error: data.error || data.message,
+                        details: data
+                    }, 'error');
+                }
+            } catch (error) {
+                addResult('❌ Ошибка создания заказа', error.message, 'error');
+            }
+        }
+
+        // Автоматическая авторизация при загрузке страницы
+        window.onload = function() {
+            addResult('🚀 Тест загружен', 'Готов к тестированию API создания заказа поставщика', 'info');
+        };
+    </script>
+</body>
+</html>
