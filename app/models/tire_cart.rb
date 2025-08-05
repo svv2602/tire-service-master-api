@@ -1,12 +1,12 @@
 # Единая корзина пользователя для товаров от разных поставщиков
 class TireCart < ApplicationRecord
   # Связи
-  belongs_to :user
+  belongs_to :user, optional: true  # Позволяем гостевые корзины без пользователя
   has_many :tire_cart_items, dependent: :destroy
   has_many :supplier_tire_products, through: :tire_cart_items
 
   # Валидации
-  validates :user_id, presence: true, uniqueness: true
+  validates :user_id, uniqueness: true, allow_nil: true  # Разрешаем null для гостевых корзин
 
   # Скоупы
   scope :with_items, -> { joins(:tire_cart_items) }

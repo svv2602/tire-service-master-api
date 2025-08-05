@@ -1,5 +1,6 @@
 class Api::V1::UnifiedTireCartsController < ApplicationController
-  before_action :authenticate_request!
+  skip_before_action :authenticate_request  # Отключаем обязательную аутентификацию
+  before_action :optional_authenticate_request
   before_action :set_cart, only: [:show, :add_item, :update_item, :remove_item, :clear]
   before_action :set_cart_item, only: [:update_item, :remove_item]
 
@@ -129,8 +130,64 @@ class Api::V1::UnifiedTireCartsController < ApplicationController
 
   private
 
+  # Опциональная аутентификация - не требует обязательного входа
+  def optional_authenticate_request
+    # Пытаемся получить токен из cookies или заголовка
+    access_token = cookies[:access_token]
+    access_token = request.headers['Authorization']&.split(' ')&.last if access_token.nil?
+    
+    if access_token.present?
+      begin
+        decoded = Auth::JsonWebToken.decode(access_token)
+        
+        # Проверяем, что это access токен
+        if decoded[:token_type] == 'access'
+          @current_user = User.find(decoded[:user_id])
+          
+          # Проверяем, что пользователь активен
+          unless @current_user.is_active?
+            Rails.logger.warn("🚫 Пользователь неактивен: #{@current_user.email}")
+            @current_user = nil
+          else
+            Rails.logger.info("🔐 Пользователь авторизован: #{@current_user.email}")
+          end
+        else
+          Rails.logger.info("👤 Неверный тип токена, работаем как гость")
+          @current_user = nil
+        end
+      rescue JWT::DecodeError, JWT::ExpiredSignature, ActiveRecord::RecordNotFound => e
+        Rails.logger.info("👤 Ошибка токена, работаем как гость: #{e.message}")
+        @current_user = nil
+      end
+    else
+      Rails.logger.info("👤 Токен отсутствует, работаем как гость")
+      @current_user = nil
+    end
+  end
+
   def set_cart
-    @cart = current_user.tire_cart || current_user.create_tire_cart!
+    if current_user
+      # Для авторизованных пользователей - обычная корзина
+      @cart = current_user.tire_cart || current_user.create_tire_cart!
+      Rails.logger.info("🛒 Загружена корзина пользователя: #{@cart.id}")
+    else
+      # Для гостей - корзина в сессии
+      @cart = get_or_create_guest_cart
+      Rails.logger.info("👤 Загружена гостевая корзина: #{@cart.id}")
+    end
+  end
+
+  def get_or_create_guest_cart
+    # Пытаемся найти корзину по ID из сессии
+    if session[:guest_cart_id]
+      cart = TireCart.find_by(id: session[:guest_cart_id], user_id: nil)
+      return cart if cart
+    end
+
+    # Создаем новую гостевую корзину
+    cart = TireCart.create!(user_id: nil)
+    session[:guest_cart_id] = cart.id
+    cart
   end
 
   def set_cart_item
