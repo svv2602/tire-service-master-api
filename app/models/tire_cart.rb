@@ -25,6 +25,10 @@ class TireCart < ApplicationRecord
     "#{total_amount.to_f} UAH"
   end
 
+  def formatted_total_amount
+    "#{total_amount.to_f} ₴"
+  end
+
   def empty?
     tire_cart_items.empty?
   end

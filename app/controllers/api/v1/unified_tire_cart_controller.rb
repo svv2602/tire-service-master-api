@@ -140,14 +140,24 @@ class Api::V1::UnifiedTireCartController < ApplicationController
   end
 
   def format_unified_cart(cart)
+    grouped_items = cart.tire_cart_items.includes(:supplier_tire_product).group_by { |item| item.product_supplier }
+
+    formatted_suppliers = grouped_items.map do |supplier, items|
+      {
+        id: supplier.id,
+        name: supplier.name,
+        items: items.map { |item| format_cart_item(item) },
+        items_count: items.sum(&:quantity),
+        total_amount: items.sum { |item| item.quantity * item.price_at_add }.to_f
+      }
+    end
+
     {
       id: cart.id,
       total_items_count: cart.total_items_count,
       total_amount: cart.total_amount.to_f,
-      formatted_total: cart.formatted_total,
-      empty: cart.empty?,
-      suppliers_count: cart.suppliers.count,
-      items_by_supplier: format_items_by_supplier(cart),
+      formatted_total_amount: cart.formatted_total_amount,
+      suppliers: formatted_suppliers,
       updated_at: cart.updated_at.strftime('%d.%m.%Y %H:%M')
     }
   end

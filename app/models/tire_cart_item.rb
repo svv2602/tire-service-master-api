@@ -27,6 +27,11 @@ class TireCartItem < ApplicationRecord
   delegate :brand, :model, :name, :tire_size, :season, :image_url, :product_url, 
            :in_stock, :stock_status, to: :supplier_tire_product, prefix: :product
   delegate :supplier, to: :supplier_tire_product
+  
+  # Алиас для удобства группировки
+  def product_supplier
+    supplier_tire_product.supplier
+  end
 
   # Методы экземпляра
   def current_price
@@ -39,11 +44,38 @@ class TireCartItem < ApplicationRecord
   end
 
   def formatted_price
-    "#{current_price.to_f} UAH"
+    "#{price_at_add.to_f} ₴"
   end
 
   def formatted_total_price
-    "#{total_price.to_f} UAH"
+    "#{total_price.to_f} ₴"
+  end
+
+  def price_changed?
+    current_price != price_at_add
+  end
+
+  def price_change_info
+    return nil unless price_changed?
+    
+    change = current_price - price_at_add
+    change_percent = ((change / price_at_add) * 100).round(2)
+    
+    {
+      old_price: price_at_add.to_f,
+      new_price: current_price.to_f,
+      change: change.to_f,
+      change_percent: change_percent,
+      increased: change > 0
+    }
+  end
+
+  def product_available?
+    supplier_tire_product.in_stock
+  end
+
+  def product_availability_message
+    product_available? ? 'В наличии' : 'Нет в наличии'
   end
 
   def product_display_name
