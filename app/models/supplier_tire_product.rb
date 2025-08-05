@@ -34,11 +34,22 @@ class SupplierTireProduct < ApplicationRecord
   scope :search_by_text, ->(query) {
     return all if query.blank?
     
-    sanitized_query = "%#{query.strip}%"
-    where(
-      'brand_normalized ILIKE ? OR model ILIKE ? OR name ILIKE ? OR external_id ILIKE ? OR description ILIKE ?',
-      sanitized_query, sanitized_query, sanitized_query, sanitized_query, sanitized_query
-    )
+    # Разбиваем запрос на отдельные слова для поиска с условием "И"
+    words = query.strip.split(/[\s\/]+/).reject(&:blank?).map(&:strip)
+    return all if words.empty?
+    
+    # Создаем условия для каждого слова (все слова должны быть найдены)
+    conditions = []
+    params = []
+    
+    words.each do |word|
+      sanitized_word = "%#{word}%"
+      conditions << '(brand_normalized ILIKE ? OR model ILIKE ? OR name ILIKE ? OR external_id ILIKE ? OR description ILIKE ?)'
+      params += [sanitized_word, sanitized_word, sanitized_word, sanitized_word, sanitized_word]
+    end
+    
+    # Объединяем условия через AND для поиска всех слов
+    where(conditions.join(' AND '), *params)
   }
   scope :updated_after, ->(date) { 
     return all if date.blank?
