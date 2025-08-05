@@ -2,6 +2,7 @@ class Supplier < ApplicationRecord
   # Связи
   has_many :supplier_tire_products, dependent: :destroy
   has_many :supplier_price_versions, dependent: :destroy
+  has_many :tire_orders, dependent: :destroy
   
   # Валидации
   validates :firm_id, presence: true, uniqueness: true, length: { maximum: 50 }

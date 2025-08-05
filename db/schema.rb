@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_04_015821) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_05_071615) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1180,6 +1180,35 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_04_015821) do
     t.index ["version"], name: "index_tire_data_versions_on_version", unique: true
   end
 
+  create_table "tire_order_items", force: :cascade do |t|
+    t.bigint "tire_order_id", null: false
+    t.bigint "supplier_tire_product_id", null: false
+    t.integer "quantity", default: 1, null: false
+    t.decimal "price_at_order", precision: 10, scale: 2, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["supplier_tire_product_id"], name: "index_tire_order_items_on_supplier_tire_product_id"
+    t.index ["tire_order_id", "supplier_tire_product_id"], name: "index_tire_order_items_unique", unique: true
+    t.index ["tire_order_id"], name: "index_tire_order_items_on_tire_order_id"
+  end
+
+  create_table "tire_orders", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "supplier_id", null: false
+    t.string "status", default: "draft", null: false
+    t.string "client_name", null: false
+    t.string "client_phone", null: false
+    t.text "comment"
+    t.decimal "total_amount", precision: 10, scale: 2, default: "0.0"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["status"], name: "index_tire_orders_on_status"
+    t.index ["supplier_id", "status"], name: "index_tire_orders_on_supplier_id_and_status"
+    t.index ["supplier_id"], name: "index_tire_orders_on_supplier_id"
+    t.index ["user_id", "status"], name: "index_tire_orders_on_user_id_and_status"
+    t.index ["user_id"], name: "index_tire_orders_on_user_id"
+  end
+
   create_table "tire_types", force: :cascade do |t|
     t.string "name", null: false
     t.text "description"
@@ -1333,6 +1362,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_04_015821) do
   add_foreign_key "telegram_notifications", "bookings"
   add_foreign_key "telegram_notifications", "users"
   add_foreign_key "telegram_subscriptions", "users"
+  add_foreign_key "tire_order_items", "supplier_tire_products"
+  add_foreign_key "tire_order_items", "tire_orders"
+  add_foreign_key "tire_orders", "suppliers"
+  add_foreign_key "tire_orders", "users"
   add_foreign_key "user_social_accounts", "users"
   add_foreign_key "users", "user_roles", column: "role_id"
   add_foreign_key "users", "users", column: "suspended_by_id"

@@ -27,6 +27,9 @@ class User < ApplicationRecord
   has_one :telegram_subscription, dependent: :destroy
   has_many :telegram_notifications, dependent: :destroy
   
+  # Заказы шин
+  has_many :tire_orders, dependent: :destroy
+  
   # Push уведомления
   has_many :push_subscriptions, dependent: :destroy
   

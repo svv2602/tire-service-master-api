@@ -1,6 +1,8 @@
 class SupplierTireProduct < ApplicationRecord
   # Связи
   belongs_to :supplier
+  has_many :tire_order_items, dependent: :destroy
+  has_many :tire_orders, through: :tire_order_items
   
   # Константы для сезонности
   SEASONS = {

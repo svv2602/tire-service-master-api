@@ -231,6 +231,29 @@ Rails.application.routes.draw do
         end
       end
       
+      # API корзины и заказов шин
+      resources :tire_carts, only: [:index, :show, :destroy] do
+        member do
+          post 'items', to: 'tire_carts#add_item'
+          put 'items/:item_id', to: 'tire_carts#update_item'
+          delete 'items/:item_id', to: 'tire_carts#remove_item'
+          delete 'clear', to: 'tire_carts#clear'
+        end
+      end
+      
+      resources :tire_orders, only: [:index, :show, :create] do
+        member do
+          patch :cancel
+          patch :archive
+        end
+        collection do
+          get :all, to: 'tire_orders#index_all'  # Только для админов
+          patch ':id/confirm', to: 'tire_orders#confirm'
+          patch ':id/start_processing', to: 'tire_orders#start_processing'
+          patch ':id/complete', to: 'tire_orders#complete'
+        end
+      end
+      
       # Клиентская авторизация (опциональная)
       scope 'clients' do
         post 'register', to: 'client_auth#register'
