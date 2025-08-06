@@ -124,6 +124,13 @@ class ApplicationController < ActionController::API
     request.user_agent
   end
   
+  # Проверка прав администратора
+  def ensure_admin!
+    unless current_user&.admin?
+      render json: { error: 'Доступ запрещен' }, status: :forbidden
+    end
+  end
+  
   private
   
   def not_found
