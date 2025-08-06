@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест окончательного исправления зацикливания токенов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid #2196F3;
+            background-color: #f8f9fa;
+        }
+        .success { border-left-color: #4CAF50; }
+        .error { border-left-color: #f44336; }
+        .warning { border-left-color: #ff9800; }
+        button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #1976D2; }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .result.success { background-color: #d4edda; color: #155724; }
+        .result.error { background-color: #f8d7da; color: #721c24; }
+        .result.warning { background-color: #fff3cd; color: #856404; }
+        .log-output {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+        .highlight {
+            background-color: #fed7d7;
+            color: #c53030;
+            font-weight: bold;
+        }
+        .counter {
+            font-size: 18px;
+            font-weight: bold;
+            color: #e53e3e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Тест окончательного исправления зацикливания токенов</h1>
+        
+        <div class="test-section">
+            <h3>📋 Описание проблемы</h3>
+            <p><strong>Проблема:</strong> После выхода из спящего режима в логах бэкенда возникало зацикливание:</p>
+            <div class="log-output">Token auto-refreshed successfully for user 51731157413c4ed58
+Token auto-refreshed successfully for user 51731157413c4ed58
+Token auto-refreshed successfully for user 51731157413c4ed58
+[бесконечное повторение...]</div>
+            
+            <p><strong>Корневые причины:</strong></p>
+            <ul>
+                <li>❌ Слишком короткий интервал защиты (10 секунд)</li>
+                <li>❌ Сброс счетчика попыток после успешного обновления</li>
+                <li>❌ Множественные interceptor'ы на фронтенде</li>
+            </ul>
+        </div>
+
+        <div class="test-section success">
+            <h3>✅ Примененные исправления</h3>
+            <ul>
+                <li>🔧 Увеличен интервал защиты с 10 секунд до <strong>2 минут</strong></li>
+                <li>🔧 Убран сброс счетчика попыток после успешного обновления</li>
+                <li>🔧 Улучшено логирование с детальной информацией</li>
+                <li>🔧 Более строгая защита от зацикливания</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Тестирование</h3>
+            <button onclick="simulateMultipleRequests()">🚀 Симулировать множественные запросы</button>
+            <button onclick="checkCurrentAuth()">🔍 Проверить текущую авторизацию</button>
+            <button onclick="clearResults()">🧹 Очистить результаты</button>
+            
+            <div id="testResults"></div>
+        </div>
+
+        <div class="test-section warning">
+            <h3>📊 Мониторинг логов сервера</h3>
+            <p><strong>Команда для мониторинга:</strong></p>
+            <div class="log-output">cd tire-service-master-api
+tail -f log/development.log | grep -i "token"</div>
+            
+            <p><strong>Ожидаемое поведение ПОСЛЕ исправления:</strong></p>
+            <div class="log-output">✅ Token auto-refreshed successfully for user 51731157413c4ed58
+🚫 Token refresh attempt too frequent for user 51731157413c4ed58, skipping to prevent loop
+🚫 Token refresh attempt too frequent for user 51731157413c4ed58, skipping to prevent loop
+[больше никаких обновлений в течение 2 минут]</div>
+        </div>
+
+        <div class="test-section">
+            <h3>⚠️ Инструкции для тестирования спящего режима</h3>
+            <ol>
+                <li>Запустите приложение (Frontend + Backend)</li>
+                <li>Авторизуйтесь в системе (admin@test.com / admin123)</li>
+                <li>Откройте мониторинг логов: <code>tail -f log/development.log | grep -i token</code></li>
+                <li>Переведите компьютер в спящий режим на > 1 часа</li>
+                <li>Проснитесь и откройте любую страницу админки</li>
+                <li><strong>Ожидаемый результат:</strong> Одно сообщение об обновлении токена, затем блокировка на 2 минуты</li>
+                <li><strong>НЕ должно быть:</strong> Бесконечного зацикливания сообщений</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3>📈 Счетчик повторений (для диагностики)</h3>
+            <p>Количество сообщений "Token auto-refreshed successfully": <span id="tokenCounter" class="counter">0</span></p>
+            <p>Последнее обновление: <span id="lastUpdate">-</span></p>
+            <button onclick="startTokenMonitoring()">📡 Начать мониторинг</button>
+            <button onclick="stopTokenMonitoring()">⏹️ Остановить мониторинг</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let tokenCount = 0;
+        let monitoringInterval = null;
+        
+        function log(message, type = 'info') {
+            const resultsDiv = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `result ${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            resultsDiv.appendChild(logEntry);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        async function makeRequest(url, options = {}) {
+            const defaultOptions = {
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            };
+            
+            try {
+                const response = await fetch(url, { ...defaultOptions, ...options });
+                const data = await response.json();
+                return { response, data, error: null };
+            } catch (error) {
+                return { response: null, data: null, error };
+            }
+        }
+
+        async function simulateMultipleRequests() {
+            log('🚀 Начинаем симуляцию множественных запросов...', 'info');
+            
+            // Делаем 10 параллельных запросов для симуляции ситуации после спящего режима
+            const requests = [];
+            for (let i = 0; i < 10; i++) {
+                requests.push(makeRequest(`${API_BASE}/auth/me`));
+            }
+            
+            try {
+                const results = await Promise.all(requests);
+                let successCount = 0;
+                let errorCount = 0;
+                
+                results.forEach((result, index) => {
+                    if (result.response && result.response.ok) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                    }
+                });
+                
+                log(`📊 Результаты: ${successCount} успешных, ${errorCount} с ошибками`, 'info');
+                log('🔍 Проверьте логи сервера - должно быть максимум одно сообщение об обновлении токена', 'warning');
+                
+            } catch (error) {
+                log(`❌ Ошибка при выполнении запросов: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkCurrentAuth() {
+            log('🔍 Проверяем текущую авторизацию...', 'info');
+            
+            const { response, data, error } = await makeRequest(`${API_BASE}/auth/me`);
+            
+            if (error) {
+                log(`❌ Ошибка сети: ${error.message}`, 'error');
+            } else if (response.ok) {
+                log(`✅ Авторизация действительна. Пользователь: ${data.user?.email || 'неизвестно'}`, 'success');
+            } else {
+                log(`⚠️ Проблемы с авторизацией. Статус: ${response.status}`, 'warning');
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('testResults').innerHTML = '';
+            tokenCount = 0;
+            document.getElementById('tokenCounter').textContent = '0';
+            document.getElementById('lastUpdate').textContent = '-';
+        }
+
+        function startTokenMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+            }
+            
+            log('📡 Начат мониторинг токенов (симуляция - в реальности нужно смотреть логи сервера)', 'info');
+            
+            // Симуляция мониторинга - в реальности нужно смотреть логи сервера
+            monitoringInterval = setInterval(() => {
+                // Делаем запрос для потенциального обновления токена
+                makeRequest(`${API_BASE}/auth/me`).then(result => {
+                    if (result.response && result.response.status === 200) {
+                        // Симуляция обнаружения обновления токена
+                        // В реальности это нужно отслеживать в логах сервера
+                    }
+                });
+            }, 5000); // Каждые 5 секунд
+        }
+
+        function stopTokenMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+                monitoringInterval = null;
+                log('⏹️ Мониторинг остановлен', 'info');
+            }
+        }
+
+        // Автоматическая проверка при загрузке
+        window.onload = () => {
+            log('🚀 Страница загружена. Готов к тестированию исправлений зацикливания токенов.', 'info');
+            checkCurrentAuth();
+        };
+
+        // Очистка при закрытии страницы
+        window.onbeforeunload = () => {
+            stopTokenMonitoring();
+        };
+    </script>
+</body>
+</html>

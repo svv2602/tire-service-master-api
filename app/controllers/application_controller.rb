@@ -88,11 +88,12 @@ class ApplicationController < ActionController::API
     # Создаем уникальный ключ для пользователя (используем refresh_token как идентификатор)
     user_key = Digest::SHA256.hexdigest(refresh_token)[0..16]
     
-    # Защита от зацикливания - используем глобальную переменную класса с мьютексом
+    # 🔧 УСИЛЕННАЯ ЗАЩИТА от зацикливания - используем глобальную переменную класса с мьютексом
     @@token_refresh_mutex.synchronize do
       last_attempt = @@token_refresh_attempts[user_key]
-      if last_attempt && Time.current - last_attempt < 10.seconds
-        Rails.logger.warn("Token refresh attempt too frequent for user #{user_key}, skipping to prevent loop (last attempt: #{last_attempt})")
+      # Увеличиваем интервал защиты с 10 секунд до 2 минут для предотвращения зацикливания
+      if last_attempt && Time.current - last_attempt < 2.minutes
+        Rails.logger.warn("🚫 Token refresh attempt too frequent for user #{user_key}, skipping to prevent loop (last attempt: #{last_attempt}, interval: #{Time.current - last_attempt} seconds)")
         return false
       end
       
@@ -116,12 +117,11 @@ class ApplicationController < ActionController::API
         path: '/'
       }
       
-      Rails.logger.info("Token auto-refreshed successfully for user #{user_key}")
+      Rails.logger.info("✅ Token auto-refreshed successfully for user #{user_key}")
       
-      # Сбрасываем счетчик попыток после успешного обновления
-      @@token_refresh_mutex.synchronize do
-        @@token_refresh_attempts.delete(user_key)
-      end
+      # 🔧 ИСПРАВЛЕНИЕ: НЕ сбрасываем счетчик попыток после успешного обновления
+      # Это предотвращает зацикливание - токен будет обновлен только раз в 2 минуты
+      # @@token_refresh_attempts.delete(user_key) - УБРАНО для предотвращения зацикливания
       
       return true
     rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
@@ -129,12 +129,11 @@ class ApplicationController < ActionController::API
       cookies.delete(:access_token)
       cookies.delete(:refresh_token)
       
-      # Сбрасываем счетчик попыток
-      @@token_refresh_mutex.synchronize do
-        @@token_refresh_attempts.delete(user_key)
-      end
+      # 🔧 ИСПРАВЛЕНИЕ: НЕ сбрасываем счетчик попыток при ошибке
+      # Оставляем защиту активной для предотвращения повторных попыток
+      # @@token_refresh_attempts.delete(user_key) - УБРАНО для предотвращения зацикливания
       
-      Rails.logger.info("Failed to refresh token for user #{user_key}: #{e.message}")
+      Rails.logger.warn("❌ Failed to refresh token for user #{user_key}: #{e.message}")
       return false
     end
   end
