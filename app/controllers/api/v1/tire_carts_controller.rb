@@ -1,6 +1,6 @@
 class Api::V1::TireCartsController < ApplicationController
   before_action :authenticate_request!
-  before_action :set_cart, only: [:show, :update, :destroy, :add_item, :update_item, :remove_item, :clear]
+  before_action :set_cart, only: [:show, :destroy, :add_item, :update_item, :remove_item, :clear]
   before_action :set_cart_item, only: [:update_item, :remove_item]
 
   # GET /api/v1/tire_carts
@@ -101,6 +101,16 @@ class Api::V1::TireCartsController < ApplicationController
     render json: {
       message: 'Корзина очищена',
       cart: format_cart(@cart.reload)
+    }
+  end
+
+  # DELETE /api/v1/tire_carts/:id
+  # Удаление корзины
+  def destroy
+    @cart.destroy
+    
+    render json: {
+      message: 'Корзина удалена'
     }
   end
 
