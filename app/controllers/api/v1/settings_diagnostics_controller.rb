@@ -276,7 +276,7 @@ class Api::V1::SettingsDiagnosticsController < ApplicationController
         priority: 'high',
         component: 'email',
         message: 'Настройте Email уведомления для базовой функциональности системы',
-        action_url: '/admin/settings/email'
+        action_url: '/admin/notifications/email'
       }
     end
     
@@ -285,7 +285,7 @@ class Api::V1::SettingsDiagnosticsController < ApplicationController
         priority: 'high',
         component: 'notifications',
         message: 'Настройте хотя бы один канал уведомлений',
-        action_url: '/admin/settings/notification-channels'
+        action_url: '/admin/notifications/channels'
       }
     end
     
@@ -294,7 +294,7 @@ class Api::V1::SettingsDiagnosticsController < ApplicationController
         priority: 'medium',
         component: 'push',
         message: 'Настройте Push уведомления для улучшения пользовательского опыта',
-        action_url: '/admin/settings/push'
+        action_url: '/admin/notifications/push-settings'
       }
     end
     
@@ -303,7 +303,7 @@ class Api::V1::SettingsDiagnosticsController < ApplicationController
         priority: 'medium',
         component: 'telegram',
         message: 'Настройте Telegram интеграцию для дополнительного канала уведомлений',
-        action_url: '/admin/settings/telegram'
+        action_url: '/admin/notifications/telegram'
       }
     end
     
@@ -312,7 +312,7 @@ class Api::V1::SettingsDiagnosticsController < ApplicationController
         priority: 'low',
         component: 'oauth',
         message: 'Настройте Google OAuth для упрощения регистрации пользователей',
-        action_url: '/admin/settings/google-oauth'
+        action_url: '/admin/notifications/google-oauth'
       }
     end
     
