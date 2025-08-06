@@ -76,18 +76,32 @@ class ApplicationController < ActionController::API
     end
   end
   
+  # Глобальная переменная для отслеживания попыток обновления токенов
+  @@token_refresh_attempts = {}
+  @@token_refresh_mutex = Mutex.new
+
   # Попытка автоматического обновления токена
   def try_refresh_token
     refresh_token = cookies[:refresh_token]
     return false if refresh_token.blank?
 
-    # Защита от зацикливания - проверяем, не пытались ли мы уже обновить токен недавно
-    if session[:last_refresh_attempt] && Time.current - session[:last_refresh_attempt] < 5.seconds
-      Rails.logger.warn("Token refresh attempt too frequent, skipping to prevent loop")
-      return false
-    end
+    # Создаем уникальный ключ для пользователя (используем refresh_token как идентификатор)
+    user_key = Digest::SHA256.hexdigest(refresh_token)[0..16]
     
-    session[:last_refresh_attempt] = Time.current
+    # Защита от зацикливания - используем глобальную переменную класса с мьютексом
+    @@token_refresh_mutex.synchronize do
+      last_attempt = @@token_refresh_attempts[user_key]
+      if last_attempt && Time.current - last_attempt < 10.seconds
+        Rails.logger.warn("Token refresh attempt too frequent for user #{user_key}, skipping to prevent loop (last attempt: #{last_attempt})")
+        return false
+      end
+      
+      # Записываем время попытки
+      @@token_refresh_attempts[user_key] = Time.current
+      
+      # Очищаем старые записи (старше 1 часа)
+      @@token_refresh_attempts.delete_if { |k, v| Time.current - v > 1.hour }
+    end
 
     begin
       new_access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
@@ -102,16 +116,25 @@ class ApplicationController < ActionController::API
         path: '/'
       }
       
-      Rails.logger.info("Token auto-refreshed successfully for user session")
+      Rails.logger.info("Token auto-refreshed successfully for user #{user_key}")
+      
       # Сбрасываем счетчик попыток после успешного обновления
-      session[:last_refresh_attempt] = nil
+      @@token_refresh_mutex.synchronize do
+        @@token_refresh_attempts.delete(user_key)
+      end
+      
       return true
     rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError => e
       # Удаляем недействительные cookies
       cookies.delete(:access_token)
       cookies.delete(:refresh_token)
-      session[:last_refresh_attempt] = nil
-      Rails.logger.info("Failed to refresh token: #{e.message}")
+      
+      # Сбрасываем счетчик попыток
+      @@token_refresh_mutex.synchronize do
+        @@token_refresh_attempts.delete(user_key)
+      end
+      
+      Rails.logger.info("Failed to refresh token for user #{user_key}: #{e.message}")
       return false
     end
   end
