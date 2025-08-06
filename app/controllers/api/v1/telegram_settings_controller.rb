@@ -252,9 +252,22 @@ class Api::V1::TelegramSettingsController < ApplicationController
           webhook_url: webhook_url
         }
       else
+        # 🔧 ИСПРАВЛЕНИЕ: Улучшенная обработка ошибки rate limiting
+        error_message = case response[:error_code]
+        when 429
+          'Превышен лимит запросов к Telegram API. Попробуйте через несколько минут.'
+        when 400
+          'Неверный URL webhook. Проверьте корректность адреса.'
+        when 401
+          'Неверный токен бота. Проверьте правильность токена.'
+        else
+          "Ошибка установки webhook: #{response[:description]}"
+        end
+        
         render json: {
           success: false,
-          message: "Ошибка установки webhook: #{response[:description]}"
+          message: error_message,
+          error_code: response[:error_code]
         }, status: :unprocessable_entity
       end
       

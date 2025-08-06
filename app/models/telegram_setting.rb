@@ -147,8 +147,8 @@ class TelegramSetting < ApplicationRecord
 
   private
 
-  # ✅ ЗАЩИТА: Проверка частоты обновлений (1 минута)
+  # ✅ ЗАЩИТА: Проверка частоты обновлений (увеличено до 5 минут для предотвращения rate limiting)
   def webhook_recently_updated?
-    webhook_last_updated_at.present? && webhook_last_updated_at > 1.minute.ago
+    webhook_last_updated_at.present? && webhook_last_updated_at > 5.minutes.ago
   end
 end
