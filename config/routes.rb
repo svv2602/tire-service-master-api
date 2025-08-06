@@ -59,6 +59,9 @@ Rails.application.routes.draw do
       get 'settings', to: 'settings#show'
       patch 'settings', to: 'settings#update'
       
+      # Диагностика настроек системы
+      get 'settings_diagnostics', to: 'settings_diagnostics#index'
+      
       # Система уведомлений
       resources :email_templates do
         member do

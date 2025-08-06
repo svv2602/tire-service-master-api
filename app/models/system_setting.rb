@@ -97,8 +97,18 @@ class SystemSetting < ApplicationRecord
 
   # Расшифровка чувствительных данных
   def decrypt_sensitive_data
-    # Для демонстрации - в продакшене использовать Rails.application.credentials или gem 'attr_encrypted'
-    # В данном случае оставляем как есть для простоты
+    # Расшифровываем чувствительные данные при загрузке из БД
+    if sensitive? && value.present? && is_encrypted?
+      begin
+        decrypted_value = decrypt_value(value)
+        # Обновляем value в памяти (без сохранения в БД)
+        self.value = decrypted_value
+        self.is_encrypted = false # Помечаем как расшифрованное в памяти
+      rescue => e
+        Rails.logger.error "Decrypt error for key #{key}: #{e.message}"
+        # Оставляем зашифрованное значение если расшифровка не удалась
+      end
+    end
   end
 
   # Простое шифрование (в продакшене заменить на proper encryption)

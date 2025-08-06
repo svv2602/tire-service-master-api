@@ -175,7 +175,7 @@ module Api
                   # Создаем финальную настройку, объединяя БД данные с базовыми метаданными
                   base_settings[setting.key] = base_setting.merge({
                     key: setting.key,
-                    value: setting.value,
+                    value: setting.typed_value, # Используем typed_value для расшифровки
                     description: setting.description,
                     category: setting.category,
                     type: setting.setting_type,
@@ -201,7 +201,7 @@ module Api
                 # Объединяем БД данные с базовыми метаданными
                 base_settings[setting.key] = base_setting.merge({
                   key: setting.key,
-                  value: setting.value,
+                  value: setting.typed_value, # Используем typed_value для расшифровки
                   description: setting.description,
                   category: setting.category,
                   type: setting.setting_type
@@ -230,7 +230,7 @@ module Api
           if db_setting
             setting = {
               key: db_setting.key,
-              value: db_setting.value,
+              value: db_setting.typed_value, # Используем typed_value для расшифровки
               description: db_setting.description,
               category: db_setting.category,
               type: db_setting.setting_type,
