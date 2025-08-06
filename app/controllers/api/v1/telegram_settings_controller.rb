@@ -6,8 +6,11 @@ class Api::V1::TelegramSettingsController < ApplicationController
   def show
     authorize TelegramSetting, :show?
     
+    # 🔧 ИСПРАВЛЕНИЕ: Поддержка параметра show_full_token для админов
+    show_full_token = params[:show_full_token] == 'true' && current_user&.admin?
+    
     render json: {
-      telegram_settings: format_settings(@telegram_settings),
+      telegram_settings: format_settings(@telegram_settings, show_full_token: show_full_token),
       statistics: get_telegram_statistics
     }
   end
@@ -403,10 +406,10 @@ class Api::V1::TelegramSettingsController < ApplicationController
     permitted_params
   end
 
-  def format_settings(settings)
+  def format_settings(settings, show_full_token: false)
     {
       id: settings.id,
-      bot_token: settings.bot_token.present? ? "#{settings.bot_token[0..10]}..." : nil,
+      bot_token: format_bot_token(settings.bot_token, show_full_token),
       bot_username: settings.bot_username,
       webhook_url: settings.webhook_url,
       webhook_last_updated_at: settings.webhook_last_updated_at,
@@ -422,6 +425,19 @@ class Api::V1::TelegramSettingsController < ApplicationController
       created_at: settings.created_at,
       updated_at: settings.updated_at
     }
+  end
+
+  # 🔧 ИСПРАВЛЕНИЕ: Форматирование токена бота
+  def format_bot_token(token, show_full_token)
+    return nil unless token.present?
+    
+    if show_full_token && current_user&.admin?
+      # Показываем полный токен только админам при запросе
+      token
+    else
+      # Маскируем токен для безопасности
+      "#{token[0..10]}..."
+    end
   end
 
   def get_telegram_statistics
