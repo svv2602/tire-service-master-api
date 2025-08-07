@@ -4,17 +4,22 @@ module Auth
   class TokenRevokedError < StandardError; end
 
   class JsonWebToken
+    # Получение секретного ключа из переменной окружения или credentials
+    def self.secret_key
+      ENV['SECRET_KEY_BASE'] || Rails.application.credentials.secret_key_base
+    end
+
     def self.encode(payload)
       payload = payload.dup
       payload[:exp] = 24.hours.from_now.to_i
-      JWT.encode(payload, Rails.application.credentials.secret_key_base, 'HS256')
+      JWT.encode(payload, secret_key, 'HS256')
     end
 
     def self.decode(token)
       begin
         decoded = JWT.decode(
           token,
-          Rails.application.credentials.secret_key_base,
+          secret_key,
           true,
           algorithm: 'HS256'
         ).first
@@ -31,7 +36,7 @@ module Auth
       payload = payload.dup
       payload[:token_type] = 'access'
       payload[:exp] = 1.hour.from_now.to_i
-      JWT.encode(payload, Rails.application.credentials.secret_key_base, 'HS256')
+      JWT.encode(payload, secret_key, 'HS256')
     end
 
     # Создание refresh токена (длительный срок жизни)
@@ -39,7 +44,7 @@ module Auth
       payload = payload.dup
       payload[:token_type] = 'refresh'
       payload[:exp] = 30.days.from_now.to_i
-      JWT.encode(payload, Rails.application.credentials.secret_key_base, 'HS256')
+      JWT.encode(payload, secret_key, 'HS256')
     end
 
     # Декодирование access токена
@@ -57,10 +62,14 @@ module Auth
     end
 
     def self.refresh_access_token(refresh_token)
+      Rails.logger.info "🔄 Attempting to refresh token with key: #{secret_key[0..10]}..."
       decoded = decode_refresh_token(refresh_token)
+      Rails.logger.info "✅ Successfully decoded refresh token for user: #{decoded[:user_id]}"
       
       # Создаем новый access токен
-      encode_access_token(user_id: decoded[:user_id])
+      new_token = encode_access_token(user_id: decoded[:user_id])
+      Rails.logger.info "✅ Generated new access token"
+      new_token
     end
   end
 end 
