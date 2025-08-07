@@ -9,8 +9,34 @@ module Api
       def index
         if params[:partner_id].present?
           # Операторы конкретного партнера
-          operators = Operator.includes(:user, :partner)
+          operators_scope = Operator.includes(:user, :partner)
             .where(partner_id: @partner.id)
+          
+          # Фильтрация по поиску (имя, фамилия, email, телефон)
+          if params[:search].present?
+            search_term = "%#{params[:search]}%"
+            operators_scope = operators_scope.joins(:user)
+              .where(
+                "users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ? OR users.phone ILIKE ?",
+                search_term, search_term, search_term, search_term
+              )
+          end
+          
+          # Фильтрация по активности
+          if params[:is_active].present?
+            is_active = params[:is_active] == 'true'
+            operators_scope = operators_scope.where(is_active: is_active)
+          end
+          
+          # Фильтрация по назначенным сервисным точкам
+          if params[:service_point_search].present?
+            service_point_search = "%#{params[:service_point_search]}%"
+            operators_scope = operators_scope.joins(operator_service_points: :service_point)
+              .where("service_points.name ILIKE ?", service_point_search)
+              .distinct
+          end
+          
+          operators = operators_scope.order(created_at: :desc)
           render json: operators, each_serializer: OperatorSerializer
         else
           # Все операторы (для админов)
