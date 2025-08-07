@@ -15,6 +15,11 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
             'localhost:8000', '127.0.0.1:8000',
             '192.168.9.109:3008',
             '192.168.3.145:3008',
+            # Production domain
+            'http://service-station.tot.biz.ua:3008',
+            'https://service-station.tot.biz.ua:3008',
+            'http://service-station.tot.biz.ua',
+            'https://service-station.tot.biz.ua',
             # Docker internal network
             /http:\/\/web:\d+/,
             /http:\/\/api:\d+/,

@@ -45,7 +45,11 @@ module TireServiceMasterApi
     
     # Добавляем поддержку куки для API приложения
     config.middleware.use ActionDispatch::Cookies
-    config.middleware.use ActionDispatch::Session::CookieStore, key: '_tire_service_session'
+    config.middleware.use ActionDispatch::Session::CookieStore, 
+                         key: '_tire_service_session',
+                         domain: :all,  # Разрешаем cookies для всех поддоменов
+                         secure: Rails.env.production?,  # Secure только в production
+                         same_site: :lax  # Более гибкие настройки для cross-origin запросов
     
     # Добавляем автозагрузку папки lib
     config.autoload_paths << Rails.root.join('lib')
