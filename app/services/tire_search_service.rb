@@ -1113,35 +1113,47 @@ class TireSearchService
   end
 
   def needs_llm_parsing?
-    # Используем LLM если простой парсинг НЕ нашел brand ИЛИ model
-    # Но НЕ используем LLM если найден только диаметр без других слов - это нормальный случай
-    if @parsed_data[:brand].blank? || @parsed_data[:model].blank?
-      # Если найден только диаметр без других слов (например: "R16", "шины 18") - LLM не нужна
-      # Но если есть другие слова кроме диаметра (например: "лада на 14") - нужен LLM
-      diameter_only_query = @query.strip.match?(/^(шины\s+)?(r?\d{2,3}|на\s+\d{2,3})$/i)
-      
-
-      
-      if @parsed_data[:diameter].present? && @parsed_data[:brand].blank? && @parsed_data[:model].blank? && diameter_only_query
-        Rails.logger.info "LLM НЕ нужен: найден только диаметр R#{@parsed_data[:diameter]} без других слов"
-        return false
-      end
-      
-      # Если найдены частичные размеры шин - LLM не нужен
-      partial_tire_size = (@parsed_data[:width].present? && @parsed_data[:height].present?) ||
-                         (@parsed_data[:width].present? && @parsed_data[:diameter].present?) ||
-                         (@parsed_data[:height].present? && @parsed_data[:diameter].present?)
-      
-      if partial_tire_size && @parsed_data[:brand].blank? && @parsed_data[:model].blank?
-        Rails.logger.info "LLM НЕ нужен: найдены частичные размеры шин (width: #{@parsed_data[:width]}, height: #{@parsed_data[:height]}, diameter: #{@parsed_data[:diameter]})"
-        return false
-      end
-      
-      Rails.logger.info "LLM нужен: brand=#{@parsed_data[:brand].inspect}, model=#{@parsed_data[:model].inspect}, query='#{@query}'"
+    # НОВАЯ ЛОГИКА: Используем LLM если простой парсинг не смог полностью распознать запрос
+    
+    # 1. Проверяем, есть ли полный размер шины (ширина + высота + диаметр)
+    full_tire_size = @parsed_data[:tire_size].present? || 
+                     (@parsed_data[:width].present? && @parsed_data[:height].present? && @parsed_data[:diameter].present?)
+    
+    # 2. Проверяем, распознан ли автомобиль (бренд + модель)
+    car_identified = @parsed_data[:brand].present? && @parsed_data[:model].present?
+    
+    # 3. Если найден полный размер шины И автомобиль - LLM не нужен (всё распознано)
+    if full_tire_size && car_identified
+      Rails.logger.info "LLM НЕ нужен: найден полный размер шины И автомобиль"
+      return false
+    end
+    
+    # 4. Если найден только полный размер шины без автомобиля - LLM не нужен
+    if full_tire_size && @parsed_data[:brand].blank?
+      Rails.logger.info "LLM НЕ нужен: найден полный размер шины, автомобиль не указан"
+      return false
+    end
+    
+    # 5. Простые запросы только по диаметру без других слов - LLM не нужен
+    diameter_only_query = @query.strip.match?(/^(шины\s+)?(r?\d{2,3}|на\s+\d{2,3})$/i)
+    if @parsed_data[:diameter].present? && @parsed_data[:brand].blank? && diameter_only_query
+      Rails.logger.info "LLM НЕ нужен: найден только диаметр R#{@parsed_data[:diameter]} без других слов"
+      return false
+    end
+    
+    # 6. Проверяем, есть ли в запросе потенциальные слова-бренды/модели, которые не распознались
+    query_words = @query.downcase.split(/\s+/).reject { |w| w.match?(/\A\d+\z/) || w.match?(/\A(шины|резина|на|для|р|r)\z/i) }
+    has_potential_brand_words = query_words.any? { |word| word.length >= 3 }
+    
+    # 7. ОСНОВНОЕ УСЛОВИЕ: Используем LLM если:
+    #    - НЕ найден полный размер шины ИЛИ НЕ найден автомобиль
+    #    - И есть потенциальные слова для парсинга
+    if (!full_tire_size || !car_identified) && has_potential_brand_words
+      Rails.logger.info "LLM нужен: неполное распознание (tire_size: #{full_tire_size}, car: #{car_identified}) + потенциальные слова: #{query_words}"
       return true
     end
-
-    # Дополнительно используем LLM для сложных случаев даже если brand/model найдены
+    
+    # 8. Дополнительно используем LLM для сложных/вопросительных запросов
     complex_patterns = [
       @query.match?(/какие|посоветуйте|подойдет|нужны|помогите|скажите|подскажите/i), # Вопросительная форма
       @query.match?(/поменял|купил|заменил|установил|ищу|хочу/i), # Контекстные слова
@@ -1154,8 +1166,8 @@ class TireSearchService
       return true
     end
 
-    # Если brand И model найдены и запрос простой - LLM не нужен
-    Rails.logger.info "LLM НЕ нужен: простой запрос с найденными brand=#{@parsed_data[:brand]}, model=#{@parsed_data[:model]}"
+    # 9. Если всё распознано или нет потенциальных слов - LLM не нужен
+    Rails.logger.info "LLM НЕ нужен: запрос полностью распознан или нет потенциальных слов для парсинга"
     false
   end
 
@@ -1628,6 +1640,7 @@ class TireSearchService
 
   # Умное объединение результатов простого парсинга и LLM
   def smart_merge_results(simple_data, llm_data)
+    Rails.logger.info "🔄 smart_merge_results: simple=#{simple_data.inspect}, llm=#{llm_data.inspect}"
     result = simple_data.dup
 
     # LLM может перезаписывать brand и model если:
@@ -1635,30 +1648,29 @@ class TireSearchService
     # 2. Комбинация LLM существует в БД, а простого парсинга - нет
     # 3. В запросе есть явное указание на бренд (пользователь хочет конкретный бренд)
     
-    if llm_data[:brand].present? && llm_data[:model].present?
-      # Проверяем какая комбинация лучше
-      simple_car_exists = car_exists_in_database?(simple_data[:brand], simple_data[:model])
-      llm_car_exists = car_exists_in_database?(llm_data[:brand], llm_data[:model])
-      
-      # Проверяем есть ли в запросе явное указание на бренд LLM
+    # Обрабатываем бренд от LLM (даже если модель не найдена)
+    if llm_data[:brand].present?
       query_lower = @query.downcase
       llm_brand_mentioned = query_lower.include?(llm_data[:brand].downcase) ||
                            brand_mentioned_in_query?(llm_data[:brand], query_lower)
       
-      should_use_llm = false
-      reason = ""
-      
-      if llm_car_exists && !simple_car_exists
-        should_use_llm = true
-        reason = "LLM найден в БД, простой парсинг - нет"
-      elsif llm_car_exists && simple_car_exists && llm_brand_mentioned
-        should_use_llm = true
-        reason = "пользователь явно указал бренд #{llm_data[:brand]}"
-      end
-      
-      if should_use_llm
-        Rails.logger.info "LLM исправляет (#{reason}): #{simple_data[:brand]} #{simple_data[:model]} → #{llm_data[:brand]} #{llm_data[:model]}"
+      # Используем бренд от LLM если:
+      # 1. Простой парсинг не нашел бренд ИЛИ
+      # 2. LLM нашел бренд который явно упоминается в запросе
+      if simple_data[:brand].blank? || llm_brand_mentioned
+        Rails.logger.info "LLM дополняет бренд: #{simple_data[:brand].inspect} → #{llm_data[:brand]}"
         result[:brand] = llm_data[:brand]
+      end
+    end
+    
+    # Обрабатываем модель от LLM
+    if llm_data[:model].present?
+      # Используем модель от LLM если:
+      # 1. Простой парсинг не нашел модель ИЛИ
+      # 2. LLM нашел более точную модель для того же бренда
+      if simple_data[:model].blank? || 
+         (result[:brand] == llm_data[:brand] && llm_data[:model] != simple_data[:model])
+        Rails.logger.info "LLM дополняет модель: #{simple_data[:model].inspect} → #{llm_data[:model]}"
         result[:model] = llm_data[:model]
       end
     end
@@ -1666,9 +1678,13 @@ class TireSearchService
     # Для остальных полей - обычное слияние (LLM дополняет, не перезаписывает)
     llm_data.each do |key, value|
       next if [:brand, :model].include?(key) # brand и model обработаны выше
-      result[key] = value if value.present? && result[key].blank?
+      if value.present? && result[key].blank?
+        Rails.logger.info "LLM дополняет #{key}: #{result[key].inspect} → #{value}"
+        result[key] = value
+      end
     end
 
+    Rails.logger.info "🏁 smart_merge_results result: #{result.inspect}"
     result
   end
 

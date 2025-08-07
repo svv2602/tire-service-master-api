@@ -70,13 +70,25 @@ class OpenaiService
       )
 
       content = response.dig("choices", 0, "message", "content")
+      Rails.logger.info "🔍 OpenAI raw response: #{content}"
       return {} unless content
 
+      # Очищаем markdown обертку если есть
+      json_content = content.strip
+      if json_content.start_with?('```json') && json_content.end_with?('```')
+        json_content = json_content.gsub(/\A```json\n?/, '').gsub(/\n?```\z/, '')
+      elsif json_content.start_with?('```') && json_content.end_with?('```')
+        json_content = json_content.gsub(/\A```\n?/, '').gsub(/\n?```\z/, '')
+      end
+      
       # Парсим JSON ответ
-      result = JSON.parse(content)
+      result = JSON.parse(json_content)
+      Rails.logger.info "🔍 OpenAI parsed JSON: #{result.inspect}"
       
       # Валидируем и очищаем результат
-      validate_and_clean_result(result)
+      cleaned_result = validate_and_clean_result(result)
+      Rails.logger.info "🔍 OpenAI cleaned result: #{cleaned_result.inspect}"
+      cleaned_result
       
     rescue JSON::ParserError => e
       Rails.logger.error "OpenAI JSON parse error: #{e.message}"
@@ -229,6 +241,7 @@ class OpenaiService
       height = tire_size['height'].to_i
       diameter = tire_size['diameter'].to_i
 
+      # Если есть все три параметра - создаем полный размер
       if width >= 145 && width <= 335 && 
          height >= 25 && height <= 85 && 
          diameter >= 13 && diameter <= 24
@@ -239,6 +252,11 @@ class OpenaiService
           diameter: diameter,
           full_size: "#{width}/#{height}R#{diameter}"
         }
+      else
+        # Сохраняем отдельные параметры если они валидны
+        cleaned[:width] = width if width >= 145 && width <= 335
+        cleaned[:height] = height if height >= 25 && height <= 85
+        cleaned[:diameter] = diameter if diameter >= 13 && diameter <= 24
       end
     end
 
