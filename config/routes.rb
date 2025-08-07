@@ -40,6 +40,12 @@ Rails.application.routes.draw do
       get 'supplier_products_search/product/:id', to: 'supplier_products_search#product_details'
       get 'supplier_products_search/available_sizes/:diameter', to: 'supplier_products_search#available_sizes_by_diameter'
       
+      # Чат-консультант по шинам
+      post 'tire_chat/message', to: 'tire_chat#message'
+      get 'tire_chat/stream', to: 'tire_chat#stream'
+      post 'tire_chat/reset', to: 'tire_chat#reset'
+      get 'tire_chat/status', to: 'tire_chat#status'
+      
       # Управление поставщиками
       resources :suppliers do
         member do

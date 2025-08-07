@@ -330,6 +330,21 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
     t.index ["user_id"], name: "index_clients_on_user_id", unique: true
   end
 
+  create_table "countries", force: :cascade do |t|
+    t.string "name", limit: 100, null: false, comment: "Каноничное название страны"
+    t.string "normalized_name", limit: 100, null: false, comment: "Нормализованное название для поиска"
+    t.string "iso_code", limit: 3, comment: "ISO код страны (DE, CN, JP)"
+    t.integer "rating_score", default: 5, comment: "Рейтинг качества производства (1-10)"
+    t.text "aliases", default: [], comment: "Альтернативные названия", array: true
+    t.boolean "is_active", default: true, comment: "Активность справочника"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["aliases"], name: "index_countries_on_aliases", using: :gin
+    t.index ["iso_code"], name: "index_countries_on_iso_code"
+    t.index ["normalized_name"], name: "index_countries_on_normalized_name", unique: true
+    t.index ["rating_score"], name: "index_countries_on_rating_score"
+  end
+
   create_table "custom_variables", force: :cascade do |t|
     t.string "name", limit: 100, null: false
     t.text "description"
@@ -1011,9 +1026,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
   create_table "supplier_tire_products", force: :cascade do |t|
     t.bigint "supplier_id", null: false
     t.string "external_id", limit: 255, null: false
-    t.string "brand", limit: 100, null: false
+    t.string "original_brand", limit: 100, null: false
     t.string "brand_normalized", limit: 100, null: false
-    t.string "model", limit: 255, null: false
+    t.string "original_model", limit: 255, null: false
     t.string "name", limit: 500, null: false
     t.integer "width", null: false
     t.integer "height", null: false
@@ -1027,19 +1042,29 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
     t.text "description"
     t.string "image_url", limit: 1000
     t.string "product_url", limit: 1000
-    t.string "country", limit: 100
+    t.string "original_country", limit: 100
     t.string "year_week", limit: 20
     t.text "search_tokens"
     t.jsonb "raw_data"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "tire_brand_id", comment: "Нормализованный бренд"
+    t.bigint "tire_model_id", comment: "Нормализованная модель"
+    t.bigint "country_id", comment: "Нормализованная страна производства"
+    t.integer "production_year", comment: "Год производства (извлеченный из year_week)"
+    t.decimal "optimality_score", precision: 5, scale: 2, comment: "Рассчитанный рейтинг оптимальности"
     t.index "to_tsvector('russian'::regconfig, search_tokens)", name: "idx_supplier_tire_products_tokens", using: :gin
-    t.index ["brand_normalized", "width", "height", "diameter", "season", "in_stock"], name: "idx_supplier_tire_products_search"
-    t.index ["brand_normalized"], name: "index_supplier_tire_products_on_brand_normalized"
+    t.index ["country_id"], name: "index_supplier_tire_products_on_country_id"
     t.index ["in_stock"], name: "index_supplier_tire_products_on_in_stock"
+    t.index ["optimality_score"], name: "index_supplier_tire_products_on_optimality_score"
+    t.index ["production_year"], name: "index_supplier_tire_products_on_production_year"
     t.index ["season"], name: "index_supplier_tire_products_on_season"
     t.index ["supplier_id", "external_id"], name: "index_supplier_tire_products_on_supplier_id_and_external_id", unique: true
     t.index ["supplier_id"], name: "index_supplier_tire_products_on_supplier_id"
+    t.index ["tire_brand_id", "tire_model_id"], name: "idx_on_tire_brand_id_tire_model_id_7823a23358"
+    t.index ["tire_brand_id", "width", "height", "diameter", "season", "in_stock"], name: "idx_supplier_products_normalized_search"
+    t.index ["tire_brand_id"], name: "index_supplier_tire_products_on_tire_brand_id"
+    t.index ["tire_model_id"], name: "index_supplier_tire_products_on_tire_model_id"
   end
 
   create_table "suppliers", force: :cascade do |t|
@@ -1166,6 +1191,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
     t.index ["user_id"], name: "index_telegram_subscriptions_on_user_id"
   end
 
+  create_table "tire_brands", force: :cascade do |t|
+    t.string "name", limit: 100, null: false, comment: "Каноничное название бренда"
+    t.string "normalized_name", limit: 100, null: false, comment: "Нормализованное название для поиска"
+    t.integer "rating_score", default: 5, comment: "Рейтинг бренда (1-10)"
+    t.text "aliases", default: [], comment: "Альтернативные названия и алиасы", array: true
+    t.bigint "country_id", comment: "Страна происхождения бренда"
+    t.boolean "is_premium", default: false, comment: "Премиум сегмент"
+    t.boolean "is_active", default: true, comment: "Активность справочника"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["aliases"], name: "index_tire_brands_on_aliases", using: :gin
+    t.index ["country_id", "is_premium"], name: "index_tire_brands_on_country_id_and_is_premium"
+    t.index ["country_id"], name: "index_tire_brands_on_country_id"
+    t.index ["is_premium"], name: "index_tire_brands_on_is_premium"
+    t.index ["normalized_name"], name: "index_tire_brands_on_normalized_name", unique: true
+    t.index ["rating_score"], name: "index_tire_brands_on_rating_score"
+  end
+
   create_table "tire_cart_items", force: :cascade do |t|
     t.bigint "tire_cart_id", null: false
     t.bigint "supplier_tire_product_id", null: false
@@ -1197,6 +1240,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
     t.index ["imported_at"], name: "index_tire_data_versions_on_imported_at"
     t.index ["is_active"], name: "index_tire_data_versions_on_is_active"
     t.index ["version"], name: "index_tire_data_versions_on_version", unique: true
+  end
+
+  create_table "tire_models", force: :cascade do |t|
+    t.bigint "tire_brand_id", null: false, comment: "Бренд шины"
+    t.string "name", limit: 255, null: false, comment: "Каноничное название модели"
+    t.string "normalized_name", limit: 255, null: false, comment: "Нормализованное название для поиска"
+    t.integer "rating_score", default: 5, comment: "Рейтинг модели (1-10)"
+    t.text "aliases", default: [], comment: "Альтернативные названия модели", array: true
+    t.string "season_type", limit: 20, comment: "Тип сезонности (summer, winter, all_season)"
+    t.boolean "is_active", default: true, comment: "Активность справочника"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["aliases"], name: "index_tire_models_on_aliases", using: :gin
+    t.index ["rating_score"], name: "index_tire_models_on_rating_score"
+    t.index ["season_type"], name: "index_tire_models_on_season_type"
+    t.index ["tire_brand_id", "normalized_name"], name: "index_tire_models_on_tire_brand_id_and_normalized_name", unique: true
+    t.index ["tire_brand_id", "season_type"], name: "index_tire_models_on_tire_brand_id_and_season_type"
+    t.index ["tire_brand_id"], name: "index_tire_models_on_tire_brand_id"
   end
 
   create_table "tire_order_items", force: :cascade do |t|
@@ -1376,14 +1437,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
   add_foreign_key "service_posts", "service_points"
   add_foreign_key "services", "service_categories", column: "category_id"
   add_foreign_key "supplier_price_versions", "suppliers"
+  add_foreign_key "supplier_tire_products", "countries"
   add_foreign_key "supplier_tire_products", "suppliers"
+  add_foreign_key "supplier_tire_products", "tire_brands"
+  add_foreign_key "supplier_tire_products", "tire_models"
   add_foreign_key "system_logs", "users"
   add_foreign_key "telegram_notifications", "bookings"
   add_foreign_key "telegram_notifications", "users"
   add_foreign_key "telegram_subscriptions", "users"
+  add_foreign_key "tire_brands", "countries"
   add_foreign_key "tire_cart_items", "supplier_tire_products"
   add_foreign_key "tire_cart_items", "tire_carts"
   add_foreign_key "tire_carts", "users"
+  add_foreign_key "tire_models", "tire_brands"
   add_foreign_key "tire_order_items", "supplier_tire_products"
   add_foreign_key "tire_order_items", "tire_orders"
   add_foreign_key "tire_orders", "suppliers"

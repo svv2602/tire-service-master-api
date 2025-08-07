@@ -196,7 +196,7 @@ module Api
         grouped_products = products.group_by do |product|
           {
             brand: product.brand_normalized,
-            model: product.model,
+            model: product.original_model,
             width: product.width,
             height: product.height,
             diameter: product.diameter,
@@ -318,7 +318,7 @@ module Api
             priority: product.supplier.priority
           },
           brand: product.brand_normalized,
-          model: product.model,
+          model: product.original_model,
           name: product.name,
           size: product.tire_size,
           load_speed_index: product.load_speed_indices,

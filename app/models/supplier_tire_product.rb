@@ -1,6 +1,9 @@
 class SupplierTireProduct < ApplicationRecord
   # Связи
   belongs_to :supplier
+  belongs_to :tire_brand, optional: true
+  belongs_to :tire_model, optional: true
+  belongs_to :country, optional: true
   has_many :tire_order_items, dependent: :destroy
   has_many :tire_orders, through: :tire_order_items
   
@@ -13,9 +16,8 @@ class SupplierTireProduct < ApplicationRecord
   
   # Валидации
   validates :external_id, presence: true, length: { maximum: 255 }
-  validates :brand, presence: true, length: { maximum: 100 }
-  validates :brand_normalized, presence: true, length: { maximum: 100 }
-  validates :model, presence: true, length: { maximum: 255 }
+  validates :original_brand, presence: true, length: { maximum: 100 }
+  validates :original_model, presence: true, length: { maximum: 255 }
   validates :name, presence: true, length: { maximum: 500 }
   validates :width, presence: true, numericality: { greater_than: 0 }
   validates :height, presence: true, numericality: { greater_than: 0 }
@@ -28,8 +30,17 @@ class SupplierTireProduct < ApplicationRecord
   
   # Скоупы
   scope :in_stock, -> { where(in_stock: true) }
-  scope :by_brand, ->(brand) { where(brand_normalized: normalize_brand(brand)) }
+  scope :by_brand, ->(brand_id) { where(tire_brand_id: brand_id) }
+  scope :by_brand_name, ->(brand_name) { 
+    joins(:tire_brand).where(tire_brands: { normalized_name: TireBrand.send(:normalize_string, brand_name) })
+  }
   scope :by_season, ->(season) { where(season: season) }
+  scope :by_country, ->(country_id) { where(country_id: country_id) }
+  scope :by_model, ->(model_id) { where(tire_model_id: model_id) }
+  scope :normalized, -> { where.not(tire_brand_id: nil) }
+  scope :not_normalized, -> { where(tire_brand_id: nil) }
+  scope :by_optimality, ->(min_score) { where('optimality_score >= ?', min_score) }
+  scope :top_optimality, ->(limit = 10) { order(optimality_score: :desc).limit(limit) }
   scope :by_size, ->(width, height, diameter) { 
     where(width: width, height: height, diameter: diameter) 
   }
@@ -46,7 +57,7 @@ class SupplierTireProduct < ApplicationRecord
     
     words.each do |word|
       sanitized_word = "%#{word}%"
-      conditions << '(brand_normalized ILIKE ? OR model ILIKE ? OR name ILIKE ? OR external_id ILIKE ? OR description ILIKE ?)'
+      conditions << '(original_brand ILIKE ? OR original_model ILIKE ? OR name ILIKE ? OR external_id ILIKE ? OR description ILIKE ?)'
       params += [sanitized_word, sanitized_word, sanitized_word, sanitized_word, sanitized_word]
     end
     
@@ -123,7 +134,7 @@ class SupplierTireProduct < ApplicationRecord
     
     # Группируем по параметрам шин
     grouped = products.group_by do |product|
-      "#{product.brand_normalized}|#{product.model}|#{product.width}/#{product.height}R#{product.diameter}|#{product.load_index}#{product.speed_index}"
+      "#{product.brand_normalized}|#{product.original_model}|#{product.width}/#{product.height}R#{product.diameter}|#{product.load_index}#{product.speed_index}"
     end
     
     # Преобразуем в структуру для фронтенда
@@ -132,7 +143,7 @@ class SupplierTireProduct < ApplicationRecord
       {
         tire_key: tire_key,
         brand: first_product.brand_normalized,
-        model: first_product.model,
+        model: first_product.original_model,
         size: "#{first_product.width}/#{first_product.height}R#{first_product.diameter}",
         load_speed_index: "#{first_product.load_index}#{first_product.speed_index}",
         season: first_product.season,
@@ -176,11 +187,86 @@ class SupplierTireProduct < ApplicationRecord
     return 'Цена не указана' unless price_uah
     "#{price_uah.to_i} грн"
   end
+
+  # === МЕТОДЫ ДЛЯ НОРМАЛИЗАЦИИ И ОЦЕНКИ ===
+
+  # Автоматическая нормализация при сохранении
+  def auto_normalize!
+    TireDataNormalizer.normalize_product(self)
+  end
+
+  # Расчет рейтинга оптимальности
+  def calculate_optimality_score(options = {})
+    TireOptimalityCalculator.calculate_optimality(self, options)
+  end
+
+  # Обновление рейтинга оптимальности
+  def update_optimality_score!(options = {})
+    score = calculate_optimality_score(options)
+    update_column(:optimality_score, score)
+    score
+  end
+
+  # Получение полного названия с брендом и моделью
+  def full_normalized_name
+    return name if tire_brand.blank? && tire_model.blank?
+    
+    parts = []
+    parts << tire_brand.name if tire_brand
+    parts << tire_model.name if tire_model
+    parts << size_designation
+    parts.join(' ')
+  end
+
+  # Обозначение размера
+  def size_designation
+    "#{width}/#{height}R#{diameter}"
+  end
+
+  # Проверка нормализации
+  def normalized?
+    tire_brand_id.present?
+  end
+
+  # Получение детальной информации для чата
+  def chat_description
+    parts = []
+    parts << "#{tire_brand&.name || original_brand} #{tire_model&.name || original_model}"
+    parts << size_designation
+    parts << "#{season.capitalize} #{production_year}" if production_year
+    parts << "#{price_uah} грн" if price_uah
+    parts << "(рейтинг: #{optimality_score})" if optimality_score
+    parts.join(' ')
+  end
+
+  # Получение причин рекомендации
+  def recommendation_reasons
+    reasons = []
+    
+    if tire_brand&.is_premium
+      reasons << "премиум бренд"
+    end
+    
+    if optimality_score && optimality_score >= 8
+      reasons << "высокий рейтинг качества"
+    end
+    
+    if production_year && production_year >= Time.current.year - 1
+      reasons << "новая модель"
+    end
+    
+    if country&.rating_score && country.rating_score >= 8
+      reasons << "качественное производство"
+    end
+    
+    reasons.empty? ? ["хорошее соотношение цена-качество"] : reasons
+  end
   
   private
   
   def normalize_brand_name
-    self.brand_normalized = self.class.normalize_brand(brand)
+    # Этот метод больше не нужен, так как нормализация происходит через TireDataNormalizer
+    # self.brand_normalized = self.class.normalize_brand(original_brand)
   end
   
   def normalize_season
@@ -196,11 +282,12 @@ class SupplierTireProduct < ApplicationRecord
   
   def update_search_tokens
     tokens = [
-      brand, brand_normalized, model, name,
+      original_brand, tire_brand&.name, original_model, tire_model&.name, name,
       tire_size, load_speed_indices,
-      country, season_display
+      original_country, country&.name, season_display
     ].compact.join(' ')
     
     self.search_tokens = tokens
   end
+  
 end

@@ -194,7 +194,7 @@ class Api::V1::TireCartsController < ApplicationController
         id: product.id,
         name: product.name,
         brand: product.brand,
-        model: product.model,
+        model: product.original_model,
         size: product.tire_size,
         season: product.season,
         image_url: product.image_url,

@@ -51,6 +51,33 @@ class OpenaiService
     @client = setup_client
   end
 
+  # Универсальный метод для chat completion
+  def chat_completion(prompt, options = {})
+    return nil unless @client && prompt.present?
+
+    begin
+      response = @client.chat(
+        parameters: {
+          model: options[:model] || openai_model,
+          messages: [
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          max_tokens: options[:max_tokens] || openai_max_tokens,
+          temperature: options[:temperature] || openai_temperature
+        }
+      )
+
+      Rails.logger.info "🤖 OpenAI chat completion response received"
+      response
+    rescue => e
+      Rails.logger.error "❌ OpenAI chat completion error: #{e.message}"
+      nil
+    end
+  end
+
   def parse_tire_search_query(query)
     return {} unless @client && query.present?
 

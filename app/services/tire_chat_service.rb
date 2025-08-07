@@ -1,0 +1,553 @@
+# frozen_string_literal: true
+
+# Сервис для интеллектуального чата с пользователями по выбору оптимальных шин
+class TireChatService
+  include ActionView::Helpers::TextHelper
+
+  # Контекст разговора
+  attr_reader :conversation_history, :current_filters, :user_preferences
+
+  def initialize(conversation_history: [], current_filters: {}, user_preferences: {})
+    @conversation_history = conversation_history || []
+    @current_filters = current_filters || {}
+    @user_preferences = user_preferences || {}
+    @openai_service = OpenaiService.new
+  end
+
+  # Основной метод обработки сообщения пользователя
+  def process_message(user_message, available_products = nil)
+    Rails.logger.info "🤖 Обработка сообщения: #{user_message}"
+    
+    # Добавляем сообщение пользователя в историю
+    add_to_history(:user, user_message)
+    
+    # Анализируем намерение пользователя
+    intent = analyze_user_intent(user_message)
+    Rails.logger.info "🎯 Определено намерение: #{intent[:type]}"
+    
+    # Обрабатываем намерение и генерируем ответ
+    response = handle_intent(intent, available_products)
+    
+    # Добавляем ответ ассистента в историю
+    add_to_history(:assistant, response[:message])
+    
+    response
+  rescue => e
+    Rails.logger.error "❌ Ошибка в TireChatService: #{e.message}"
+    fallback_response
+  end
+
+  private
+
+  # Анализ намерения пользователя через OpenAI
+  def analyze_user_intent(message)
+    # Сначала пробуем простой анализ по ключевым словам
+    simple_intent = analyze_simple_intent(message)
+    return simple_intent if simple_intent[:confidence] > 0.8
+    
+    # Если не уверены, используем OpenAI
+    prompt = build_intent_analysis_prompt(message)
+    
+    response = @openai_service.send(:chat_completion, prompt)
+    content = response.dig("choices", 0, "message", "content")
+    
+    if content
+      parsed_intent = parse_intent_response(content)
+      Rails.logger.info "📝 Распознанное намерение: #{parsed_intent}"
+      parsed_intent
+    else
+      simple_intent.presence || { type: 'general_question', parameters: {} }
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка анализа намерения: #{e.message}"
+    simple_intent.presence || { type: 'general_question', parameters: {} }
+  end
+
+  # Простой анализ по ключевым словам
+  def analyze_simple_intent(message)
+    msg = message.to_s.downcase
+    parameters = {}
+    intent_types = []
+    
+    # Размер шин
+    if size_match = msg.match(/(\d{3})[\s\/]*(\d{2})[\s\/]*[rр]?(\d{2})/)
+      parameters[:size] = "#{size_match[1]}/#{size_match[2]}R#{size_match[3]}"
+      intent_types << 'size_request'
+    end
+    
+    # Сезонность
+    if msg.match?(/летн|summer/i)
+      parameters[:season] = 'летние'
+      intent_types << 'season_preference'
+    elsif msg.match?(/зимн|winter/i)
+      parameters[:season] = 'зимние'
+      intent_types << 'season_preference'
+    elsif msg.match?(/всесезон|all.season/i)
+      parameters[:season] = 'всесезонные'
+      intent_types << 'season_preference'
+    end
+    
+    # Приоритеты
+    if msg.match?(/цен.*качеств|соотношен|бюджет/i)
+      parameters[:priority] = 'цена/качество'
+      intent_types << 'priority_request'
+    elsif msg.match?(/престиж|статус|бренд/i)
+      parameters[:priority] = 'престиж'
+      intent_types << 'priority_request'
+    end
+    
+    # Запрос рекомендаций
+    if msg.match?(/покажи|лучш|рекоменд|топ|вариант|подбер/i)
+      intent_types << 'recommendation_request'
+    end
+    
+    # Возвращаем комплексное намерение или самое приоритетное
+    if intent_types.length > 1
+      return { 
+        type: 'complex_request', 
+        parameters: parameters, 
+        intent_types: intent_types,
+        confidence: 0.95 
+      }
+    elsif intent_types.length == 1
+      return { 
+        type: intent_types.first, 
+        parameters: parameters, 
+        confidence: 0.9 
+      }
+    end
+    
+    { type: 'general_question', parameters: parameters, confidence: 0.1 }
+  end
+
+  # Построение промпта для анализа намерения
+  def build_intent_analysis_prompt(message)
+    <<~PROMPT
+      Ты - эксперт по автомобильным шинам. Проанализируй сообщение пользователя и определи его намерение.
+
+      ВОЗМОЖНЫЕ НАМЕРЕНИЯ:
+      1. "size_request" - пользователь указывает размер шин (например: "205/55/16", "225 60 R17")
+      2. "priority_request" - пользователь указывает приоритеты (цена/качество, престиж, функциональность)
+      3. "recommendation_request" - просит рекомендации (лучшие, оптимальные, топ варианты)
+      4. "brand_preference" - упоминает конкретные бренды шин
+      5. "season_preference" - указывает сезонность (зимние, летние, всесезонные)
+      6. "budget_constraint" - указывает бюджет или ценовые ограничения
+      7. "technical_question" - технические вопросы о характеристиках шин
+      8. "general_question" - общие вопросы
+
+      ИСТОРИЯ РАЗГОВОРА:
+      #{format_conversation_for_prompt}
+
+      ТЕКУЩИЕ ФИЛЬТРЫ:
+      #{@current_filters.to_json}
+
+      СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ: #{message}
+
+      Отвечай СТРОГО в JSON формате:
+      {
+        "type": "тип_намерения",
+        "parameters": {
+          "size": "размер шин если указан",
+          "priority": "приоритет если указан", 
+          "brands": ["список брендов если указаны"],
+          "season": "сезон если указан",
+          "budget_max": "максимальный бюджет если указан",
+          "budget_min": "минимальный бюджет если указан"
+        },
+        "confidence": 0.95
+      }
+    PROMPT
+  end
+
+  # Парсинг ответа OpenAI с намерением
+  def parse_intent_response(content)
+    # Очищаем markdown если есть
+    json_content = content.strip
+    if json_content.start_with?('```json') && json_content.end_with?('```')
+      json_content = json_content.gsub(/\A```json\n?/, '').gsub(/\n?```\z/, '')
+    elsif json_content.start_with?('```') && json_content.end_with?('```')
+      json_content = json_content.gsub(/\A```\n?/, '').gsub(/\n?```\z/, '')
+    end
+    
+    JSON.parse(json_content).with_indifferent_access
+  rescue JSON::ParserError => e
+    Rails.logger.error "❌ Ошибка парсинга намерения: #{e.message}, контент: #{content}"
+    { type: 'general_question', parameters: {}, confidence: 0.1 }
+  end
+
+  # Обработка намерения и генерация ответа
+  def handle_intent(intent, available_products)
+    case intent[:type]
+    when 'complex_request'
+      handle_complex_request(intent, available_products)
+    when 'size_request'
+      handle_size_request(intent[:parameters])
+    when 'priority_request'
+      handle_priority_request(intent[:parameters])
+    when 'recommendation_request'
+      handle_recommendation_request(intent[:parameters], available_products)
+    when 'brand_preference'
+      handle_brand_preference(intent[:parameters])
+    when 'season_preference'
+      handle_season_preference(intent[:parameters])
+    when 'budget_constraint'
+      handle_budget_constraint(intent[:parameters])
+    when 'technical_question'
+      handle_technical_question(intent[:parameters], available_products)
+    else
+      handle_general_question(intent[:parameters], available_products)
+    end
+  end
+
+  # Обработка комплексного запроса
+  def handle_complex_request(intent, available_products)
+    parameters = intent[:parameters]
+    intent_types = intent[:intent_types] || []
+    
+    Rails.logger.info "🎯 Обработка комплексного запроса: #{intent_types.join(', ')}"
+    
+    # Обновляем фильтры и предпочтения
+    update_filters_from_parameters(parameters)
+    
+    # Определяем, что показать пользователю
+    if intent_types.include?('recommendation_request')
+      # Если просят рекомендации, сразу их показываем
+      handle_recommendation_request(parameters, available_products)
+    else
+      # Иначе подтверждаем принятые параметры
+      confirmations = []
+      
+      if parameters[:size].present?
+        confirmations << "размер #{parameters[:size]}"
+      end
+      
+      if parameters[:season].present?
+        confirmations << "#{parameters[:season]} шины"
+      end
+      
+      if parameters[:priority].present?
+        confirmations << "приоритет: #{parameters[:priority]}"
+      end
+      
+      message = "✅ Принято: #{confirmations.join(', ')}. #{get_next_question_for_context}"
+      
+      {
+        message: message,
+        filters_updated: @current_filters,
+        preferences_updated: @user_preferences,
+        next_step: 'recommendation_request'
+      }
+    end
+  end
+
+  # Обновление фильтров из параметров
+  def update_filters_from_parameters(parameters)
+    if parameters[:size].present?
+      @current_filters[:size] = parse_tire_size(parameters[:size])
+    end
+    
+    if parameters[:season].present?
+      normalized_season = case parameters[:season].to_s.downcase
+      when /летн|summer/
+        'summer'
+      when /зимн|winter/
+        'winter'
+      when /всесезон|all.season/
+        'all_season'
+      else
+        parameters[:season]
+      end
+      @current_filters[:season] = normalized_season
+    end
+    
+    if parameters[:priority].present?
+      @user_preferences[:priority_type] = normalize_priority(parameters[:priority])
+    end
+    
+    Rails.logger.info "🔧 Обновленные фильтры: #{@current_filters}"
+    Rails.logger.info "🎯 Обновленные предпочтения: #{@user_preferences}"
+  end
+
+  # Обработка запроса размера шин
+  def handle_size_request(parameters)
+    size = parameters[:size]
+    if size.present?
+      @current_filters[:size] = parse_tire_size(size)
+      {
+        message: "✅ Отлично! Размер #{size} принят. Теперь расскажите о ваших приоритетах: что для вас важнее - соотношение цена/качество, престижность бренда или максимальная функциональность?",
+        filters_updated: @current_filters,
+        next_step: 'priority_request'
+      }
+    else
+      {
+        message: "🤔 Не удалось распознать размер шин. Укажите размер в формате, например: 205/55R16 или 225 60 17",
+        next_step: 'size_request'
+      }
+    end
+  end
+
+  # Обработка запроса приоритетов
+  def handle_priority_request(parameters)
+    priority = parameters[:priority]
+    if priority.present?
+      @user_preferences[:priority_type] = normalize_priority(priority)
+      {
+        message: "👍 Понял, ваш приоритет - #{get_priority_description(priority)}. #{get_next_question_for_context}",
+        preferences_updated: @user_preferences,
+        next_step: 'recommendation_request'
+      }
+    else
+      {
+        message: "Выберите ваш приоритет:\n🏆 **Престижность** - топовые бренды и статус\n💰 **Цена/качество** - лучшее соотношение\n⚙️ **Функциональность** - максимальные технические характеристики",
+        next_step: 'priority_request'
+      }
+    end
+  end
+
+  # Обработка запроса рекомендаций
+  def handle_recommendation_request(parameters, available_products)
+    # Проверяем есть ли размер в фильтрах
+    if @current_filters[:size].blank?
+      return {
+        message: "Для подбора оптимальных шин мне нужно знать размер. Укажите размер ваших шин, например: 205/55R16",
+        next_step: 'size_request'
+      }
+    end
+
+    recommendations = get_tire_recommendations(available_products)
+    
+    if recommendations.any?
+      {
+        message: format_recommendations(recommendations),
+        recommendations: recommendations,
+        action: 'show_recommendations'
+      }
+    else
+      {
+        message: "😔 К сожалению, по вашим критериям не найдено подходящих шин. Попробуйте изменить параметры поиска.",
+        action: 'no_results'
+      }
+    end
+  end
+
+  # Получение рекомендаций на основе фильтров и предпочтений
+  def get_tire_recommendations(available_products = nil)
+    # Если продукты не переданы, ищем в базе
+    products_scope = available_products || SupplierTireProduct.in_stock.includes(:tire_brand, :tire_model, :country)
+    
+    # Применяем фильтры
+    if @current_filters[:size].present?
+      size = @current_filters[:size]
+      products_scope = products_scope.by_size(size[:width], size[:height], size[:diameter])
+    end
+    
+    if @current_filters[:season].present?
+      products_scope = products_scope.by_season(@current_filters[:season])
+    end
+    
+    if @current_filters[:brands].present?
+      brand_ids = TireBrand.where(normalized_name: @current_filters[:brands]).pluck(:id)
+      products_scope = products_scope.where(tire_brand_id: brand_ids)
+    end
+    
+    # Рассчитываем рейтинги с приоритетами пользователя
+    priority_type = @user_preferences[:priority_type] || 'balanced'
+    
+    # Получаем топ-10 товаров по рейтингу оптимальности
+    recommendations = TireOptimalityCalculator.calculate_batch_optimality(
+      products_scope.limit(50), # Берем 50 для расчета, вернем топ-10
+      priority_type: priority_type
+    ).first(10)
+    
+    Rails.logger.info "🎯 Найдено #{recommendations.length} рекомендаций"
+    recommendations
+  end
+
+  # Форматирование рекомендаций для пользователя
+  def format_recommendations(recommendations)
+    if recommendations.empty?
+      return "😔 Не найдено подходящих шин по вашим критериям."
+    end
+
+    message = "🎯 **Вот мои рекомендации для вас:**\n\n"
+    
+    recommendations.first(5).each_with_index do |item, index|
+      product = item[:product]
+      score = item[:optimality_score]
+      
+      message += "**#{index + 1}. #{product.tire_brand&.name} #{product.tire_model&.name}** "
+      message += "#{product.size_designation}\n"
+      message += "   💰 #{product.formatted_price} | "
+      message += "⭐ Рейтинг: #{score}/10 | "
+      message += "🌍 #{product.country&.name}\n"
+      message += "   ✨ *#{product.recommendation_reasons.join(', ')}*\n\n"
+    end
+    
+    message += "💡 **Почему именно эти шины?**\n"
+    message += get_recommendation_explanation
+    
+    message
+  end
+
+  # Объяснение логики рекомендаций
+  def get_recommendation_explanation
+    priority = @user_preferences[:priority_type]
+    
+    case priority
+    when 'price_quality'
+      "Учитывая ваш приоритет соотношения цена/качество, я выбрал шины с высоким рейтингом качества по разумной цене."
+    when 'prestige'
+      "Согласно вашему запросу на престижность, рекомендую топовые бренды с отличной репутацией."
+    when 'functionality'
+      "Исходя из вашего фокуса на функциональность, это шины с лучшими техническими характеристиками."
+    else
+      "Рекомендации основаны на сбалансированной оценке всех характеристик шин."
+    end
+  end
+
+  # Получение следующего вопроса в зависимости от контекста
+  def get_next_question_for_context
+    if @current_filters[:size].blank?
+      "Какой размер шин вам нужен?"
+    elsif @current_filters[:season].blank?
+      "Какие шины нужны - зимние, летние или всесезонные?"
+    else
+      "Готов подобрать для вас оптимальные варианты!"
+    end
+  end
+
+  # Нормализация приоритета пользователя
+  def normalize_priority(priority_text)
+    priority_lower = priority_text.to_s.downcase
+    
+    case priority_lower
+    when /цен.*качеств|соотношен|бюджет|выгод/
+      'price_quality'
+    when /престиж|статус|бренд|имидж|топ/
+      'prestige'
+    when /функц|техн|характер|производ|надеж/
+      'functionality'
+    else
+      'balanced'
+    end
+  end
+
+  # Описание приоритета для пользователя
+  def get_priority_description(priority)
+    case normalize_priority(priority)
+    when 'price_quality'
+      'оптимальное соотношение цена/качество'
+    when 'prestige'
+      'престижность и статус бренда'
+    when 'functionality'
+      'максимальная функциональность'
+    else
+      'сбалансированный подход'
+    end
+  end
+
+  # Парсинг размера шин из текста
+  def parse_tire_size(size_text)
+    # Паттерны: "205/55R16", "205 55 16", "205/55/16"
+    matches = size_text.match(/(\d{3})[\/\s]*(\d{2})[\/\s]*[rR]?(\d{2})/)
+    
+    if matches
+      {
+        width: matches[1].to_i,
+        height: matches[2].to_i,
+        diameter: matches[3].to_i,
+        full_size: "#{matches[1]}/#{matches[2]}R#{matches[3]}"
+      }
+    else
+      nil
+    end
+  end
+
+  # Добавление сообщения в историю разговора
+  def add_to_history(role, message)
+    @conversation_history << {
+      role: role,
+      message: message,
+      timestamp: Time.current
+    }
+    
+    # Ограничиваем историю последними 20 сообщениями
+    @conversation_history = @conversation_history.last(20)
+  end
+
+  # Форматирование истории для промпта
+  def format_conversation_for_prompt
+    @conversation_history.last(10).map do |entry|
+      "#{entry[:role] == :user ? 'Пользователь' : 'Ассистент'}: #{entry[:message]}"
+    end.join("\n")
+  end
+
+  # Fallback ответ при ошибках
+  def fallback_response
+    {
+      message: "😔 Извините, возникла техническая проблема. Онлайн-консультант временно недоступен. Попробуйте использовать стандартные фильтры поиска.",
+      action: 'fallback'
+    }
+  end
+
+  # Обработка остальных типов намерений (заглушки для расширения)
+  def handle_brand_preference(parameters)
+    brands = parameters[:brands] || []
+    @current_filters[:brands] = brands.map(&:downcase)
+    
+    {
+      message: "✅ Учту ваши предпочтения по брендам: #{brands.join(', ')}. #{get_next_question_for_context}",
+      filters_updated: @current_filters
+    }
+  end
+
+  def handle_season_preference(parameters)
+    season = parameters[:season]
+    
+    # Нормализуем сезон
+    normalized_season = case season.to_s.downcase
+    when /летн|summer/
+      'summer'
+    when /зимн|winter/
+      'winter'
+    when /всесезон|all.season/
+      'all_season'
+    else
+      season
+    end
+    
+    @current_filters[:season] = normalized_season
+    
+    {
+      message: "✅ Отлично, ищем #{season} шины. #{get_next_question_for_context}",
+      filters_updated: @current_filters
+    }
+  end
+
+  def handle_budget_constraint(parameters)
+    budget_max = parameters[:budget_max]
+    budget_min = parameters[:budget_min]
+    
+    @current_filters[:budget_max] = budget_max if budget_max
+    @current_filters[:budget_min] = budget_min if budget_min
+    
+    {
+      message: "💰 Учту ваш бюджет. #{get_next_question_for_context}",
+      filters_updated: @current_filters
+    }
+  end
+
+  def handle_technical_question(parameters, available_products)
+    {
+      message: "🔧 Для детального технического консультирования рекомендую обратиться к нашим специалистам. А пока могу помочь с подбором шин по основным критериям.",
+      next_step: 'general_question'
+    }
+  end
+
+  def handle_general_question(parameters, available_products)
+    {
+      message: "👋 Привет! Я помогу вам выбрать оптимальные шины. Для начала укажите размер ваших шин, например: 205/55R16",
+      next_step: 'size_request'
+    }
+  end
+end
