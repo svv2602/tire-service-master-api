@@ -17,13 +17,13 @@ module Api
         Rails.logger.info "BaseController#authenticate_request: Authorization header: #{header}"
         Rails.logger.info "BaseController#authenticate_request: Token from header: #{token}"
         
-        # Если токена нет в заголовке, пытаемся получить из encrypted cookies
+        # Если токена нет в заголовке, пытаемся получить из cookies (обычных, не encrypted)
         if token.blank?
           Rails.logger.info "BaseController#authenticate_request: Trying to get token from cookies"
           Rails.logger.info "BaseController#authenticate_request: Raw access_token cookie: #{request.cookies['access_token']}"
           
-          token = cookies.encrypted[:access_token]
-          Rails.logger.info "BaseController#authenticate_request: Decrypted token: #{token ? 'present' : 'nil'}"
+          token = cookies[:access_token]
+          Rails.logger.info "BaseController#authenticate_request: Token from cookies: #{token ? 'present' : 'nil'}"
         end
         
         # Если токен все еще отсутствует, возвращаем ошибку

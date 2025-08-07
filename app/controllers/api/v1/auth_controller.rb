@@ -128,6 +128,16 @@ module Api
           # Генерируем новый access токен
           new_access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
           
+          # Обновляем access токен в cookies
+          cookies[:access_token] = {
+            value: new_access_token,
+            httponly: true,
+            secure: Rails.env.production?,
+            same_site: :lax,
+            expires: 1.hour.from_now,
+            path: '/'
+          }
+          
           render json: {
             access_token: new_access_token,
             user: {
@@ -140,8 +150,11 @@ module Api
               client_id: user.client&.id
             }
           }, status: :ok
-        rescue JWT::DecodeError, ActiveRecord::RecordNotFound => e
+        rescue Auth::TokenExpiredError, Auth::TokenInvalidError, JWT::DecodeError, ActiveRecord::RecordNotFound => e
           Rails.logger.error "Auth#refresh error: #{e.message}"
+          # Очищаем недействительные cookies
+          cookies.delete(:access_token)
+          cookies.delete(:refresh_token)
           render json: { error: I18n.t('auth.errors.invalid_refresh_token') }, status: :unauthorized
         end
       end

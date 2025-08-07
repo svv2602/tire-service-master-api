@@ -231,7 +231,7 @@ class Api::V1::UnifiedTireCartsController < ApplicationController
           Rails.logger.info("👤 Неверный тип токена, работаем как гость")
           @current_user = nil
         end
-      rescue JWT::DecodeError, JWT::ExpiredSignature, ActiveRecord::RecordNotFound => e
+      rescue Auth::TokenExpiredError, Auth::TokenInvalidError, JWT::DecodeError, JWT::ExpiredSignature, ActiveRecord::RecordNotFound => e
         Rails.logger.info("👤 Ошибка токена, работаем как гость: #{e.message}")
         @current_user = nil
       end
