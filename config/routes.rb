@@ -618,7 +618,14 @@ Rails.application.routes.draw do
       # Маршруты для ролей пользователей
       resources :user_roles, only: [:index, :show]
 
-      resources :operators, only: [:index, :update, :destroy]
+      resources :operators, only: [:index, :update, :destroy] do
+        # Получение назначений оператора к сервисным точкам
+        resources :service_points, controller: 'operator_service_points', only: [:index, :create] do
+          collection do
+            post :bulk_assign
+          end
+        end
+      end
 
       # Прямые маршруты для управления привязками операторов
       resources :operator_service_points, only: [:show, :update, :destroy]
