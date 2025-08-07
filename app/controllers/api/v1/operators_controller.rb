@@ -64,6 +64,8 @@ module Api
 
       # Добавить нового сотрудника-оператора
       def create
+        authorize Operator, :create?
+        
         Rails.logger.info "=== CREATE OPERATOR DEBUG ==="
         Rails.logger.info "params[:partner_id]: #{params[:partner_id]}"
         Rails.logger.info "@partner: #{@partner.inspect}"
