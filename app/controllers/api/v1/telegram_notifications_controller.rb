@@ -1,4 +1,4 @@
-class Api::V1::TelegramNotificationsController < ApplicationController
+class Api::V1::TelegramNotificationsController < Api::V1::ApiController
   before_action :authenticate_request
   before_action :set_telegram_notification, only: [:show, :update, :destroy, :retry]
 
@@ -9,8 +9,6 @@ class Api::V1::TelegramNotificationsController < ApplicationController
     @telegram_notifications = policy_scope(TelegramNotification)
                               .includes(:user, :booking)
                               .order(created_at: :desc)
-                              .page(params[:page])
-                              .per(params[:per_page] || 20)
     
     # Фильтрация по статусу
     @telegram_notifications = @telegram_notifications.where(status: params[:status]) if params[:status].present?
@@ -18,16 +16,16 @@ class Api::V1::TelegramNotificationsController < ApplicationController
     # Фильтрация по типу
     @telegram_notifications = @telegram_notifications.where(notification_type: params[:type]) if params[:type].present?
     
-    render json: {
-      telegram_notifications: @telegram_notifications.map do |notification|
-        format_notification(notification)
-      end,
-      pagination: {
-        current_page: @telegram_notifications.current_page,
-        total_pages: @telegram_notifications.total_pages,
-        total_count: @telegram_notifications.total_count
-      }
-    }
+    # Применяем пагинацию через метод paginate из ApiController
+    result = paginate(@telegram_notifications)
+    
+    # Форматируем данные
+    result[:telegram_notifications] = result[:data].map do |notification|
+      format_notification(notification)
+    end
+    result.delete(:data) # Убираем :data, оставляем :telegram_notifications
+    
+    render json: result
   end
 
   # GET /api/v1/telegram_notifications/:id

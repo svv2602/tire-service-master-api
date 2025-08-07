@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Api::V1::TireBrandsController < ApplicationController
+class Api::V1::TireBrandsController < Api::V1::ApiController
   before_action :authenticate_request!
   before_action :set_tire_brand, only: [:show, :update, :destroy]
   before_action :authorize_admin_or_manager!
@@ -9,8 +9,6 @@ class Api::V1::TireBrandsController < ApplicationController
   def index
     @tire_brands = TireBrand.includes(:country, :tire_models)
                            .order(:name)
-                           .page(params[:page])
-                           .per(params[:per_page] || 20)
 
     # Фильтрация по поиску
     if params[:search].present?
@@ -31,15 +29,13 @@ class Api::V1::TireBrandsController < ApplicationController
     # Фильтрация по премиум статусу
     @tire_brands = @tire_brands.where(is_premium: true) if params[:premium_only] == 'true'
 
-    render json: {
-      data: @tire_brands.map { |brand| format_tire_brand(brand) },
-      pagination: {
-        current_page: @tire_brands.current_page,
-        total_pages: @tire_brands.total_pages,
-        total_count: @tire_brands.total_count,
-        per_page: @tire_brands.limit_value
-      }
-    }
+    # Применяем пагинацию через метод paginate из ApiController
+    result = paginate(@tire_brands)
+    
+    # Форматируем данные
+    result[:data] = result[:data].map { |brand| format_tire_brand(brand) }
+
+    render json: result
   end
 
   # GET /api/v1/tire_brands/:id
@@ -145,7 +141,7 @@ class Api::V1::TireBrandsController < ApplicationController
       is_active: brand.is_active,
       is_premium: brand.is_premium,
       rating_score: brand.rating_score,
-      logo_url: brand.logo_url,
+      # logo_url: brand.logo_url, # Поле отсутствует в модели
       models_count: brand.tire_models.count,
       created_at: brand.created_at.strftime('%Y-%m-%d'),
       updated_at: brand.updated_at.strftime('%Y-%m-%d %H:%M')

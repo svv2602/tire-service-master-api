@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Api::V1::TireModelsController < ApplicationController
+class Api::V1::TireModelsController < Api::V1::ApiController
   before_action :authenticate_request!
   before_action :set_tire_model, only: [:show, :update, :destroy]
   before_action :authorize_admin_or_manager!
@@ -9,8 +9,6 @@ class Api::V1::TireModelsController < ApplicationController
   def index
     @tire_models = TireModel.includes(:tire_brand, tire_brand: :country)
                            .order('tire_brands.name, tire_models.name')
-                           .page(params[:page])
-                           .per(params[:per_page] || 20)
 
     # Фильтрация по поиску
     if params[:search].present?
@@ -31,15 +29,13 @@ class Api::V1::TireModelsController < ApplicationController
     # Фильтрация по статусу
     @tire_models = @tire_models.where(is_active: true) if params[:active_only] == 'true'
 
-    render json: {
-      data: @tire_models.map { |model| format_tire_model(model) },
-      pagination: {
-        current_page: @tire_models.current_page,
-        total_pages: @tire_models.total_pages,
-        total_count: @tire_models.total_count,
-        per_page: @tire_models.limit_value
-      }
-    }
+    # Применяем пагинацию через метод paginate из ApiController
+    result = paginate(@tire_models)
+    
+    # Форматируем данные
+    result[:data] = result[:data].map { |model| format_tire_model(model) }
+
+    render json: result
   end
 
   # GET /api/v1/tire_models/:id

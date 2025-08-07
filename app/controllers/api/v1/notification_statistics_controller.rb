@@ -1,4 +1,4 @@
-class Api::V1::NotificationStatisticsController < Api::V1::BaseController
+class Api::V1::NotificationStatisticsController < Api::V1::ApiController
   before_action :authenticate_request!
   before_action :ensure_admin!
 
@@ -206,12 +206,13 @@ class Api::V1::NotificationStatisticsController < Api::V1::BaseController
     page = params[:page]&.to_i || 1
     per_page = [params[:per_page]&.to_i || 20, 100].min
     
-    failures = NotificationLog
+    failures_query = NotificationLog
       .failed
       .includes(:template)
       .order(created_at: :desc)
-      .page(page)
-      .per(per_page)
+    
+    # Применяем пагинацию через метод paginate из ApiController
+    result = paginate(failures_query)
     
     # Группируем ошибки по типам
     error_types = NotificationLog
@@ -222,17 +223,13 @@ class Api::V1::NotificationStatisticsController < Api::V1::BaseController
       .sort_by { |_, count| -count }
       .first(10)
     
-    render json: {
-      failures: failures.map { |log| serialize_notification_log(log, detailed: true) },
-      pagination: {
-        current_page: failures.current_page,
-        total_pages: failures.total_pages,
-        total_count: failures.total_count,
-        per_page: per_page
-      },
-      error_types: error_types.map { |msg, count| { message: msg, count: count } },
-      total_failures: NotificationLog.failed.count
-    }
+    # Форматируем данные
+    result[:failures] = result[:data].map { |log| serialize_notification_log(log, detailed: true) }
+    result.delete(:data)
+    result[:error_types] = error_types.map { |msg, count| { message: msg, count: count } }
+    result[:total_failures] = NotificationLog.failed.count
+    
+    render json: result
   end
 
   # GET /api/v1/notification_statistics/performance

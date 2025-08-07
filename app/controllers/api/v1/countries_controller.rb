@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Api::V1::CountriesController < ApplicationController
+class Api::V1::CountriesController < Api::V1::ApiController
   before_action :authenticate_request!
   before_action :set_country, only: [:show, :update, :destroy]
   before_action :authorize_admin_or_manager!
@@ -9,8 +9,6 @@ class Api::V1::CountriesController < ApplicationController
   def index
     @countries = Country.includes(:tire_brands)
                        .order(:name)
-                       .page(params[:page])
-                       .per(params[:per_page] || 20)
 
     # Фильтрация по поиску
     if params[:search].present?
@@ -24,15 +22,13 @@ class Api::V1::CountriesController < ApplicationController
     # Фильтрация по статусу
     @countries = @countries.where(is_active: true) if params[:active_only] == 'true'
 
-    render json: {
-      data: @countries.map { |country| format_country(country) },
-      pagination: {
-        current_page: @countries.current_page,
-        total_pages: @countries.total_pages,
-        total_count: @countries.total_count,
-        per_page: @countries.limit_value
-      }
-    }
+    # Применяем пагинацию через метод paginate из ApiController
+    result = paginate(@countries)
+    
+    # Форматируем данные
+    result[:data] = result[:data].map { |country| format_country(country) }
+
+    render json: result
   end
 
   # GET /api/v1/countries/:id
