@@ -477,6 +477,32 @@ Rails.application.routes.draw do
           get :with_service_points
         end
       end
+      
+      # Справочники шин
+      resources :countries, only: [:index, :show, :create, :update, :destroy] do
+        member do
+          patch :toggle_status
+        end
+      end
+      
+      resources :tire_brands, only: [:index, :show, :create, :update, :destroy] do
+        member do
+          patch :toggle_status
+        end
+        collection do
+          get :top_brands
+        end
+      end
+      
+      resources :tire_models, only: [:index, :show, :create, :update, :destroy] do
+        member do
+          patch :toggle_status
+        end
+        collection do
+          get :seasons
+          get 'by_brand/:brand_id', action: :by_brand, as: :by_brand
+        end
+      end
       resources :car_brands do
         resources :car_models
       end
