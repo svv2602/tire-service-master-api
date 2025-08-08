@@ -74,6 +74,75 @@ class Api::V1::CarTireSearchController < ApplicationController
     search_models_and_sizes(format_brand(brand), parsed_query)
   end
 
+  # POST /api/v1/car_tire_search/resolve_model
+  # Получение размеров шин для конкретной модели
+  def resolve_model
+    model_id = params[:model_id]
+    year = params[:year]&.to_i
+    
+    if model_id.blank?
+      render json: { 
+        status: 'error', 
+        message: 'ID модели обязателен' 
+      }, status: :bad_request
+      return
+    end
+    
+    begin
+      model = CarModel.includes(:brand).find(model_id)
+      brand = format_brand(model.brand)
+      
+      # Ищем размеры шин для модели
+      tire_sizes = CarBrandSearchService.get_tire_sizes(model_id, year)
+      
+      if tire_sizes.empty?
+        render json: {
+          status: :sizes_not_found,
+          message: "Размеры шин не найдены для #{brand[:name]} #{model.name}#{year ? " #{year} года" : ""}",
+          brand: brand,
+          model: {
+            id: model.id,
+            name: model.name,
+            brand_name: brand[:name],
+            brand_id: brand[:id]
+          },
+          year: year
+        }
+        return
+      end
+      
+      # Ищем товары поставщиков для найденных размеров
+      tire_offers = find_tire_offers(tire_sizes)
+      
+      render json: {
+        status: :success,
+        brand: brand,
+        model: {
+          id: model.id,
+          name: model.name,
+          brand_name: brand[:name],
+          brand_id: brand[:id]
+        },
+        year: year,
+        tire_sizes: tire_sizes,
+        tire_offers: tire_offers,
+        message: "Найдено #{tire_sizes.count} размеров шин и #{tire_offers.count} предложений"
+      }
+      
+    rescue ActiveRecord::RecordNotFound
+      render json: { 
+        status: 'error', 
+        message: 'Модель автомобиля не найдена' 
+      }, status: :not_found
+    rescue => e
+      Rails.logger.error "Car tire search error: #{e.message}"
+      render json: { 
+        status: 'error', 
+        message: 'Ошибка при поиске размеров шин' 
+      }, status: :internal_server_error
+    end
+  end
+
   private
 
   # Парсинг поискового запроса автомобиля
