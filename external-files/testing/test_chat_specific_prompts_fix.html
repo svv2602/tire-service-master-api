@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест конкретных подсказок в чат-боте</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .test-title {
+            color: #2196F3;
+            border-bottom: 2px solid #2196F3;
+            padding-bottom: 10px;
+        }
+        .test-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #45a049;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .chat-message {
+            background: #e3f2fd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #2196F3;
+        }
+        .user-message {
+            background: #e8f5e8;
+            border-left-color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <h1>🤖 Тест конкретных подсказок в чат-боте</h1>
+    
+    <div class="test-container">
+        <h2 class="test-title">Тест 1: Только приоритет "Премиум шины"</h2>
+        <p>Проверяем, что после указания только приоритета чат запрашивает размер и сезон</p>
+        <button class="test-button" onclick="testPriorityOnly()">Тестировать приоритет</button>
+        <div id="priority-result" class="result"></div>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">Тест 2: Только размер шин</h2>
+        <p>Проверяем запрос сезонности после указания размера</p>
+        <button class="test-button" onclick="testSizeOnly()">Тестировать размер</button>
+        <div id="size-result" class="result"></div>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">Тест 3: Размер + Сезон = Готовность</h2>
+        <p>Проверяем готовность к рекомендациям при наличии размера и сезона</p>
+        <button class="test-button" onclick="testSizeAndSeason()">Тестировать полные данные</button>
+        <div id="complete-result" class="result"></div>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">Тест 4: Новый поиск</h2>
+        <p>Проверяем функцию "начать новый поиск"</p>
+        <button class="test-button" onclick="testNewSearch()">Тестировать новый поиск</button>
+        <div id="new-search-result" class="result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        async function sendChatMessage(message, conversationId = null) {
+            try {
+                const response = await fetch(`${API_URL}/api/v1/tire_chat/message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        message: message,
+                        conversation_id: conversationId,
+                        locale: 'ru'
+                    })
+                });
+
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Ошибка:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        function showResult(elementId, data, testTitle) {
+            const element = document.getElementById(elementId);
+            
+            if (data.success) {
+                element.className = 'result success';
+                element.innerHTML = `
+                    <strong>✅ ${testTitle} - УСПЕХ</strong><br>
+                    <div class="chat-message">
+                        <strong>Ответ бота:</strong><br>
+                        ${data.response.message}
+                    </div>
+                    <strong>Action:</strong> ${data.response.action || 'не указан'}<br>
+                    <strong>Next Step:</strong> ${data.response.next_step || 'не указан'}<br>
+                    <strong>Conversation ID:</strong> ${data.conversation_id}
+                `;
+            } else {
+                element.className = 'result error';
+                element.innerHTML = `
+                    <strong>❌ ${testTitle} - ОШИБКА</strong><br>
+                    ${data.error}
+                `;
+            }
+        }
+
+        async function testPriorityOnly() {
+            const result = await sendChatMessage('Премиум шины');
+            showResult('priority-result', result, 'Тест приоритета');
+            
+            // Проверяем, содержит ли ответ запрос размера и сезона
+            if (result.success) {
+                const message = result.response.message.toLowerCase();
+                if (message.includes('размер') && message.includes('сезон')) {
+                    document.getElementById('priority-result').innerHTML += 
+                        '<br><strong>🎯 РЕЗУЛЬТАТ: Корректно запрашивает размер и сезон!</strong>';
+                } else {
+                    document.getElementById('priority-result').innerHTML += 
+                        '<br><strong>⚠️ ПРОБЛЕМА: Не запрашивает размер или сезон</strong>';
+                }
+            }
+        }
+
+        async function testSizeOnly() {
+            const result = await sendChatMessage('205/55R16');
+            showResult('size-result', result, 'Тест размера');
+            
+            if (result.success) {
+                const message = result.response.message.toLowerCase();
+                if (message.includes('сезон')) {
+                    document.getElementById('size-result').innerHTML += 
+                        '<br><strong>🎯 РЕЗУЛЬТАТ: Корректно запрашивает сезон!</strong>';
+                } else {
+                    document.getElementById('size-result').innerHTML += 
+                        '<br><strong>⚠️ ПРОБЛЕМА: Не запрашивает сезон</strong>';
+                }
+            }
+        }
+
+        async function testSizeAndSeason() {
+            // Отправляем размер
+            const sizeResult = await sendChatMessage('205/55R16');
+            
+            if (sizeResult.success) {
+                // Отправляем сезон с тем же conversation_id
+                const seasonResult = await sendChatMessage('Зимние шины', sizeResult.conversation_id);
+                showResult('complete-result', seasonResult, 'Полные данные');
+                
+                if (seasonResult.success) {
+                    const message = seasonResult.response.message.toLowerCase();
+                    if (message.includes('ищу') || message.includes('рекоменд') || seasonResult.response.action === 'show_recommendations_with_options') {
+                        document.getElementById('complete-result').innerHTML += 
+                            '<br><strong>🎯 РЕЗУЛЬТАТ: Готов к рекомендациям!</strong>';
+                    } else {
+                        document.getElementById('complete-result').innerHTML += 
+                            '<br><strong>⚠️ ПРОБЛЕМА: Не готов к рекомендациям</strong>';
+                    }
+                }
+            }
+        }
+
+        async function testNewSearch() {
+            const result = await sendChatMessage('Новый поиск');
+            showResult('new-search-result', result, 'Новый поиск');
+            
+            if (result.success) {
+                const message = result.response.message;
+                if (result.response.action === 'new_search_started') {
+                    document.getElementById('new-search-result').innerHTML += 
+                        '<br><strong>🎯 РЕЗУЛЬТАТ: Новый поиск запущен!</strong>';
+                } else {
+                    document.getElementById('new-search-result').innerHTML += 
+                        '<br><strong>⚠️ ПРОБЛЕМА: Новый поиск не распознан</strong>';
+                }
+            }
+        }
+
+        // Автоматический тест при загрузке
+        window.onload = function() {
+            console.log('🚀 Страница тестирования конкретных подсказок загружена');
+            console.log('📋 Доступные тесты:');
+            console.log('1. Тест приоритета - проверка запроса размера/сезона');
+            console.log('2. Тест размера - проверка запроса сезона');
+            console.log('3. Полные данные - проверка готовности к рекомендациям');
+            console.log('4. Новый поиск - проверка сброса параметров');
+        };
+    </script>
+</body>
+</html>

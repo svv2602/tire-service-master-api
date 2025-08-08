@@ -9,7 +9,7 @@ class TireChatService
 
   def initialize(conversation_history: [], current_filters: {}, user_preferences: {}, locale: 'ru')
     @conversation_history = conversation_history || []
-    @current_filters = current_filters || {}
+    @current_filters = initialize_filters(current_filters || {})
     @user_preferences = user_preferences || {}
     @locale = locale || 'ru'
     @openai_service = OpenaiService.new
@@ -39,6 +39,18 @@ class TireChatService
   end
 
   private
+
+  # Инициализация фильтров с базовой структурой
+  def initialize_filters(filters)
+    {
+      size: nil,
+      season: nil,
+      budget_min: nil,
+      budget_max: nil,
+      brand_preferences: nil,
+      priority_type: nil
+    }.merge(filters)
+  end
 
   # Анализ намерения пользователя через OpenAI
   def analyze_user_intent(message)
@@ -501,22 +513,29 @@ class TireChatService
 
   # Получение следующего вопроса в зависимости от контекста
   def get_next_question_for_context
+    Rails.logger.info "🔍 Проверка параметров для next_question: #{@current_filters.inspect}"
+    
     missing_params = []
     
     # Проверяем обязательные параметры
     if @current_filters[:size].blank?
       missing_params << localized_message('missing_size_param')
+      Rails.logger.info "📏 Отсутствует размер шин"
     end
     
     if @current_filters[:season].blank?
       missing_params << localized_message('missing_season_param')
+      Rails.logger.info "🌤️ Отсутствует сезон шин"
     end
     
     if missing_params.any?
       # Формируем конкретные подсказки о недостающих параметрах
-      return "#{localized_message('need_more_info')}\n#{missing_params.join("\n")}"
+      result = "#{localized_message('need_more_info')}\n#{missing_params.join("\n")}"
+      Rails.logger.info "❓ Запрашиваем недостающие параметры: #{missing_params.length}"
+      return result
     else
       # Если основные параметры есть, готовы к рекомендациям
+      Rails.logger.info "✅ Все параметры готовы для рекомендаций"
       return localized_message('ready_to_recommend')
     end
   end
