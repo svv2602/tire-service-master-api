@@ -95,6 +95,13 @@ class TireChatService
       intent_types << 'size_request'
     end
     
+    # Распознавание марок автомобилей
+    car_brands = detect_car_brand(msg)
+    if car_brands.any?
+      parameters[:car_model] = car_brands.join(' ')
+      intent_types << 'car_model_request'
+    end
+    
     # Сезонность
     if msg.match?(/летн|літн|лето|літо|summer/i)
       parameters[:season] = 'летние'
@@ -165,7 +172,8 @@ class TireChatService
       7. "technical_question" - технические вопросы о характеристиках шин
       8. "new_search_request" - хочет начать новый поиск с нуля (сбросить параметры)
       9. "continue_discussion" - хочет обсудить уже найденные результаты подробнее
-      10. "general_question" - общие вопросы
+      10. "car_model_request" - упоминает марку/модель автомобиля для подбора шин
+      11. "general_question" - общие вопросы
 
       ИСТОРИЯ РАЗГОВОРА:
       #{format_conversation_for_prompt}
@@ -230,6 +238,8 @@ class TireChatService
       handle_new_search_request(intent[:parameters])
     when 'continue_discussion'
       handle_continue_discussion(intent[:parameters])
+    when 'car_model_request'
+      handle_car_model_request(intent[:parameters])
     else
       handle_general_question(intent[:parameters], available_products)
     end
@@ -638,6 +648,65 @@ class TireChatService
     lang_descriptions[priority_type] || lang_descriptions['balanced']
   end
 
+  # Распознавание марок и моделей автомобилей
+  def detect_car_brand(message)
+    car_brands_and_models = {
+      # Популярные марки
+      'volkswagen' => ['тигуан', 'пассат', 'гольф', 'джетта', 'поло', 'туарег'],
+      'audi' => ['а4', 'а6', 'q5', 'q7', 'а3', 'а8', 'tt'],
+      'bmw' => ['х5', 'х3', 'х1', 'серия 3', 'серия 5', 'серия 7'],
+      'mercedes' => ['c-class', 'e-class', 's-class', 'gla', 'glc', 'gle'],
+      'toyota' => ['камри', 'королла', 'рав4', 'прадо', 'ленд крузер', 'авенсис'],
+      'honda' => ['аккорд', 'цивик', 'cr-v', 'пилот', 'инсайт'],
+      'nissan' => ['альмера', 'кашкай', 'х-trail', 'мурано', 'патфайндер'],
+      'hyundai' => ['солярис', 'элантра', 'туксон', 'санта фе', 'creta'],
+      'kia' => ['рио', 'церато', 'спортейдж', 'соренто', 'пиканто'],
+      'mazda' => ['3', '6', 'cx-5', 'cx-3', 'cx-9'],
+      'ford' => ['фокус', 'мондео', 'куга', 'экспедишн', 'эскейп'],
+      'skoda' => ['октавия', 'фабия', 'кодиак', 'карок', 'суперб'],
+      'renault' => ['логан', 'сандеро', 'дастер', 'каптур', 'флюенс'],
+      'opel' => ['астра', 'корса', 'инсигния', 'мокка', 'зафира'],
+      'peugeot' => ['206', '207', '308', '508', '3008'],
+      'citroen' => ['c3', 'c4', 'c5', 'berlingo', 'xsara'],
+      'mitsubishi' => ['лансер', 'аутлендер', 'паджеро', 'l200', 'asx'],
+      'subaru' => ['импреза', 'форестер', 'легаси', 'аутбек', 'xv'],
+      'volvo' => ['s60', 's90', 'xc60', 'xc90', 'v40'],
+      'lexus' => ['rx', 'nx', 'gx', 'lx', 'es', 'ls'],
+      'infiniti' => ['qx50', 'qx70', 'q50', 'qx80', 'fx'],
+      'acura' => ['mdx', 'rdx', 'tlx', 'ilx'],
+      'land rover' => ['range rover', 'discovery', 'defender', 'freelander'],
+      'jeep' => ['cherokee', 'grand cherokee', 'compass', 'wrangler'],
+      'chevrolet' => ['круз', 'авео', 'лачетти', 'каптива', 'тахо'],
+      'cadillac' => ['escalade', 'xt5', 'ats', 'cts'],
+      'porsche' => ['cayenne', 'macan', '911', 'panamera'],
+      'jaguar' => ['xf', 'xe', 'f-pace', 'e-pace'],
+      'alfa romeo' => ['giulia', 'stelvio', '159', '147'],
+      'fiat' => ['500', 'panda', 'tipo', 'doblo'],
+      'lada' => ['веста', 'гранта', 'калина', 'приора', 'нива'],
+      'uaz' => ['патриот', 'хантер', 'буханка']
+    }
+    
+    detected = []
+    msg_lower = message.downcase
+    
+    car_brands_and_models.each do |brand, models|
+      # Проверяем марку
+      if msg_lower.include?(brand)
+        detected << brand
+      end
+      
+      # Проверяем модели
+      models.each do |model|
+        if msg_lower.include?(model)
+          detected << "#{brand} #{model}"
+        end
+      end
+    end
+    
+    # Убираем дубликаты и сортируем по длине (более специфичные первыми)
+    detected.uniq.sort_by(&:length).reverse
+  end
+
   # Парсинг размера шин из текста
   def parse_tire_size(size_text)
     Rails.logger.info "🔍 Парсинг размера: '#{size_text}'"
@@ -745,6 +814,30 @@ class TireChatService
         next_step: next_step
       }
     end
+  end
+
+  # Обработка запроса с моделью автомобиля
+  def handle_car_model_request(parameters)
+    car_model = parameters[:car_model]
+    Rails.logger.info "🚗 Обработка запроса модели автомобиля: #{car_model}"
+    
+    # Сохраняем модель автомобиля в контексте
+    @user_preferences[:car_model] = car_model
+    
+    # Формируем ответ с предложением перейти на поиск по автомобилю
+    message = "🚗 Понял, вам нужны шины для **#{car_model}**.\n\n"
+    message += "Для точного подбора размера шин по марке автомобиля я рекомендую воспользоваться нашим специальным поиском:\n\n"
+    message += "🔍 **Поиск шин по автомобилю**\n"
+    message += "Там вы сможете выбрать точную модель и год выпуска для подбора правильного размера.\n\n"
+    message += "Или укажите размер шин вручную в формате: **205/55R16**, **225/60R17**"
+    
+    {
+      message: message,
+      filters_updated: @current_filters,
+      preferences_updated: @user_preferences,
+      action: 'show_car_search_button',
+      car_search_query: car_model
+    }
   end
 
   def handle_budget_constraint(parameters)
