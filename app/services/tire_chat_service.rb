@@ -102,6 +102,16 @@ class TireChatService
       intent_types << 'recommendation_request'
     end
     
+    # Запрос на новый поиск
+    if msg.match?(/новый поиск|нов\w* поиск|начать заново|другие параметры|изменить критерии|сбросить|поиск другой|новий пошук|починати заново|інші параметри|скинути/i)
+      intent_types << 'new_search_request'
+    end
+    
+    # Продолжение обсуждения результатов
+    if msg.match?(/обсуд|подробн|детальн|сравн|больше информации|расскажи|особенности|характеристики|о модел|обговор|детальніше|порівня|більше інформації|розкажи|особливості|характеристики|про модел/i)
+      intent_types << 'continue_discussion'
+    end
+    
     # Возвращаем комплексное намерение или самое приоритетное
     if intent_types.length > 1
       return { 
@@ -134,7 +144,9 @@ class TireChatService
       5. "season_preference" - указывает сезонность (зимние, летние, всесезонные)
       6. "budget_constraint" - указывает бюджет или ценовые ограничения
       7. "technical_question" - технические вопросы о характеристиках шин
-      8. "general_question" - общие вопросы
+      8. "new_search_request" - хочет начать новый поиск с нуля (сбросить параметры)
+      9. "continue_discussion" - хочет обсудить уже найденные результаты подробнее
+      10. "general_question" - общие вопросы
 
       ИСТОРИЯ РАЗГОВОРА:
       #{format_conversation_for_prompt}
@@ -195,6 +207,10 @@ class TireChatService
       handle_budget_constraint(intent[:parameters])
     when 'technical_question'
       handle_technical_question(intent[:parameters], available_products)
+    when 'new_search_request'
+      handle_new_search_request(intent[:parameters])
+    when 'continue_discussion'
+      handle_continue_discussion(intent[:parameters])
     else
       handle_general_question(intent[:parameters], available_products)
     end
@@ -354,7 +370,7 @@ class TireChatService
       {
         message: format_recommendations(recommendations),
         recommendations: recommendations,
-        action: 'show_recommendations'
+        action: 'show_recommendations_with_options'
       }
     else
       {
@@ -449,8 +465,12 @@ class TireChatService
       message += "   ✨ *#{product.recommendation_reasons.join(', ')}*\n\n"
     end
     
-    message += "💡 **Почему именно эти шины?**\n"
+    message += "💡 **#{localized_message('recommendation_explanation_title')}**\n"
     message += get_recommendation_explanation
+    message += "\n\n"
+    
+    # Добавляем опции для продолжения диалога
+    message += format_continuation_options
     
     message
   end
@@ -471,22 +491,52 @@ class TireChatService
     end
   end
 
+  # Форматирование опций для продолжения диалога
+  def format_continuation_options
+    "🔄 **#{localized_message('continuation_options_title')}**\n\n" +
+    "💬 #{localized_message('continue_discussion_option')}\n" +
+    "🔍 #{localized_message('new_search_option')}\n\n" +
+    "#{localized_message('continuation_prompt')}"
+  end
+
   # Получение следующего вопроса в зависимости от контекста
   def get_next_question_for_context
-    # Обязательные поля: размер и сезон
+    missing_params = []
+    
+    # Проверяем обязательные параметры
     if @current_filters[:size].blank?
-      localized_message('size_question')
-    elsif @current_filters[:season].blank?
-      localized_message('season_question')
+      missing_params << localized_message('missing_size_param')
+    end
+    
+    if @current_filters[:season].blank?
+      missing_params << localized_message('missing_season_param')
+    end
+    
+    if missing_params.any?
+      # Формируем конкретные подсказки о недостающих параметрах
+      return "#{localized_message('need_more_info')}\n#{missing_params.join("\n")}"
     else
-      # Только когда есть и размер, и сезон - готовы к рекомендациям
-      localized_message('ready_to_recommend')
+      # Если основные параметры есть, готовы к рекомендациям
+      return localized_message('ready_to_recommend')
     end
   end
   
   # Проверка готовности к рекомендациям
   def ready_for_recommendations?
     @current_filters[:size].present? && @current_filters[:season].present?
+  end
+
+  # Сброс всех фильтров для начала нового поиска
+  def reset_filters
+    @current_filters = {
+      size: nil,
+      season: nil,
+      budget_min: nil,
+      budget_max: nil,
+      brand_preferences: nil,
+      priority_type: nil
+    }
+    @user_preferences = {}
   end
 
   # Нормализация приоритета пользователя
@@ -611,7 +661,7 @@ class TireChatService
           message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{format_recommendations(recommendations)}",
           filters_updated: @current_filters,
           recommendations: recommendations,
-          action: 'show_recommendations'
+          action: 'show_recommendations_with_options'
         }
       else
         size_info = @current_filters[:size] ? @current_filters[:size][:full_size] : 'неизвестный'
@@ -664,13 +714,33 @@ class TireChatService
     }
   end
 
+  # Обработка запроса на начало нового поиска
+  def handle_new_search_request(parameters)
+    reset_filters
+    {
+      message: "🔄 #{localized_message('new_search_started')}\n\n#{localized_message('welcome_message')}",
+      filters_updated: @current_filters,
+      action: 'new_search_started',
+      next_step: 'size_request'
+    }
+  end
+
+  # Обработка запроса на продолжение обсуждения текущих результатов
+  def handle_continue_discussion(parameters)
+    {
+      message: "💬 #{localized_message('continue_discussion_ready')}",
+      action: 'continue_discussion',
+      next_step: 'discussion_mode'
+    }
+  end
+
   # Получение локализованного сообщения
   def localized_message(key, **interpolations)
     messages = {
       'ru' => {
         'size_question' => 'Какой размер шин вам нужен?',
         'season_question' => 'Какие шины нужны - зимние, летние или всесезонные?',
-        'ready_to_recommend' => 'Готов подобрать для вас оптимальные варианты!',
+        'ready_to_recommend' => 'Отлично! У меня есть все необходимые данные. Ищу лучшие варианты для вас...',
         'budget_noted' => 'Учту ваш бюджет.',
         'size_accepted' => 'Отлично! Размер %{size} принят.',
         'size_not_recognized' => 'Не удалось распознать размер шин. Укажите размер в формате, например: 205/55R16 или 225 60 17',
@@ -682,12 +752,22 @@ class TireChatService
         'brands_accepted' => 'Учту ваши предпочтения по брендам: %{brands}.',
         'no_results' => 'К сожалению, по вашим критериям не найдено подходящих шин. Попробуйте изменить параметры поиска.',
         'no_results_suggest_changes' => 'К сожалению, по размеру %{size} и сезону %{season} шин не найдено. Попробуйте другой размер или проверьте наличие в других категориях.',
-        'recommendations_title' => 'Вот мои рекомендации для вас:'
+        'recommendations_title' => 'Вот мои рекомендации для вас:',
+        'recommendation_explanation_title' => 'Почему именно эти шины?',
+        'continuation_options_title' => 'Что вы хотите сделать дальше?',
+        'continue_discussion_option' => '💬 Обсудить эти варианты подробнее',
+        'new_search_option' => '🔍 Начать новый поиск с другими параметрами',
+        'continuation_prompt' => 'Просто напишите, что вас интересует!',
+        'new_search_started' => 'Начинаем новый поиск! Все предыдущие параметры сброшены.',
+        'continue_discussion_ready' => 'Отлично! Давайте обсудим найденные варианты шин. Что бы вы хотели узнать подробнее? Например, особенности конкретных моделей, сравнение характеристик или рекомендации по установке.',
+        'need_more_info' => 'Для подбора оптимальных шин мне нужно знать:',
+        'missing_size_param' => '📏 **Размер шин** - например: 205/55R16, 225/60R17',
+        'missing_season_param' => '🌤️ **Сезон** - зимние, летние или всесезонные шины'
       },
       'uk' => {
         'size_question' => 'Який розмір шин вам потрібен?',
         'season_question' => 'Які шини потрібні - зимові, літні чи всесезонні?',
-        'ready_to_recommend' => 'Готовий підібрати для вас оптимальні варіанти!',
+        'ready_to_recommend' => 'Відмінно! У мене є всі необхідні дані. Шукаю найкращі варіанти для вас...',
         'budget_noted' => 'Врахую ваш бюджет.',
         'size_accepted' => 'Відмінно! Розмір %{size} прийнято.',
         'size_not_recognized' => 'Не вдалося розпізнати розмір шин. Вкажіть розмір у форматі, наприклад: 205/55R16 або 225 60 17',
@@ -699,7 +779,17 @@ class TireChatService
         'brands_accepted' => 'Врахую ваші переваги щодо брендів: %{brands}.',
         'no_results' => 'На жаль, за вашими критеріями не знайдено підходящих шин. Спробуйте змінити параметри пошуку.',
         'no_results_suggest_changes' => 'На жаль, за розміром %{size} та сезоном %{season} шин не знайдено. Спробуйте інший розмір або перевірте наявність в інших категоріях.',
-        'recommendations_title' => 'Ось мої рекомендації для вас:'
+        'recommendations_title' => 'Ось мої рекомендації для вас:',
+        'recommendation_explanation_title' => 'Чому саме ці шини?',
+        'continuation_options_title' => 'Що ви хочете зробити далі?',
+        'continue_discussion_option' => '💬 Обговорити ці варіанти детальніше',
+        'new_search_option' => '🔍 Почати новий пошук з іншими параметрами',
+        'continuation_prompt' => 'Просто напишіть, що вас цікавить!',
+        'new_search_started' => 'Починаємо новий пошук! Усі попередні параметри скинуто.',
+        'continue_discussion_ready' => 'Відмінно! Давайте обговоримо знайдені варіанти шин. Що б ви хотіли дізнатися детальніше? Наприклад, особливості конкретних моделей, порівняння характеристик або рекомендації щодо встановлення.',
+        'need_more_info' => 'Для підбору оптимальних шин мені потрібно знати:',
+        'missing_size_param' => '📏 **Розмір шин** - наприклад: 205/55R16, 225/60R17',
+        'missing_season_param' => '🌤️ **Сезон** - зимові, літні чи всесезонні шини'
       }
     }
 
