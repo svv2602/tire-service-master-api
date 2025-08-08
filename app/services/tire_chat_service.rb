@@ -5,12 +5,13 @@ class TireChatService
   include ActionView::Helpers::TextHelper
 
   # Контекст разговора
-  attr_reader :conversation_history, :current_filters, :user_preferences
+  attr_reader :conversation_history, :current_filters, :user_preferences, :locale
 
-  def initialize(conversation_history: [], current_filters: {}, user_preferences: {})
+  def initialize(conversation_history: [], current_filters: {}, user_preferences: {}, locale: 'ru')
     @conversation_history = conversation_history || []
     @current_filters = current_filters || {}
     @user_preferences = user_preferences || {}
+    @locale = locale || 'ru'
     @openai_service = OpenaiService.new
   end
 
@@ -76,13 +77,13 @@ class TireChatService
     end
     
     # Сезонность
-    if msg.match?(/летн|summer/i)
+    if msg.match?(/летн|літн|лето|літо|summer/i)
       parameters[:season] = 'летние'
       intent_types << 'season_preference'
-    elsif msg.match?(/зимн|winter/i)
+    elsif msg.match?(/зимн|зимов|зима|winter/i)
       parameters[:season] = 'зимние'
       intent_types << 'season_preference'
-    elsif msg.match?(/всесезон|all.season/i)
+    elsif msg.match?(/всесезон|всесезон|all.season/i)
       parameters[:season] = 'всесезонные'
       intent_types << 'season_preference'
     end
@@ -248,16 +249,17 @@ class TireChatService
     
     if parameters[:season].present?
       normalized_season = case parameters[:season].to_s.downcase
-      when /летн|summer/
+      when /летн|літн|лето|літо|summer/
         'summer'
-      when /зимн|winter/
+      when /зимн|зимов|зима|winter/
         'winter'
-      when /всесезон|all.season/
+      when /всесезон|всесезон|all.season/
         'all_season'
       else
         parameters[:season]
       end
       @current_filters[:season] = normalized_season
+      Rails.logger.info "🔄 Нормализация сезона в update_filters: '#{parameters[:season]}' → '#{normalized_season}'"
     end
     
     if parameters[:priority].present?
@@ -273,14 +275,38 @@ class TireChatService
     size = parameters[:size]
     if size.present?
       @current_filters[:size] = parse_tire_size(size)
-      {
-        message: "✅ Отлично! Размер #{size} принят. Теперь расскажите о ваших приоритетах: что для вас важнее - соотношение цена/качество, престижность бренда или максимальная функциональность?",
-        filters_updated: @current_filters,
-        next_step: 'priority_request'
-      }
+      
+      # Если у нас есть размер и сезон - сразу ищем и показываем результат
+      if ready_for_recommendations?
+        recommendations = get_tire_recommendations
+        
+        if recommendations.any?
+          return {
+            message: "✅ #{localized_message('size_accepted', size: size)}\n\n#{format_recommendations(recommendations)}",
+            filters_updated: @current_filters,
+            recommendations: recommendations,
+            action: 'show_recommendations'
+          }
+        else
+          size_info = @current_filters[:size][:full_size]
+          season_info = @current_filters[:season]
+          return {
+            message: "✅ #{localized_message('size_accepted', size: size)}\n\n#{localized_message('no_results_suggest_changes', size: size_info, season: season_info)}",
+            filters_updated: @current_filters,
+            action: 'no_results',
+            next_step: 'parameter_adjustment'
+          }
+        end
+      else
+        {
+          message: "✅ #{localized_message('size_accepted', size: size)} #{get_next_question_for_context}",
+          filters_updated: @current_filters,
+          next_step: get_next_step_after_size
+        }
+      end
     else
       {
-        message: "🤔 Не удалось распознать размер шин. Укажите размер в формате, например: 205/55R16 или 225 60 17",
+        message: "🤔 #{localized_message('size_not_recognized')}",
         next_step: 'size_request'
       }
     end
@@ -291,14 +317,15 @@ class TireChatService
     priority = parameters[:priority]
     if priority.present?
       @user_preferences[:priority_type] = normalize_priority(priority)
+      next_step = ready_for_recommendations? ? 'recommendation_request' : determine_next_step
       {
-        message: "👍 Понял, ваш приоритет - #{get_priority_description(priority)}. #{get_next_question_for_context}",
+        message: "👍 #{localized_message('priority_accepted', priority_description: get_priority_description(priority))} #{get_next_question_for_context}",
         preferences_updated: @user_preferences,
-        next_step: 'recommendation_request'
+        next_step: next_step
       }
     else
       {
-        message: "Выберите ваш приоритет:\n🏆 **Престижность** - топовые бренды и статус\n💰 **Цена/качество** - лучшее соотношение\n⚙️ **Функциональность** - максимальные технические характеристики",
+        message: localized_message('priority_options'),
         next_step: 'priority_request'
       }
     end
@@ -306,11 +333,18 @@ class TireChatService
 
   # Обработка запроса рекомендаций
   def handle_recommendation_request(parameters, available_products)
-    # Проверяем есть ли размер в фильтрах
+    # Проверяем есть ли все обязательные данные
     if @current_filters[:size].blank?
       return {
-        message: "Для подбора оптимальных шин мне нужно знать размер. Укажите размер ваших шин, например: 205/55R16",
+        message: localized_message('recommendations_needed_size'),
         next_step: 'size_request'
+      }
+    end
+    
+    if @current_filters[:season].blank?
+      return {
+        message: localized_message('season_question'),
+        next_step: 'season_request'
       }
     end
 
@@ -324,7 +358,7 @@ class TireChatService
       }
     else
       {
-        message: "😔 К сожалению, по вашим критериям не найдено подходящих шин. Попробуйте изменить параметры поиска.",
+        message: "😔 #{localized_message('no_results')}",
         action: 'no_results'
       }
     end
@@ -332,44 +366,76 @@ class TireChatService
 
   # Получение рекомендаций на основе фильтров и предпочтений
   def get_tire_recommendations(available_products = nil)
+    Rails.logger.info "🔍 Поиск рекомендаций с фильтрами: #{@current_filters}"
+    
     # Если продукты не переданы, ищем в базе
     products_scope = available_products || SupplierTireProduct.in_stock.includes(:tire_brand, :tire_model, :country)
+    initial_count = products_scope.count
+    Rails.logger.info "📦 Начальное количество товаров в наличии: #{initial_count}"
     
     # Применяем фильтры
     if @current_filters[:size].present?
       size = @current_filters[:size]
+      Rails.logger.info "📏 Применяю фильтр размера: #{size[:width]}/#{size[:height]}R#{size[:diameter]}"
       products_scope = products_scope.by_size(size[:width], size[:height], size[:diameter])
+      size_count = products_scope.count
+      Rails.logger.info "📏 После фильтра размера: #{size_count} товаров"
     end
     
     if @current_filters[:season].present?
+      Rails.logger.info "❄️ Применяю фильтр сезона: #{@current_filters[:season]}"
       products_scope = products_scope.by_season(@current_filters[:season])
+      season_count = products_scope.count
+      Rails.logger.info "❄️ После фильтра сезона: #{season_count} товаров"
     end
     
     if @current_filters[:brands].present?
       brand_ids = TireBrand.where(normalized_name: @current_filters[:brands]).pluck(:id)
       products_scope = products_scope.where(tire_brand_id: brand_ids)
+      Rails.logger.info "🏷️ После фильтра брендов: #{products_scope.count} товаров"
+    end
+    
+    final_products = products_scope.limit(50)
+    Rails.logger.info "🎯 Итоговое количество для расчета: #{final_products.count}"
+    
+    # Если нет товаров после фильтрации, возвращаем пустой массив
+    if final_products.count == 0
+      Rails.logger.warn "⚠️ Нет товаров после применения фильтров"
+      return []
     end
     
     # Рассчитываем рейтинги с приоритетами пользователя
     priority_type = @user_preferences[:priority_type] || 'balanced'
     
-    # Получаем топ-10 товаров по рейтингу оптимальности
-    recommendations = TireOptimalityCalculator.calculate_batch_optimality(
-      products_scope.limit(50), # Берем 50 для расчета, вернем топ-10
-      priority_type: priority_type
-    ).first(10)
-    
-    Rails.logger.info "🎯 Найдено #{recommendations.length} рекомендаций"
-    recommendations
+    begin
+      # Получаем топ-10 товаров по рейтингу оптимальности
+      recommendations = TireOptimalityCalculator.calculate_batch_optimality(
+        final_products,
+        priority_type: priority_type
+      ).first(10)
+      
+      Rails.logger.info "🎯 Найдено #{recommendations.length} рекомендаций"
+      recommendations
+    rescue => e
+      Rails.logger.error "❌ Ошибка при расчете оптимальности: #{e.message}"
+      # Возвращаем простой список без расчета оптимальности
+      final_products.first(10).map do |product|
+        {
+          product: product,
+          optimality_score: 7.0,
+          recommendation_reasons: ['Доступен в наличии']
+        }
+      end
+    end
   end
 
   # Форматирование рекомендаций для пользователя
   def format_recommendations(recommendations)
     if recommendations.empty?
-      return "😔 Не найдено подходящих шин по вашим критериям."
+      return "😔 #{localized_message('no_results')}"
     end
 
-    message = "🎯 **Вот мои рекомендации для вас:**\n\n"
+    message = "🎯 **#{localized_message('recommendations_title')}**\n\n"
     
     recommendations.first(5).each_with_index do |item, index|
       product = item[:product]
@@ -407,13 +473,20 @@ class TireChatService
 
   # Получение следующего вопроса в зависимости от контекста
   def get_next_question_for_context
+    # Обязательные поля: размер и сезон
     if @current_filters[:size].blank?
-      "Какой размер шин вам нужен?"
+      localized_message('size_question')
     elsif @current_filters[:season].blank?
-      "Какие шины нужны - зимние, летние или всесезонные?"
+      localized_message('season_question')
     else
-      "Готов подобрать для вас оптимальные варианты!"
+      # Только когда есть и размер, и сезон - готовы к рекомендациям
+      localized_message('ready_to_recommend')
     end
+  end
+  
+  # Проверка готовности к рекомендациям
+  def ready_for_recommendations?
+    @current_filters[:size].present? && @current_filters[:season].present?
   end
 
   # Нормализация приоритета пользователя
@@ -434,16 +507,25 @@ class TireChatService
 
   # Описание приоритета для пользователя
   def get_priority_description(priority)
-    case normalize_priority(priority)
-    when 'price_quality'
-      'оптимальное соотношение цена/качество'
-    when 'prestige'
-      'престижность и статус бренда'
-    when 'functionality'
-      'максимальная функциональность'
-    else
-      'сбалансированный подход'
-    end
+    priority_type = normalize_priority(priority)
+    
+    descriptions = {
+      'ru' => {
+        'price_quality' => 'оптимальное соотношение цена/качество',
+        'prestige' => 'престижность и статус бренда',
+        'functionality' => 'максимальная функциональность',
+        'balanced' => 'сбалансированный подход'
+      },
+      'uk' => {
+        'price_quality' => 'оптимальне співвідношення ціна/якість',
+        'prestige' => 'престижність і статус бренду',
+        'functionality' => 'максимальна функціональність',
+        'balanced' => 'збалансований підхід'
+      }
+    }
+    
+    lang_descriptions = descriptions[@locale] || descriptions['ru']
+    lang_descriptions[priority_type] || lang_descriptions['balanced']
   end
 
   # Парсинг размера шин из текста
@@ -496,7 +578,7 @@ class TireChatService
     @current_filters[:brands] = brands.map(&:downcase)
     
     {
-      message: "✅ Учту ваши предпочтения по брендам: #{brands.join(', ')}. #{get_next_question_for_context}",
+      message: "✅ #{localized_message('brands_accepted', brands: brands.join(', '))} #{get_next_question_for_context}",
       filters_updated: @current_filters
     }
   end
@@ -504,24 +586,50 @@ class TireChatService
   def handle_season_preference(parameters)
     season = parameters[:season]
     
-    # Нормализуем сезон
+    # Нормализуем сезон - используем значения из SupplierTireProduct::SEASONS
     normalized_season = case season.to_s.downcase
-    when /летн|summer/
+    when /летн|літн|лето|літо|summer/
       'summer'
-    when /зимн|winter/
+    when /зимн|зимов|зима|winter/
       'winter'
-    when /всесезон|all.season/
+    when /всесезон|всесезон|all.season/
       'all_season'
     else
       season
     end
     
+    Rails.logger.info "🔄 Нормализация сезона: '#{season}' → '#{normalized_season}'"
+    
     @current_filters[:season] = normalized_season
     
-    {
-      message: "✅ Отлично, ищем #{season} шины. #{get_next_question_for_context}",
-      filters_updated: @current_filters
-    }
+    # Если у нас есть размер и сезон - сразу ищем и показываем результат
+    if ready_for_recommendations?
+      recommendations = get_tire_recommendations
+      
+      if recommendations.any?
+        return {
+          message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{format_recommendations(recommendations)}",
+          filters_updated: @current_filters,
+          recommendations: recommendations,
+          action: 'show_recommendations'
+        }
+      else
+        size_info = @current_filters[:size] ? @current_filters[:size][:full_size] : 'неизвестный'
+        return {
+          message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{localized_message('no_results_suggest_changes', size: size_info, season: season)}",
+          filters_updated: @current_filters,
+          action: 'no_results',
+          next_step: 'parameter_adjustment'
+        }
+      end
+    else
+      next_step = determine_next_step
+      {
+        message: "✅ #{localized_message('season_accepted', season: season)} #{get_next_question_for_context}",
+        filters_updated: @current_filters,
+        next_step: next_step
+      }
+    end
   end
 
   def handle_budget_constraint(parameters)
@@ -531,9 +639,14 @@ class TireChatService
     @current_filters[:budget_max] = budget_max if budget_max
     @current_filters[:budget_min] = budget_min if budget_min
     
+    # Проверяем, есть ли все обязательные данные для рекомендаций
+    next_question = get_next_question_for_context
+    next_step = ready_for_recommendations? ? 'recommendation_request' : determine_next_step
+    
     {
-      message: "💰 Учту ваш бюджет. #{get_next_question_for_context}",
-      filters_updated: @current_filters
+      message: "💰 #{localized_message('budget_noted')} #{next_question}",
+      filters_updated: @current_filters,
+      next_step: next_step
     }
   end
 
@@ -546,8 +659,78 @@ class TireChatService
 
   def handle_general_question(parameters, available_products)
     {
-      message: "👋 Привет! Я помогу вам выбрать оптимальные шины. Для начала укажите размер ваших шин, например: 205/55R16",
+      message: "👋 #{localized_message('welcome_message')}",
       next_step: 'size_request'
     }
+  end
+
+  # Получение локализованного сообщения
+  def localized_message(key, **interpolations)
+    messages = {
+      'ru' => {
+        'size_question' => 'Какой размер шин вам нужен?',
+        'season_question' => 'Какие шины нужны - зимние, летние или всесезонные?',
+        'ready_to_recommend' => 'Готов подобрать для вас оптимальные варианты!',
+        'budget_noted' => 'Учту ваш бюджет.',
+        'size_accepted' => 'Отлично! Размер %{size} принят.',
+        'size_not_recognized' => 'Не удалось распознать размер шин. Укажите размер в формате, например: 205/55R16 или 225 60 17',
+        'welcome_message' => 'Привет! Я помогу вам выбрать оптимальные шины. Для начала укажите размер ваших шин, например: 205/55R16',
+        'priority_accepted' => 'Понял, ваш приоритет - %{priority_description}.',
+        'priority_options' => 'Выберите ваш приоритет:\n🏆 **Престижность** - топовые бренды и статус\n💰 **Цена/качество** - лучшее соотношение\n⚙️ **Функциональность** - максимальные технические характеристики',
+        'recommendations_needed_size' => 'Для подбора оптимальных шин мне нужно знать размер. Укажите размер ваших шин, например: 205/55R16',
+        'season_accepted' => 'Отлично, ищем %{season} шины.',
+        'brands_accepted' => 'Учту ваши предпочтения по брендам: %{brands}.',
+        'no_results' => 'К сожалению, по вашим критериям не найдено подходящих шин. Попробуйте изменить параметры поиска.',
+        'no_results_suggest_changes' => 'К сожалению, по размеру %{size} и сезону %{season} шин не найдено. Попробуйте другой размер или проверьте наличие в других категориях.',
+        'recommendations_title' => 'Вот мои рекомендации для вас:'
+      },
+      'uk' => {
+        'size_question' => 'Який розмір шин вам потрібен?',
+        'season_question' => 'Які шини потрібні - зимові, літні чи всесезонні?',
+        'ready_to_recommend' => 'Готовий підібрати для вас оптимальні варіанти!',
+        'budget_noted' => 'Врахую ваш бюджет.',
+        'size_accepted' => 'Відмінно! Розмір %{size} прийнято.',
+        'size_not_recognized' => 'Не вдалося розпізнати розмір шин. Вкажіть розмір у форматі, наприклад: 205/55R16 або 225 60 17',
+        'welcome_message' => 'Привіт! Я допоможу вам вибрати оптимальні шини. Для початку вкажіть розмір ваших шин, наприклад: 205/55R16',
+        'priority_accepted' => 'Зрозумів, ваш пріоритет - %{priority_description}.',
+        'priority_options' => 'Виберіть ваш пріоритет:\n🏆 **Престижність** - топові бренди та статус\n💰 **Ціна/якість** - найкраще співвідношення\n⚙️ **Функціональність** - максимальні технічні характеристики',
+        'recommendations_needed_size' => 'Для підбору оптимальних шин мені потрібно знати розмір. Вкажіть розмір ваших шин, наприклад: 205/55R16',
+        'season_accepted' => 'Відмінно, шукаємо %{season} шини.',
+        'brands_accepted' => 'Врахую ваші переваги щодо брендів: %{brands}.',
+        'no_results' => 'На жаль, за вашими критеріями не знайдено підходящих шин. Спробуйте змінити параметри пошуку.',
+        'no_results_suggest_changes' => 'На жаль, за розміром %{size} та сезоном %{season} шин не знайдено. Спробуйте інший розмір або перевірте наявність в інших категоріях.',
+        'recommendations_title' => 'Ось мої рекомендації для вас:'
+      }
+    }
+
+    message_template = messages[@locale] ? messages[@locale][key] : messages['ru'][key]
+    return key unless message_template
+    
+    # Заменяем интерполяции
+    interpolations.each do |placeholder, value|
+      message_template = message_template.gsub("%{#{placeholder}}", value.to_s)
+    end
+    
+    message_template
+  end
+
+  # Получение следующего шага после указания размера
+  def get_next_step_after_size
+    if @current_filters[:season].blank?
+      'season_request'
+    else
+      'recommendation_request'
+    end
+  end
+  
+  # Определение следующего шага в диалоге
+  def determine_next_step
+    if @current_filters[:size].blank?
+      'size_request'
+    elsif @current_filters[:season].blank?
+      'season_request'
+    else
+      'recommendation_request'
+    end
   end
 end

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Тест исправлений логики чата</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+        }
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-left: 5px solid #4CAF50;
+        }
+        .problem {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+        }
+        .solution {
+            background: #d1ecf1;
+            border-left: 5px solid #17a2b8;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+        }
+        .chat-container {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+            background: #fafafa;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-message {
+            background: #e3f2fd;
+            text-align: right;
+            margin-left: 50px;
+        }
+        .bot-message {
+            background: #f1f8e9;
+            margin-right: 50px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.warning { background: #fff3cd; color: #856404; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        .test-button {
+            background: #007bff;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .reset-button {
+            background: #dc3545;
+        }
+        .reset-button:hover {
+            background: #c82333;
+        }
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .language-toggle {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .language-toggle button.active {
+            background: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Тест исправлений логики чата</h1>
+        
+        <div class="status info">
+            ℹ️ Тест специально для исправления проблем с диалогом "зима" → показ результатов
+        </div>
+
+        <div class="language-toggle">
+            <button class="active" onclick="setLanguage('ru')">🇷🇺 Русский</button>
+            <button onclick="setLanguage('uk')">🇺🇦 Українська</button>
+        </div>
+
+        <!-- Проблема из сообщения пользователя -->
+        <div class="test-section">
+            <h3>🎯 Исправление конкретной проблемы</h3>
+            
+            <div class="problem">
+                <strong>❌ Проблема из диалога:</strong>
+                <ol>
+                    <li>Размер: 215/55R17 ✅ (принят)</li>
+                    <li>Сезон: "зима" ✅ (принят)</li>
+                    <li>Ответ: "Готовий підібрати варіанти!" ❌ (зачем спрашивать?)</li>
+                    <li>Пользователь: "покажи" ❌ (должно было показаться сразу)</li>
+                    <li>Результат: "не знайдено" ❌ (хотя шины есть)</li>
+                </ol>
+            </div>
+            
+            <div class="solution">
+                <strong>✅ Исправления:</strong>
+                <ol>
+                    <li>При наличии размера И сезона → сразу показывать результат</li>
+                    <li>Убрать лишнее "готов подобрать" сообщение</li>
+                    <li>Улучшить нормализацию сезона: "зима/лето/літо" → "winter/summer"</li>
+                    <li>Поддержка полных слов: летние/зимние + лето/зима + літні/зимові + літо/зима</li>
+                    <li>Добавить логирование для отладки фильтрации</li>
+                    <li>Fallback для показа результатов без TireOptimalityCalculator</li>
+                </ol>
+            </div>
+
+            <div class="chat-container">
+                <h4>💬 Воспроизведение проблемного диалога:</h4>
+                <div id="problemDialogMessages"></div>
+                <button onclick="reproduceProblematicDialog()">🔄 Воспроизвести проблемный диалог</button>
+                <button class="reset-button" onclick="resetChat()">🗑️ Сбросить чат</button>
+            </div>
+        </div>
+
+        <!-- Тест исправленной логики -->
+        <div class="test-section">
+            <h3>✅ Тест новой логики</h3>
+            
+            <div class="chat-container">
+                <h4>💬 Новый правильный диалог:</h4>
+                <div id="fixedDialogMessages"></div>
+                <button class="test-button" onclick="testFixedLogic()">🧪 Тест исправленной логики</button>
+                <button class="reset-button" onclick="resetFixedChat()">🗑️ Сбросить</button>
+            </div>
+        </div>
+
+        <!-- Детальный анализ -->
+        <div class="test-section">
+            <h3>🔍 Детальный анализ поиска</h3>
+            
+            <div id="searchAnalysis"></div>
+            <button onclick="analyzeSearch()">🔍 Анализировать поиск шин 215/55R17 зима</button>
+        </div>
+
+        <!-- Результаты тестирования -->
+        <div class="test-section">
+            <h3>📊 Результаты тестирования</h3>
+            <div id="testResults">
+                <p>Запустите тесты выше для получения результатов</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentLanguage = 'uk'; // Начинаем с украинского как в проблемном диалоге
+        let conversationId = null;
+        let fixedConversationId = null;
+        
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            document.querySelectorAll('.language-toggle button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            updateTestResults(`🌍 Язык изменен на: ${lang === 'ru' ? 'Русский' : 'Українська'}`);
+        }
+
+        function updateTestResults(message) {
+            const results = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            results.innerHTML += `<div class="result">[${timestamp}] ${message}</div>`;
+        }
+
+        // Воспроизведение проблемного диалога
+        async function reproduceProblematicDialog() {
+            const chatDiv = document.getElementById('problemDialogMessages');
+            chatDiv.innerHTML = '<div class="status info">🔄 Воспроизведение проблемного диалога...</div>';
+            
+            // Сброс сессии
+            await resetChatSession();
+            
+            const steps = [
+                { user: '215/55R17', expected: 'Розмір прийнято' },
+                { user: 'зима', expected: 'Показ результатов или вопрос' },
+                { user: 'покажи', expected: 'Результаты' }
+            ];
+            
+            for (const [index, step] of steps.entries()) {
+                await simulateMessage(chatDiv, step.user, step.expected, `problem_${index}`);
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            
+            updateTestResults('🔄 Проблемный диалог воспроизведен');
+        }
+
+        // Тест исправленной логики
+        async function testFixedLogic() {
+            const chatDiv = document.getElementById('fixedDialogMessages');
+            chatDiv.innerHTML = '<div class="status info">✅ Тестирование исправленной логики...</div>';
+            
+            // Сброс сессии для нового теста
+            await resetChatSession();
+            
+            const steps = [
+                { user: '215/55R17', expected: 'Размер принят, вопрос о сезоне' },
+                { user: currentLanguage === 'ru' ? 'лето' : 'літо', expected: 'СРАЗУ показ результатов летних шин' }
+            ];
+            
+            for (const [index, step] of steps.entries()) {
+                await simulateMessage(chatDiv, step.user, step.expected, `fixed_${index}`);
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            
+            // Дополнительный тест с "зима"
+            await resetChatSession();
+            await simulateMessage(chatDiv, '215/55R17', 'размер принят', 'size_test');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await simulateMessage(chatDiv, 'зима', 'СРАЗУ зимние результаты', 'winter_test');
+            
+            updateTestResults('✅ Исправленная логика протестирована (лето/літо + зима)');
+        }
+
+        async function simulateMessage(container, userMessage, expectedResult, msgId) {
+            // Добавляем сообщение пользователя
+            container.innerHTML += `<div class="message user-message">👤 ${userMessage}</div>`;
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/tire_chat/message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        message: userMessage,
+                        locale: currentLanguage,
+                        conversation_id: conversationId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    conversationId = data.conversation_id;
+                    
+                    // Добавляем ответ бота
+                    const botMessage = data.response.message || 'Пустой ответ';
+                    container.innerHTML += `<div class="message bot-message">🤖 ${botMessage}</div>`;
+                    
+                    // Анализируем результат
+                    const hasRecommendations = data.response.recommendations && data.response.recommendations.length > 0;
+                    const hasReadyMessage = botMessage.includes('Готов') || botMessage.includes('Готовий');
+                    const isNoResults = botMessage.includes('не найдено') || botMessage.includes('не знайдено');
+                    
+                    if (userMessage === 'зима') {
+                        if (hasRecommendations) {
+                            container.innerHTML += `<div class="status success">✅ ОТЛИЧНО: Сразу показаны рекомендации (${data.response.recommendations.length} шт.)</div>`;
+                            updateTestResults(`✅ Сезон "зима": ИСПРАВЛЕНО - сразу показаны результаты`);
+                        } else if (hasReadyMessage) {
+                            container.innerHTML += `<div class="status warning">⚠️ СТАРАЯ ПРОБЛЕМА: Лишнее сообщение "готов подобрать"</div>`;
+                            updateTestResults(`⚠️ Сезон "зима": ПРОБЛЕМА ОСТАЕТСЯ - лишнее сообщение`);
+                        } else if (isNoResults) {
+                            container.innerHTML += `<div class="status error">❌ ПРОБЛЕМА: Нет результатов (проверить базу данных)</div>`;
+                            updateTestResults(`❌ Сезон "зима": ПРОБЛЕМА - нет результатов в БД`);
+                        } else {
+                            container.innerHTML += `<div class="status info">ℹ️ Неожиданный ответ, требует анализа</div>`;
+                        }
+                    }
+                    
+                    // Показываем дополнительную информацию
+                    if (data.response.action) {
+                        container.innerHTML += `<div class="status info">📋 Действие: ${data.response.action}</div>`;
+                    }
+                    
+                } else {
+                    container.innerHTML += `<div class="message bot-message">❌ Ошибка: ${data.error}</div>`;
+                    updateTestResults(`❌ Ошибка API: ${data.error}`);
+                }
+            } catch (error) {
+                container.innerHTML += `<div class="message bot-message">❌ Ошибка сети: ${error.message}</div>`;
+                updateTestResults(`❌ Ошибка сети: ${error.message}`);
+            }
+            
+            // Прокрутка вниз
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function analyzeSearch() {
+            const resultDiv = document.getElementById('searchAnalysis');
+            resultDiv.innerHTML = '<div class="status info">🔍 Анализирую поиск...</div>';
+            
+            try {
+                // Делаем прямой запрос к API для получения информации о товарах
+                const response = await fetch('http://localhost:8000/api/v1/supplier_products_search/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        width: 215,
+                        height: 55,
+                        diameter: 17,
+                        season: 'winter',
+                        in_stock_only: true
+                    })
+                });
+                
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <div class="status ${data.data && data.data.length > 0 ? 'success' : 'error'}">
+                        ${data.data && data.data.length > 0 ? '✅' : '❌'} 
+                        Найдено ${data.data ? data.data.length : 0} групп товаров
+                    </div>
+                    <div class="result">
+                        <strong>Поиск шин 215/55R17 зимние:</strong><br>
+                        Запрос: width=215, height=55, diameter=17, season=winter<br>
+                        Результат: ${JSON.stringify(data, null, 2)}
+                    </div>
+                `;
+                
+                if (data.data && data.data.length > 0) {
+                    updateTestResults(`✅ Анализ БД: Найдено ${data.data.length} групп зимних шин 215/55R17`);
+                } else {
+                    updateTestResults(`❌ Анализ БД: Нет зимних шин 215/55R17 в наличии`);
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">❌ Ошибка анализа: ${error.message}</div>`;
+                updateTestResults(`❌ Ошибка анализа БД: ${error.message}`);
+            }
+        }
+
+        async function resetChatSession() {
+            try {
+                await fetch('http://localhost:8000/api/v1/tire_chat/reset', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                conversationId = null;
+            } catch (error) {
+                console.warn('Ошибка сброса сессии:', error);
+            }
+        }
+
+        async function resetChat() {
+            await resetChatSession();
+            document.getElementById('problemDialogMessages').innerHTML = '';
+            updateTestResults('🗑️ Проблемный чат сброшен');
+        }
+
+        async function resetFixedChat() {
+            await resetChatSession();
+            document.getElementById('fixedDialogMessages').innerHTML = '';
+            updateTestResults('🗑️ Исправленный чат сброшен');
+        }
+
+        // Автоматический запуск при загрузке
+        window.onload = function() {
+            updateTestResults('🚀 Тест исправлений логики чата загружен');
+            updateTestResults('💡 Цель: проверить что "зима" сразу показывает результаты');
+        };
+    </script>
+</body>
+</html>

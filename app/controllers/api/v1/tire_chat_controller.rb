@@ -8,22 +8,26 @@ module Api
       
       # Обработка сообщения пользователя
       def message
-        chat_service = initialize_chat_service
-        
-        response_data = chat_service.process_message(
-          params[:message],
-          current_available_products
-        )
-        
-        # Сохраняем обновленное состояние в сессии
-        save_chat_state(chat_service)
-        
-        render json: {
-          success: true,
-          response: response_data,
-          conversation_id: session[:conversation_id],
-          timestamp: Time.current.iso8601
-        }
+        # Устанавливаем локаль из параметров запроса
+        locale = params[:locale] || 'ru'
+        I18n.with_locale(locale.to_sym) do
+          chat_service = initialize_chat_service(locale)
+          
+          response_data = chat_service.process_message(
+            params[:message],
+            current_available_products
+          )
+          
+          # Сохраняем обновленное состояние в сессии
+          save_chat_state(chat_service)
+          
+          render json: {
+            success: true,
+            response: response_data,
+            conversation_id: session[:conversation_id],
+            timestamp: Time.current.iso8601
+          }
+        end
       rescue => e
         Rails.logger.error "❌ Ошибка в tire chat: #{e.message}"
         render json: {
@@ -101,14 +105,15 @@ module Api
       private
 
       # Инициализация сервиса чата с данными из сессии
-      def initialize_chat_service
+      def initialize_chat_service(locale = 'ru')
         # Создаем ID разговора если его нет
         session[:conversation_id] ||= SecureRandom.uuid
         
         TireChatService.new(
           conversation_history: session[:conversation_history] || [],
           current_filters: session[:current_filters] || {},
-          user_preferences: session[:user_preferences] || {}
+          user_preferences: session[:user_preferences] || {},
+          locale: locale
         )
       end
 
