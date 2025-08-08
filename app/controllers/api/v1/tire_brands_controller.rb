@@ -120,8 +120,7 @@ class Api::V1::TireBrandsController < Api::V1::ApiController
 
   def tire_brand_params
     params.require(:tire_brand).permit(
-      :name, :country_id, :is_active, :is_premium, :rating_score, 
-      :description, :logo_url,
+      :name, :country_id, :is_active, :is_premium, :rating_score,
       aliases: []
     )
   end
@@ -150,7 +149,6 @@ class Api::V1::TireBrandsController < Api::V1::ApiController
 
   def format_tire_brand_detailed(brand)
     format_tire_brand(brand).merge(
-      description: brand.description,
       aliases: brand.aliases || [],
       normalized_name: brand.normalized_name,
       tire_models: brand.tire_models.active.limit(10).map do |model|
