@@ -37,10 +37,38 @@ class CarBrandSearchService
 
       normalized_model = normalize_query(model_query)
       
-      CarModel.where(brand_id: brand_ids)
-              .where('name ILIKE ?', "%#{normalized_model}%")
-              .includes(:brand)
-              .map do |model|
+      # Маппинг алиасов для популярных моделей
+      model_aliases = {
+        '320i' => '3 Series',
+        '320d' => '3 Series',
+        '325i' => '3 Series',
+        '330i' => '3 Series',
+        '335i' => '3 Series',
+        '520i' => '5 Series',
+        '525i' => '5 Series',
+        '530i' => '5 Series',
+        '535i' => '5 Series',
+        '740i' => '7 Series',
+        '750i' => '7 Series'
+      }
+      
+      # Проверяем алиасы
+      search_terms = [normalized_model]
+      if model_aliases[normalized_model]
+        search_terms << model_aliases[normalized_model].downcase
+      end
+
+      # Ищем по всем вариантам
+      models = []
+      search_terms.each do |term|
+        found_models = CarModel.where(brand_id: brand_ids)
+                              .where('name ILIKE ?', "%#{term}%")
+                              .includes(:brand)
+        models.concat(found_models.to_a)
+      end
+      
+      # Убираем дубликаты и форматируем результат
+      models.uniq.map do |model|
         {
           id: model.id,
           name: model.name,

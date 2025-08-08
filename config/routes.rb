@@ -71,6 +71,7 @@ Rails.application.routes.draw do
       # Поиск шин по автомобилю
       post 'car_tire_search/search', to: 'car_tire_search#search'
       post 'car_tire_search/resolve_brand', to: 'car_tire_search#resolve_brand'
+      post 'car_tire_search/resolve_model', to: 'car_tire_search#resolve_model'
       
       # Система уведомлений
       resources :email_templates do
