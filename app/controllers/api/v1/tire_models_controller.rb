@@ -131,8 +131,7 @@ class Api::V1::TireModelsController < Api::V1::ApiController
 
   def tire_model_params
     params.require(:tire_model).permit(
-      :name, :tire_brand_id, :season_type, :is_active, :rating_score, 
-      :description,
+      :name, :tire_brand_id, :season_type, :is_active, :rating_score,
       aliases: []
     )
   end
@@ -160,7 +159,6 @@ class Api::V1::TireModelsController < Api::V1::ApiController
 
   def format_tire_model_detailed(model)
     format_tire_model(model).merge(
-      description: model.description,
       aliases: model.aliases || [],
       normalized_name: model.normalized_name,
       full_name: model.full_name,
