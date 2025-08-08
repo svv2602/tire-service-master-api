@@ -16,8 +16,15 @@ class TireChatService
   end
 
   # Основной метод обработки сообщения пользователя
-  def process_message(user_message, available_products = nil)
-    Rails.logger.info "🤖 Обработка сообщения: #{user_message}"
+  def process_message(user_message, available_products = nil, is_quick_question: false)
+    Rails.logger.info "🤖 Обработка сообщения: #{user_message} (быстрый вопрос: #{is_quick_question})"
+    
+    # Если это быстрый вопрос, сбрасываем все фильтры и предпочтения
+    if is_quick_question
+      Rails.logger.info "🔄 Сброс параметров для быстрого вопроса"
+      reset_filters
+      @conversation_history = [] # Очищаем историю разговора
+    end
     
     # Добавляем сообщение пользователя в историю
     add_to_history(:user, user_message)
@@ -239,9 +246,43 @@ class TireChatService
     update_filters_from_parameters(parameters)
     
     # Определяем, что показать пользователю
-    if intent_types.include?('recommendation_request')
-      # Если просят рекомендации, сразу их показываем
-      handle_recommendation_request(parameters, available_products)
+    if intent_types.include?('recommendation_request') || ready_for_recommendations?
+      # Если просят рекомендации или есть все данные - показываем рекомендации
+      Rails.logger.info "🎯 Все данные готовы, показываем рекомендации"
+      
+      # Формируем сообщение подтверждения параметров
+      confirmations = []
+      if parameters[:size].present?
+        confirmations << "размер #{parameters[:size]}"
+      end
+      if parameters[:season].present?
+        confirmations << "#{parameters[:season]} шины"
+      end
+      if parameters[:priority].present?
+        confirmations << "приоритет: #{parameters[:priority]}"
+      end
+      
+      # Получаем рекомендации
+      recommendations = get_tire_recommendations(available_products)
+      
+      if recommendations.any?
+        confirmation_msg = confirmations.any? ? "✅ Принято: #{confirmations.join(', ')}.\n\n" : ""
+        {
+          message: "#{confirmation_msg}#{format_recommendations(recommendations)}",
+          filters_updated: @current_filters,
+          preferences_updated: @user_preferences,
+          recommendations: recommendations,
+          action: 'show_recommendations_with_options'
+        }
+      else
+        confirmation_msg = confirmations.any? ? "✅ Принято: #{confirmations.join(', ')}.\n\n" : ""
+        {
+          message: "#{confirmation_msg}😔 #{localized_message('no_results')}",
+          filters_updated: @current_filters,
+          preferences_updated: @user_preferences,
+          action: 'no_results'
+        }
+      end
     else
       # Иначе подтверждаем принятые параметры
       confirmations = []
@@ -264,7 +305,7 @@ class TireChatService
         message: message,
         filters_updated: @current_filters,
         preferences_updated: @user_preferences,
-        next_step: 'recommendation_request'
+        next_step: determine_next_step
       }
     end
   end
@@ -599,17 +640,22 @@ class TireChatService
 
   # Парсинг размера шин из текста
   def parse_tire_size(size_text)
-    # Паттерны: "205/55R16", "205 55 16", "205/55/16"
-    matches = size_text.match(/(\d{3})[\/\s]*(\d{2})[\/\s]*[rR]?(\d{2})/)
+    Rails.logger.info "🔍 Парсинг размера: '#{size_text}'"
+    
+    # Паттерны: "205/55R16", "205 55 16", "205/55/16", включая 2-значные ширины
+    matches = size_text.match(/(\d{2,3})[\/\s]*(\d{2})[\/\s]*[rR]?(\d{1,2})/)
     
     if matches
-      {
+      result = {
         width: matches[1].to_i,
         height: matches[2].to_i,
         diameter: matches[3].to_i,
         full_size: "#{matches[1]}/#{matches[2]}R#{matches[3]}"
       }
+      Rails.logger.info "✅ Размер распознан: #{result}"
+      result
     else
+      Rails.logger.warn "❌ Не удалось распознать размер: '#{size_text}'"
       nil
     end
   end

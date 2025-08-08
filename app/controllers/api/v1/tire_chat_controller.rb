@@ -15,7 +15,8 @@ module Api
           
           response_data = chat_service.process_message(
             params[:message],
-            current_available_products
+            current_available_products,
+            is_quick_question: params[:is_quick_question]
           )
           
           # Сохраняем обновленное состояние в сессии
