@@ -86,17 +86,46 @@ class Api::V1::CountriesController < Api::V1::ApiController
 
   # DELETE /api/v1/countries/:id
   def destroy
+    puts "🔍 COUNTRIES DELETE DEBUG:"
+    puts "  Country ID: #{@country.id}, Name: #{@country.name}"
+    puts "  Tire brands count: #{@country.tire_brands.count}"
+    puts "  Supplier tire products count: #{@country.supplier_tire_products.count}"
+    
+    # Проверяем все связанные записи
     if @country.tire_brands.exists?
+      puts "  ❌ Блокировка: есть связанные бренды шин"
       render json: { 
         error: 'Невозможно удалить страну, у которой есть связанные бренды шин' 
       }, status: :unprocessable_entity
       return
     end
 
-    @country.destroy
-    render json: { 
-      message: 'Страна успешно удалена' 
-    }
+    if @country.supplier_tire_products.exists?
+      puts "  ❌ Блокировка: есть связанные товары поставщиков"
+      render json: { 
+        error: 'Невозможно удалить страну, у которой есть связанные товары поставщиков' 
+      }, status: :unprocessable_entity
+      return
+    end
+
+    begin
+      @country.destroy!
+      puts "  ✅ Страна успешно удалена"
+      render json: { 
+        message: 'Страна успешно удалена' 
+      }
+    rescue ActiveRecord::DeleteRestrictionError => e
+      puts "  ❌ Ошибка удаления: #{e.message}"
+      render json: { 
+        error: 'Невозможно удалить страну из-за связанных данных' 
+      }, status: :unprocessable_entity
+    rescue => e
+      puts "  ❌ Общая ошибка: #{e.message}"
+      render json: { 
+        error: 'Произошла ошибка при удалении страны',
+        details: e.message 
+      }, status: :internal_server_error
+    end
   end
 
   # PATCH /api/v1/countries/:id/toggle_status
