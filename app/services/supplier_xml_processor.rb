@@ -38,6 +38,9 @@ class SupplierXmlProcessor
       # Обновление статистики
       finalize_processing(version)
       
+      # Автоматическая нормализация новых товаров
+      normalization_stats = run_auto_normalization
+      
       # Обновление времени синхронизации поставщика
       supplier.update!(last_sync_at: Time.current)
       
@@ -45,7 +48,8 @@ class SupplierXmlProcessor
         success: true,
         version: version,
         statistics: @statistics,
-        message: "Обработано #{@statistics[:processed_items]} из #{@statistics[:total_items]} товаров"
+        normalization: normalization_stats,
+        message: "Обработано #{@statistics[:processed_items]} из #{@statistics[:total_items]} товаров. Нормализация: #{normalization_stats[:summary]}"
       }
       
     rescue StandardError => e
@@ -297,5 +301,126 @@ class SupplierXmlProcessor
     
     Rails.logger.info "✅ Обработка завершена за #{processing_time}мс"
     Rails.logger.info "📊 Статистика: обработано #{@statistics[:processed_items]} (обновлено #{@statistics[:updated_items]}, создано #{@statistics[:created_items]}), ошибок #{@statistics[:error_items]}"
+  end
+
+  # Автоматическая нормализация товаров после загрузки прайса
+  def run_auto_normalization
+    Rails.logger.info "🔄 Запуск автоматической нормализации товаров поставщика #{supplier.name}..."
+    normalization_start = Time.current
+    
+    begin
+      # Получаем товары поставщика для нормализации
+      products_to_normalize = supplier.supplier_tire_products
+                                     .where(tire_brand_id: nil)
+                                     .or(supplier.supplier_tire_products.where(country_id: nil))
+                                     .or(supplier.supplier_tire_products.where(optimality_score: nil))
+      
+      total_for_normalization = products_to_normalize.count
+      
+      if total_for_normalization.zero?
+        Rails.logger.info "✅ Все товары поставщика уже нормализованы"
+        return {
+          total_products: supplier.supplier_tire_products.count,
+          processed: 0,
+          normalized_brands: 0,
+          normalized_countries: 0,
+          normalized_models: 0,
+          processing_time_ms: 0,
+          summary: "все товары уже нормализованы"
+        }
+      end
+      
+      Rails.logger.info "📦 Найдено #{total_for_normalization} товаров для нормализации"
+      
+      # Инициализируем сервис нормализации
+      normalization_service = TireNormalizationService.new(batch_size: 100)
+      
+      # Статистика нормализации
+      norm_stats = {
+        processed: 0,
+        normalized_brands: 0,
+        normalized_countries: 0,
+        normalized_models: 0,
+        failed: 0
+      }
+      
+      # Обрабатываем товары пакетами
+      products_to_normalize.find_in_batches(batch_size: 100) do |batch|
+        batch.each do |product|
+          begin
+            # Сохраняем исходное состояние для подсчета изменений
+            had_brand = product.tire_brand_id.present?
+            had_country = product.country_id.present?
+            had_model = product.tire_model_id.present?
+            
+            # Запускаем нормализацию продукта
+            normalization_service.normalize_product(product)
+            
+            # Подсчитываем что было нормализовано
+            norm_stats[:normalized_brands] += 1 if !had_brand && product.reload.tire_brand_id.present?
+            norm_stats[:normalized_countries] += 1 if !had_country && product.country_id.present?
+            norm_stats[:normalized_models] += 1 if !had_model && product.tire_model_id.present?
+            
+            norm_stats[:processed] += 1
+            
+            # Логируем прогресс каждые 50 товаров
+            if norm_stats[:processed] % 50 == 0
+              Rails.logger.info "📈 Нормализовано: #{norm_stats[:processed]}/#{total_for_normalization}"
+            end
+            
+          rescue StandardError => e
+            norm_stats[:failed] += 1
+            Rails.logger.warn "⚠️ Ошибка нормализации товара ID=#{product.id}: #{e.message}"
+          end
+        end
+      end
+      
+      processing_time = ((Time.current - normalization_start) * 1000).round(2)
+      
+      # Формируем краткое резюме
+      summary_parts = []
+      summary_parts << "#{norm_stats[:normalized_brands]} брендов" if norm_stats[:normalized_brands] > 0
+      summary_parts << "#{norm_stats[:normalized_countries]} стран" if norm_stats[:normalized_countries] > 0  
+      summary_parts << "#{norm_stats[:normalized_models]} моделей" if norm_stats[:normalized_models] > 0
+      
+      summary = if summary_parts.any?
+                  "нормализовано #{summary_parts.join(', ')}"
+                else
+                  "новых связей не найдено"
+                end
+      
+      # Итоговая статистика
+      final_stats = {
+        total_products: supplier.supplier_tire_products.count,
+        processed: norm_stats[:processed],
+        normalized_brands: norm_stats[:normalized_brands],
+        normalized_countries: norm_stats[:normalized_countries], 
+        normalized_models: norm_stats[:normalized_models],
+        failed: norm_stats[:failed],
+        processing_time_ms: processing_time,
+        summary: summary
+      }
+      
+      Rails.logger.info "✅ Нормализация завершена за #{processing_time}мс"
+      Rails.logger.info "📊 Результат: #{summary} (ошибок: #{norm_stats[:failed]})"
+      
+      return final_stats
+      
+    rescue StandardError => e
+      processing_time = ((Time.current - normalization_start) * 1000).round(2)
+      Rails.logger.error "❌ Ошибка автоматической нормализации: #{e.message}"
+      
+      return {
+        total_products: supplier.supplier_tire_products.count,
+        processed: 0,
+        normalized_brands: 0,
+        normalized_countries: 0,
+        normalized_models: 0,
+        failed: 1,
+        processing_time_ms: processing_time,
+        summary: "ошибка нормализации: #{e.message}",
+        error: e.message
+      }
+    end
   end
 end

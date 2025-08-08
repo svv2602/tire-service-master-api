@@ -115,6 +115,7 @@ module Api
               success: true,
               message: result[:message],
               statistics: result[:statistics],
+              normalization: result[:normalization],
               version: result[:version].version
             }
           else
@@ -170,6 +171,7 @@ module Api
               success: true,
               message: result[:message],
               statistics: result[:statistics],
+              normalization: result[:normalization],
               version: result[:version].version
             }
           else

@@ -25,7 +25,10 @@ priority_seeds = [
   'telegram_templates.rb',   # Создаем Telegram шаблоны уведомлений
   'push_templates.rb',       # Создаем Push шаблоны уведомлений
   'articles_multilang.rb',   # Создаем многоязычные статьи
-  'page_content.rb'          # Создаем контент страниц
+  'page_content.rb',         # Создаем контент страниц
+  # Справочники для нормализации шин (должны быть в конце)
+  '01_countries_tire_normalization.rb', # Создаем справочник стран производства шин
+  '02_tire_brands_normalization.rb'     # Создаем справочник брендов шин
 ]
 
 # Исключаемые файлы (устаревшие или временные)

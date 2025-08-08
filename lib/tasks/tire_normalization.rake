@@ -1,213 +1,280 @@
 # frozen_string_literal: true
 
 namespace :tire_normalization do
-  desc "Нормализация всех товаров поставщиков"
+  desc "Запуск полной нормализации данных шин"
   task normalize_all: :environment do
-    puts "🚀 Начинается нормализация всех товаров..."
+    puts "🚀 ЗАПУСК НОРМАЛИЗАЦИИ ДАННЫХ ШИН"
+    puts "=" * 50
     
-    start_time = Time.current
-    TireDataNormalizer.normalize_all_products
-    end_time = Time.current
+    # Проверяем наличие справочников
+    check_references_availability
     
-    duration = (end_time - start_time).round(2)
-    puts "⏱️  Время выполнения: #{duration} секунд"
+    # Запускаем нормализацию
+    service = TireNormalizationService.new(batch_size: 200)
+    stats = service.normalize_all_products!
     
-    # Статистика
-    total_products = SupplierTireProduct.count
-    normalized_products = SupplierTireProduct.normalized.count
-    normalization_rate = (normalized_products.to_f / total_products * 100).round(2)
-    
-    puts "📊 Статистика нормализации:"
-    puts "  - Всего товаров: #{total_products}"
-    puts "  - Нормализовано: #{normalized_products}"
-    puts "  - Процент нормализации: #{normalization_rate}%"
+    puts "\n🎯 ИТОГОВЫЕ РЕЗУЛЬТАТЫ:"
+    puts "  Обработано: #{stats[:processed]} товаров"
+    puts "  Нормализовано брендов: #{stats[:normalized_brands]}"
+    puts "  Нормализовано моделей: #{stats[:normalized_models]}"
+    puts "  Нормализовано стран: #{stats[:normalized_countries]}"
+    puts "  Ошибок: #{stats[:failed]}"
   end
 
-  desc "Расчет рейтингов оптимальности для всех товаров"
-  task calculate_optimality: :environment do
-    puts "🧮 Начинается расчет рейтингов оптимальности..."
+  desc "Нормализация только не обработанных товаров"
+  task normalize_new: :environment do
+    puts "🔄 НОРМАЛИЗАЦИЯ ТОЛЬКО НОВЫХ ТОВАРОВ"
+    puts "=" * 50
     
-    start_time = Time.current
-    updated_count = TireOptimalityCalculator.update_optimality_scores
-    end_time = Time.current
+    # Товары без нормализованных данных
+    scope = SupplierTireProduct.where(
+      tire_brand_id: nil,
+      tire_model_id: nil,
+      country_id: nil
+    )
     
-    duration = (end_time - start_time).round(2)
-    puts "⏱️  Время выполнения: #{duration} секунд"
-    puts "✅ Обновлено рейтингов: #{updated_count}"
-  end
-
-  desc "Расчет рейтингов оптимальности с приоритетом"
-  task :calculate_optimality_priority, [:priority_type] => :environment do |t, args|
-    priority_type = args[:priority_type] || 'balanced'
-    valid_types = ['price_quality', 'prestige', 'functionality', 'balanced']
+    count = scope.count
+    puts "📊 Товаров для нормализации: #{count}"
     
-    unless valid_types.include?(priority_type)
-      puts "❌ Неверный тип приоритета. Доступные: #{valid_types.join(', ')}"
-      exit 1
+    if count.zero?
+      puts "✅ Все товары уже нормализованы!"
+      next
     end
     
-    puts "🧮 Расчет рейтингов с приоритетом: #{priority_type}"
+    service = TireNormalizationService.new(batch_size: 100)
+    scope.find_in_batches(batch_size: 100) do |batch|
+      batch.each { |product| service.normalize_product(product) }
+    end
     
-    start_time = Time.current
-    updated_count = TireOptimalityCalculator.update_optimality_scores(
-      SupplierTireProduct.normalized,
-      priority_type: priority_type
-    )
-    end_time = Time.current
+    puts "✅ Нормализация новых товаров завершена!"
+  end
+
+  desc "Создание справочников из существующих данных"
+  task create_references: :environment do
+    puts "📚 СОЗДАНИЕ СПРАВОЧНИКОВ ИЗ ДАННЫХ"
+    puts "=" * 50
     
-    duration = (end_time - start_time).round(2)
-    puts "⏱️  Время выполнения: #{duration} секунд"
-    puts "✅ Обновлено рейтингов: #{updated_count}"
+    # Сначала загружаем существующие сиды
+    load_seeds_if_needed
+    
+    # Затем создаем недостающие записи
+    create_missing_brands
+    create_missing_models
+    
+    puts "✅ Создание справочников завершено!"
+  end
+
+  desc "Обновление рейтингов оптимальности"
+  task update_optimality: :environment do
+    puts "🎯 ОБНОВЛЕНИЕ РЕЙТИНГОВ ОПТИМАЛЬНОСТИ"
+    puts "=" * 50
+    
+    service = TireNormalizationService.new
+    updated = 0
+    
+    SupplierTireProduct.where(optimality_score: nil).find_each do |product|
+      score = service.send(:calculate_optimality_score, product)
+      product.update_column(:optimality_score, score)
+      updated += 1
+      
+      if updated % 100 == 0
+        puts "  📈 Обновлено: #{updated} товаров"
+      end
+    end
+    
+    puts "✅ Обновлено рейтингов: #{updated}"
   end
 
   desc "Статистика нормализации"
   task stats: :environment do
-    total_products = SupplierTireProduct.count
-    normalized_products = SupplierTireProduct.normalized.count
-    not_normalized = SupplierTireProduct.not_normalized.count
-    with_optimality = SupplierTireProduct.where.not(optimality_score: nil).count
-    
-    puts "📊 СТАТИСТИКА НОРМАЛИЗАЦИИ ШИН"
+    puts "📊 СТАТИСТИКА НОРМАЛИЗАЦИИ"
     puts "=" * 50
-    puts "Всего товаров: #{total_products}"
-    puts "Нормализовано: #{normalized_products} (#{(normalized_products.to_f / total_products * 100).round(2)}%)"
-    puts "Не нормализовано: #{not_normalized} (#{(not_normalized.to_f / total_products * 100).round(2)}%)"
-    puts "С рейтингом оптимальности: #{with_optimality} (#{(with_optimality.to_f / total_products * 100).round(2)}%)"
-    puts ""
     
-    # Статистика по брендам
-    puts "📈 ТОП-10 БРЕНДОВ:"
-    TireBrand.joins(:supplier_tire_products)
-             .group('tire_brands.name')
-             .order('count_all DESC')
-             .limit(10)
-             .count
-             .each_with_index do |(brand, count), index|
-               puts "  #{index + 1}. #{brand}: #{count} товаров"
-             end
-    puts ""
+    total = SupplierTireProduct.count
+    with_brand = SupplierTireProduct.where.not(tire_brand_id: nil).count
+    with_model = SupplierTireProduct.where.not(tire_model_id: nil).count
+    with_country = SupplierTireProduct.where.not(country_id: nil).count
+    with_score = SupplierTireProduct.where.not(optimality_score: nil).count
     
-    # Статистика по странам
-    puts "🌍 ТОП-5 СТРАН ПРОИЗВОДСТВА:"
-    Country.joins(:supplier_tire_products)
-           .group('countries.name')
-           .order('count_all DESC')
-           .limit(5)
-           .count
-           .each_with_index do |(country, count), index|
-             puts "  #{index + 1}. #{country}: #{count} товаров"
-           end
+    puts "📦 Всего товаров: #{total}"
     puts ""
+    puts "🔗 НОРМАЛИЗАЦИЯ:"
+    puts "  🏷️ С брендом: #{with_brand}/#{total} (#{percentage(with_brand, total)}%)"
+    puts "  🚗 С моделью: #{with_model}/#{total} (#{percentage(with_model, total)}%)"
+    puts "  🌍 Со страной: #{with_country}/#{total} (#{percentage(with_country, total)}%)"
+    puts "  🎯 С рейтингом: #{with_score}/#{total} (#{percentage(with_score, total)}%)"
+    puts ""
+    puts "📚 СПРАВОЧНИКИ:"
+    puts "  🌍 Стран: #{Country.count}"
+    puts "  🏷️ Брендов: #{TireBrand.count}"
+    puts "  🚗 Моделей: #{TireModel.count}"
     
-    # Статистика рейтингов
-    if with_optimality > 0
-      avg_rating = SupplierTireProduct.where.not(optimality_score: nil).average(:optimality_score).round(2)
-      max_rating = SupplierTireProduct.maximum(:optimality_score)
-      min_rating = SupplierTireProduct.minimum(:optimality_score)
+    # Топ необработанных брендов
+    puts ""
+    puts "🔍 ТОП-10 НЕОБРАБОТАННЫХ БРЕНДОВ:"
+    unprocessed = SupplierTireProduct
+      .where(tire_brand_id: nil)
+      .group(:original_brand)
+      .count
+      .sort_by { |_, count| -count }
+      .first(10)
+    
+    unprocessed.each_with_index do |(brand, count), index|
+      puts "  #{index + 1}. #{brand} (#{count} товаров)"
+    end
+  end
+
+  private
+
+  def check_references_availability
+    countries_count = Country.count
+    brands_count = TireBrand.count
+    
+    puts "📚 СПРАВОЧНИКИ:"
+    puts "  🌍 Стран: #{countries_count}"
+    puts "  🏷️ Брендов: #{brands_count}"
+    
+    if countries_count.zero? || brands_count.zero?
+      puts "⚠️ ПРЕДУПРЕЖДЕНИЕ: Справочники пусты!"
+      puts "💡 Запустите: rails db:seed:replant"
+      return false
+    end
+    
+    puts "✅ Справочники готовы к использованию"
+    true
+  end
+
+  def load_seeds_if_needed
+    if Country.count.zero? || TireBrand.count.zero?
+      puts "📥 Загрузка базовых справочников..."
+      Rails.application.load_seed
+    end
+  end
+
+  def create_missing_brands
+    puts "🏷️ Создание недостающих брендов..."
+    
+    # Получаем все бренды из товаров, которых нет в справочнике
+    existing_brands = TireBrand.pluck(:normalized_name)
+    
+    missing_brands = SupplierTireProduct
+      .distinct
+      .pluck(:original_brand)
+      .compact
+      .reject { |brand| 
+        normalized = TireBrand.send(:normalize_string, brand)
+        existing_brands.include?(normalized)
+      }
+    
+    created = 0
+    missing_brands.each do |brand_name|
+      next if brand_name.blank?
       
-      puts "⭐ РЕЙТИНГИ ОПТИМАЛЬНОСТИ:"
-      puts "  Средний рейтинг: #{avg_rating}"
-      puts "  Максимальный рейтинг: #{max_rating}"
-      puts "  Минимальный рейтинг: #{min_rating}"
+      # Определяем страну и рейтинг по умолчанию
+      country = guess_brand_country(brand_name)
+      rating = guess_brand_rating(brand_name)
       
-      # Распределение по рейтингам
-      puts ""
-      puts "📊 РАСПРЕДЕЛЕНИЕ ПО РЕЙТИНГАМ:"
-      [
-        [9..10, "Отличные (9-10)"],
-        [7..8.99, "Хорошие (7-8.99)"],
-        [5..6.99, "Средние (5-6.99)"],
-        [0..4.99, "Ниже среднего (0-4.99)"]
-      ].each do |range, label|
-        count = SupplierTireProduct.where(optimality_score: range).count
-        percentage = (count.to_f / with_optimality * 100).round(2)
-        puts "  #{label}: #{count} товаров (#{percentage}%)"
+      tire_brand = TireBrand.create!(
+        name: brand_name,
+        country: country,
+        rating_score: rating,
+        is_premium: rating >= 8,
+        aliases: [brand_name]
+      )
+      
+      created += 1
+      puts "  ✅ Создан бренд: #{tire_brand.name} (рейтинг: #{rating})"
+    end
+    
+    puts "📊 Создано новых брендов: #{created}"
+  end
+
+  def create_missing_models
+    puts "🚗 Создание недостающих моделей..."
+    
+    created = 0
+    TireBrand.includes(:tire_models).each do |brand|
+      existing_models = brand.tire_models.pluck(:normalized_name)
+      
+      missing_models = SupplierTireProduct
+        .joins(:tire_brand)
+        .where(tire_brand: brand)
+        .distinct
+        .pluck(:original_model)
+        .compact
+        .reject { |model|
+          normalized = TireModel.send(:normalize_string, model)
+          existing_models.include?(normalized)
+        }
+      
+      missing_models.each do |model_name|
+        next if model_name.blank?
+        
+        # Определяем сезонность модели
+        season = guess_model_season(model_name)
+        
+        tire_model = brand.tire_models.create!(
+          name: model_name,
+          season_type: season,
+          rating_score: 5, # Средний рейтинг по умолчанию
+          aliases: [model_name]
+        )
+        
+        created += 1
+        puts "  ✅ Создана модель: #{brand.name} #{tire_model.name} (#{season})"
       end
     end
+    
+    puts "📊 Создано новых моделей: #{created}"
   end
 
-  desc "Очистка данных нормализации"
-  task reset: :environment do
-    print "⚠️  Вы уверены, что хотите очистить все данные нормализации? [y/N]: "
-    response = STDIN.gets.chomp.downcase
-    
-    unless response == 'y' || response == 'yes'
-      puts "❌ Операция отменена"
-      exit 0
+  def guess_brand_country(brand_name)
+    # Простая эвристика для определения страны бренда
+    case brand_name.downcase
+    when /michelin|kleber|cooper/ then Country.find_by(iso_code: 'FR')
+    when /continental|uniroyal/ then Country.find_by(iso_code: 'DE')
+    when /pirelli/ then Country.find_by(iso_code: 'IT')
+    when /goodyear|firestone|general/ then Country.find_by(iso_code: 'US')
+    when /nokian/ then Country.find_by(iso_code: 'FI')
+    when /hankook|nexen|kumho/ then Country.find_by(iso_code: 'KR')
+    when /bridgestone|toyo|yokohama|falken/ then Country.find_by(iso_code: 'JP')
+    else nil
     end
-    
-    puts "🧹 Очистка данных нормализации..."
-    
-    # Обнуляем связи с нормализованными данными
-    SupplierTireProduct.update_all(
-      tire_brand_id: nil,
-      tire_model_id: nil,
-      country_id: nil,
-      production_year: nil,
-      optimality_score: nil
-    )
-    
-    # Удаляем справочные данные
-    TireModel.delete_all
-    TireBrand.delete_all
-    Country.delete_all
-    
-    puts "✅ Данные нормализации очищены"
-    puts "💡 Запустите 'rails runner db/seeds/tire_normalization_seeds.rb' для восстановления базовых справочников"
   end
 
-  desc "Полная нормализация и расчет рейтингов"
-  task full_process: :environment do
-    puts "🚀 ПОЛНЫЙ ПРОЦЕСС НОРМАЛИЗАЦИИ И ОЦЕНКИ"
-    puts "=" * 50
+  def guess_brand_rating(brand_name)
+    # Простая эвристика для определения рейтинга
+    premium_brands = %w[michelin continental pirelli nokian bridgestone goodyear]
+    high_brands = %w[dunlop vredestein falken yokohama toyo cooper]
     
-    start_time = Time.current
+    normalized = brand_name.downcase
     
-    # Шаг 1: Нормализация
-    puts "1️⃣ Нормализация товаров..."
-    Rake::Task['tire_normalization:normalize_all'].invoke
-    
-    # Шаг 2: Расчет рейтингов
-    puts "\n2️⃣ Расчет рейтингов оптимальности..."
-    Rake::Task['tire_normalization:calculate_optimality'].invoke
-    
-    # Шаг 3: Статистика
-    puts "\n3️⃣ Итоговая статистика:"
-    Rake::Task['tire_normalization:stats'].invoke
-    
-    end_time = Time.current
-    total_duration = (end_time - start_time).round(2)
-    
-    puts "\n🎉 ПРОЦЕСС ЗАВЕРШЕН!"
-    puts "⏱️  Общее время выполнения: #{total_duration} секунд"
+    if premium_brands.any? { |premium| normalized.include?(premium) }
+      9
+    elsif high_brands.any? { |high| normalized.include?(high) }
+      7
+    else
+      5
+    end
   end
 
-  desc "Тестирование нормализации на небольшой выборке"
-  task test: :environment do
-    puts "🧪 Тестирование нормализации на 10 товарах..."
+  def guess_model_season(model_name)
+    winter_keywords = %w[winter ice snow hakka alpin x-ice blizzak snowproof krisalp wintrac]
+    summer_keywords = %w[sport pilot eagle asymmetric primacy energy pilot]
     
-    test_products = SupplierTireProduct.not_normalized.limit(10)
+    normalized = model_name.downcase
     
-    if test_products.empty?
-      puts "❌ Нет товаров для тестирования (все уже нормализованы)"
-      exit 0
+    if winter_keywords.any? { |keyword| normalized.include?(keyword) }
+      'winter'
+    elsif summer_keywords.any? { |keyword| normalized.include?(keyword) }
+      'summer'
+    else
+      'all_season'
     end
-    
-    test_products.each_with_index do |product, index|
-      puts "\n#{index + 1}. Товар ID #{product.id}:"
-      puts "   Оригинал: #{product.original_brand} #{product.original_model} (#{product.original_country})"
-      
-      # Нормализуем
-      TireDataNormalizer.normalize_product(product)
-      product.reload
-      
-      puts "   Нормализовано: #{product.tire_brand&.name || 'НЕ НАЙДЕН'} #{product.tire_model&.name || 'НЕ НАЙДЕНА'} (#{product.country&.name || 'НЕ НАЙДЕНА'})"
-      
-      # Рассчитываем рейтинг
-      score = product.calculate_optimality_score
-      puts "   Рейтинг оптимальности: #{score}"
-    end
-    
-    puts "\n✅ Тестирование завершено"
+  end
+
+  def percentage(part, total)
+    return 0 if total.zero?
+    (part.to_f / total * 100).round(1)
   end
 end

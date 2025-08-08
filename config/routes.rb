@@ -695,6 +695,14 @@ Rails.application.routes.draw do
         end
       end
       
+      # Нормализация данных шин
+      namespace :normalization do
+        get :stats
+        get :unprocessed
+        post :run_normalization
+        get :top_unprocessed
+      end
+      
           # Админские маршруты
     namespace :admin do
       # Управление данными поиска шин
