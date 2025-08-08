@@ -54,16 +54,34 @@ class Api::V1::CountriesController < Api::V1::ApiController
 
   # PATCH/PUT /api/v1/countries/:id
   def update
+    puts "🔍 COUNTRIES UPDATE DEBUG:"
+    puts "  Country ID: #{@country.id}"
+    puts "  Current country data: #{@country.attributes.inspect}"
+    puts "  Received params: #{params.inspect}"
+    puts "  Country update params: #{country_params.inspect}"
+    
+    old_values = @country.as_json
+    
     if @country.update(country_params)
+      puts "  ✅ Update successful"
       render json: { 
         data: format_country_detailed(@country),
         message: 'Страна успешно обновлена'
       }
     else
+      puts "  ❌ Update failed with errors: #{@country.errors.full_messages}"
+      puts "  ❌ Detailed errors: #{@country.errors.details}"
       render json: { 
         errors: @country.errors.full_messages 
       }, status: :unprocessable_entity
     end
+  rescue => e
+    puts "  ❌ General error: #{e.message}"
+    puts "  ❌ Backtrace: #{e.backtrace.first(5)}"
+    render json: { 
+      error: 'Произошла ошибка при обновлении страны',
+      details: e.message 
+    }, status: :internal_server_error
   end
 
   # DELETE /api/v1/countries/:id
@@ -103,7 +121,7 @@ class Api::V1::CountriesController < Api::V1::ApiController
 
   def country_params
     params.require(:country).permit(
-      :name, :iso_code, :is_active, :rating_score, :description,
+      :name, :iso_code, :is_active, :rating_score,
       aliases: []
     )
   end
@@ -129,7 +147,6 @@ class Api::V1::CountriesController < Api::V1::ApiController
 
   def format_country_detailed(country)
     format_country(country).merge(
-      description: country.description,
       aliases: country.aliases || [],
       normalized_name: country.normalized_name,
       tire_brands: country.tire_brands.active.limit(10).map do |brand|
