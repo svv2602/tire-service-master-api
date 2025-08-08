@@ -68,6 +68,10 @@ Rails.application.routes.draw do
       # Диагностика настроек системы
       get 'settings_diagnostics', to: 'settings_diagnostics#index'
       
+      # Поиск шин по автомобилю
+      post 'car_tire_search/search', to: 'car_tire_search#search'
+      post 'car_tire_search/resolve_brand', to: 'car_tire_search#resolve_brand'
+      
       # Система уведомлений
       resources :email_templates do
         member do
