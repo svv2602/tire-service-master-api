@@ -288,7 +288,7 @@ class Api::V1::TireOrdersController < ApplicationController
       supplier_tire_product: {
         id: product.id,
         name: product.name,
-        brand: product.brand,
+        brand: product.tire_brand&.name || product.original_brand,
         model: product.original_model,
         size: product.tire_size,
         season: product.season,
