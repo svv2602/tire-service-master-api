@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест API системы вознаграждений партнеров</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .success {
+            color: #28a745;
+            background: #d4edda;
+            padding: 10px;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            padding: 10px;
+            border: 1px solid #bee5eb;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .response {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .auth-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        input, select {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .credentials {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Тест API системы вознаграждений партнеров</h1>
+        
+        <!-- Авторизация -->
+        <div class="test-section">
+            <h3>🔐 Авторизация</h3>
+            <div class="credentials">
+                <div>
+                    <input type="email" id="email" placeholder="Email" value="partner@test.com">
+                    <input type="password" id="password" placeholder="Пароль" value="partner123">
+                </div>
+                <div>
+                    <button onclick="login()">Войти как партнер</button>
+                    <button onclick="loginAsAdmin()">Войти как админ</button>
+                </div>
+            </div>
+            <div id="authStatus" class="auth-info">
+                Не авторизован
+            </div>
+        </div>
+
+        <!-- Договоренности -->
+        <div class="test-section">
+            <h3>📋 Договоренности партнер-поставщик</h3>
+            <button onclick="getAgreements()">Получить договоренности</button>
+            <button onclick="getAvailableSuppliers()">Доступные поставщики</button>
+            <button onclick="createTestAgreement()">Создать тестовую договоренность</button>
+            <div id="agreementsResult" class="response"></div>
+        </div>
+
+        <!-- Правила вознаграждений -->
+        <div class="test-section">
+            <h3>⚙️ Правила вознаграждений</h3>
+            <button onclick="getRuleTypes()">Типы правил</button>
+            <button onclick="getRules()">Получить правила</button>
+            <button onclick="createTestRule()">Создать тестовое правило</button>
+            <button onclick="previewRule()">Предварительный расчет</button>
+            <div id="rulesResult" class="response"></div>
+        </div>
+
+        <!-- Вознаграждения -->
+        <div class="test-section">
+            <h3>💰 Вознаграждения</h3>
+            <button onclick="getRewards()">Получить вознаграждения</button>
+            <button onclick="getRewardsStats()">Статистика</button>
+            <button onclick="testRewardCalculation()">Тестовый расчет вознаграждения</button>
+            <div id="rewardsResult" class="response"></div>
+        </div>
+
+        <!-- Лог -->
+        <div class="test-section">
+            <h3>📝 Лог действий</h3>
+            <button onclick="clearLog()">Очистить лог</button>
+            <div id="log" class="response"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let currentUser = null;
+        const apiUrl = 'http://localhost:8000/api/v1';
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            logDiv.textContent += logEntry;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        function updateAuthStatus(user) {
+            const statusDiv = document.getElementById('authStatus');
+            if (user) {
+                statusDiv.innerHTML = `
+                    <strong>✅ Авторизован как:</strong> ${user.email}<br>
+                    <strong>Роль:</strong> ${user.role}<br>
+                    <strong>Токен:</strong> ${authToken ? authToken.substring(0, 20) + '...' : 'Нет'}
+                `;
+                statusDiv.className = 'success';
+            } else {
+                statusDiv.innerHTML = '❌ Не авторизован';
+                statusDiv.className = 'auth-info';
+            }
+        }
+
+        async function apiRequest(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            try {
+                log(`🔄 ${options.method || 'GET'} ${endpoint}`);
+                
+                const response = await fetch(`${apiUrl}${endpoint}`, {
+                    ...options,
+                    headers
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ ${response.status}: ${JSON.stringify(data, null, 2)}`);
+                    return { success: true, data, status: response.status };
+                } else {
+                    log(`❌ ${response.status}: ${JSON.stringify(data, null, 2)}`, 'error');
+                    return { success: false, data, status: response.status };
+                }
+            } catch (error) {
+                log(`💥 Ошибка запроса: ${error.message}`, 'error');
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            const result = await apiRequest('/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password })
+            });
+
+            if (result.success) {
+                authToken = result.data.token;
+                currentUser = result.data.user;
+                updateAuthStatus(currentUser);
+                log('🎉 Успешная авторизация!');
+            } else {
+                updateAuthStatus(null);
+                log('❌ Ошибка авторизации', 'error');
+            }
+        }
+
+        async function loginAsAdmin() {
+            document.getElementById('email').value = 'admin@test.com';
+            document.getElementById('password').value = 'admin123';
+            await login();
+        }
+
+        // Договоренности
+        async function getAgreements() {
+            const result = await apiRequest('/partner_supplier_agreements');
+            document.getElementById('agreementsResult').textContent = JSON.stringify(result.data, null, 2);
+        }
+
+        async function getAvailableSuppliers() {
+            const result = await apiRequest('/partner_supplier_agreements/available_suppliers');
+            document.getElementById('agreementsResult').textContent = JSON.stringify(result.data, null, 2);
+        }
+
+        async function createTestAgreement() {
+            // Сначала получаем доступных поставщиков
+            const suppliers = await apiRequest('/partner_supplier_agreements/available_suppliers');
+            
+            if (suppliers.success && suppliers.data.data && suppliers.data.data.length > 0) {
+                const supplierId = suppliers.data.data[0].id;
+                
+                const agreementData = {
+                    partner_supplier_agreement: {
+                        supplier_id: supplierId,
+                        start_date: new Date().toISOString().split('T')[0],
+                        commission_type: 'custom',
+                        active: true,
+                        description: 'Тестовая договоренность через API'
+                    }
+                };
+
+                const result = await apiRequest('/partner_supplier_agreements', {
+                    method: 'POST',
+                    body: JSON.stringify(agreementData)
+                });
+
+                document.getElementById('agreementsResult').textContent = JSON.stringify(result.data, null, 2);
+            } else {
+                log('❌ Нет доступных поставщиков для создания договоренности', 'error');
+            }
+        }
+
+        // Правила
+        async function getRuleTypes() {
+            const result = await apiRequest('/reward_rules/rule_types');
+            document.getElementById('rulesResult').textContent = JSON.stringify(result.data, null, 2);
+        }
+
+        async function getRules() {
+            // Сначала получаем договоренности, потом правила первой договоренности
+            const agreements = await apiRequest('/partner_supplier_agreements');
+            
+            if (agreements.success && agreements.data.data && agreements.data.data.length > 0) {
+                const agreementId = agreements.data.data[0].id;
+                const result = await apiRequest(`/partner_supplier_agreements/${agreementId}/reward_rules`);
+                document.getElementById('rulesResult').textContent = JSON.stringify(result.data, null, 2);
+            } else {
+                log('❌ Нет договоренностей для получения правил', 'error');
+            }
+        }
+
+        async function createTestRule() {
+            const agreements = await apiRequest('/partner_supplier_agreements');
+            
+            if (agreements.success && agreements.data.data && agreements.data.data.length > 0) {
+                const agreementId = agreements.data.data[0].id;
+                
+                const ruleData = {
+                    reward_rule: {
+                        rule_type: 'percentage',
+                        amount: 7.5,
+                        priority: 10,
+                        active: true,
+                        description: 'Тестовое правило через API',
+                        conditions: JSON.stringify({
+                            min_order_amount: 2000,
+                            description: 'Тестовые условия'
+                        })
+                    }
+                };
+
+                const result = await apiRequest(`/partner_supplier_agreements/${agreementId}/reward_rules`, {
+                    method: 'POST',
+                    body: JSON.stringify(ruleData)
+                });
+
+                document.getElementById('rulesResult').textContent = JSON.stringify(result.data, null, 2);
+            } else {
+                log('❌ Нет договоренностей для создания правила', 'error');
+            }
+        }
+
+        async function previewRule() {
+            // Получаем первое правило и тестируем его
+            const agreements = await apiRequest('/partner_supplier_agreements');
+            
+            if (agreements.success && agreements.data.data && agreements.data.data.length > 0) {
+                const agreementId = agreements.data.data[0].id;
+                const rules = await apiRequest(`/partner_supplier_agreements/${agreementId}/reward_rules`);
+                
+                if (rules.success && rules.data.data && rules.data.data.length > 0) {
+                    const ruleId = rules.data.data[0].id;
+                    
+                    const testData = new URLSearchParams({
+                        total_amount: '5000',
+                        items_count: '4',
+                        brands: 'Michelin,Continental',
+                        diameters: '17,18'
+                    });
+
+                    const result = await apiRequest(`/reward_rules/${ruleId}/preview?${testData}`, {
+                        method: 'POST'
+                    });
+
+                    document.getElementById('rulesResult').textContent = JSON.stringify(result.data, null, 2);
+                } else {
+                    log('❌ Нет правил для тестирования', 'error');
+                }
+            }
+        }
+
+        // Вознаграждения
+        async function getRewards() {
+            const result = await apiRequest('/partner_rewards');
+            document.getElementById('rewardsResult').textContent = JSON.stringify(result.data, null, 2);
+        }
+
+        async function getRewardsStats() {
+            const result = await apiRequest('/partner_rewards/statistics');
+            document.getElementById('rewardsResult').textContent = JSON.stringify(result.data, null, 2);
+        }
+
+        async function testRewardCalculation() {
+            // Имитируем создание заказа, который должен вызвать расчет вознаграждения
+            log('ℹ️ Для тестирования расчета вознаграждения нужно создать заказ через систему TireOrder или Order', 'info');
+            log('ℹ️ Вознаграждения рассчитываются автоматически при изменении статуса заказа', 'info');
+            
+            // Показываем текущие вознаграждения
+            await getRewards();
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🚀 Тест API системы вознаграждений партнеров запущен');
+            log('📝 Для тестирования сначала авторизуйтесь как партнер или администратор');
+        });
+    </script>
+</body>
+</html>

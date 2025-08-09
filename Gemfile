@@ -71,6 +71,9 @@ gem "rswag-api"
 gem "rswag-ui"
 gem "rswag-specs"
 
+# JSON API Serializer
+gem "jsonapi-serializer"
+
 # Testing
 group :development, :test do
   # Debugging

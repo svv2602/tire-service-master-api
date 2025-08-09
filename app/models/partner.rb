@@ -14,6 +14,11 @@ class Partner < ApplicationRecord
   has_many :operators, dependent: :destroy
   has_many :notifications, as: :recipient, dependent: :destroy
   
+  # Система вознаграждений
+  has_many :partner_supplier_agreements, dependent: :destroy
+  has_many :suppliers, through: :partner_supplier_agreements
+  has_many :partner_rewards, dependent: :destroy
+  
   # Вложенные атрибуты
   accepts_nested_attributes_for :user
   

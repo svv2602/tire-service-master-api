@@ -372,6 +372,50 @@ Rails.application.routes.draw do
         end
       end
       
+              # Система вознаграждений партнеров
+        resources :partner_supplier_agreements, except: [:new, :edit] do
+          resources :reward_rules, except: [:new, :edit], shallow: true
+          collection do
+            get 'available_suppliers'
+          end
+        end
+        
+            # Управление договоренностями (админская часть)
+    resources :agreements, except: [:new, :edit] do
+      collection do
+        get 'partners'
+        get 'suppliers'
+      end
+      
+      # Исключения в договоренностях
+      resources :exceptions, controller: 'partner_supplier_agreement_exceptions', except: [:new, :edit] do
+        collection do
+          get 'tire_brands'
+          get 'tire_diameters'
+        end
+      end
+    end
+      
+      resources :reward_rules, only: [:show, :update, :destroy] do
+        member do
+          post 'preview'
+        end
+        collection do
+          get 'rule_types'
+        end
+      end
+      
+      resources :partner_rewards, only: [:index, :show, :update] do
+        member do
+          post 'mark_as_paid'
+          post 'cancel'
+        end
+        collection do
+          get 'statistics'
+          get 'export'
+        end
+      end
+      
       # Менеджеры
       resources :managers, only: [] do
         resources :service_points, only: [:index]

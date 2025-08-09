@@ -15,6 +15,9 @@ class TireOrder < ApplicationRecord
   belongs_to :supplier
   has_many :tire_order_items, dependent: :destroy
   has_many :supplier_tire_products, through: :tire_order_items
+  
+  # Система вознаграждений
+  has_many :partner_rewards, dependent: :destroy
 
   # Валидации
   validates :status, presence: true, inclusion: { in: STATUSES.keys }
@@ -38,6 +41,7 @@ class TireOrder < ApplicationRecord
   # Коллбэки
   before_save :calculate_total_amount
   after_update :clear_empty_draft_orders
+  after_update :calculate_partner_reward, if: :should_calculate_reward?
 
   # Методы экземпляра
   def status_display
@@ -125,5 +129,25 @@ class TireOrder < ApplicationRecord
     if draft? && tire_order_items.empty? && updated_at < 30.days.ago
       destroy
     end
+  end
+  
+  # Определяет, нужно ли рассчитывать вознаграждение
+  def should_calculate_reward?
+    status_changed? && %w[submitted confirmed completed].include?(status)
+  end
+  
+  # Рассчитывает вознаграждение партнера
+  def calculate_partner_reward
+    return unless user&.partner?
+    
+    service = RewardCalculationService.new(self)
+    
+    if service.reward_exists?
+      service.recalculate_existing_reward
+    else
+      service.calculate_and_create_reward
+    end
+  rescue => e
+    Rails.logger.error "Ошибка расчета вознаграждения для TireOrder ##{id}: #{e.message}"
   end
 end

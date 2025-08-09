@@ -4,6 +4,12 @@ class Supplier < ApplicationRecord
   has_many :supplier_price_versions, dependent: :destroy
   has_many :tire_orders, dependent: :destroy
   
+  # Система вознаграждений
+  has_many :partner_supplier_agreements, dependent: :destroy
+  has_many :partners, through: :partner_supplier_agreements
+  has_many :partner_rewards, dependent: :destroy
+  has_many :orders, dependent: :nullify
+  
   # Валидации
   validates :firm_id, presence: true, uniqueness: true, length: { maximum: 50 }
   validates :name, presence: true, length: { maximum: 255 }

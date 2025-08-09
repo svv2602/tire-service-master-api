@@ -2,7 +2,11 @@
 class Order < ApplicationRecord
   # Связи
   belongs_to :service_point
+  belongs_to :supplier, optional: true
   has_many :order_items, dependent: :destroy
+  
+  # Система вознаграждений
+  has_many :partner_rewards, dependent: :destroy
   
   # Валидации
   validates :status, presence: true, inclusion: { in: %w[received processing ready delivered canceled] }
@@ -32,6 +36,9 @@ class Order < ApplicationRecord
   scope :by_customer_phone, ->(phone) { where(customer_phone: phone) }
   scope :search_by_ttn, ->(ttn) { where("ttn ILIKE ?", "%#{ttn}%") }
   scope :search_by_customer, ->(query) { where("customer_name ILIKE ?", "%#{query}%") }
+  
+  # Коллбэки для автоматического расчета вознаграждений
+  after_update :calculate_partner_reward, if: :should_calculate_reward?
   
   # Методы для работы со статусами
   def can_mark_as_ready?
@@ -68,5 +75,26 @@ class Order < ApplicationRecord
     
     self.total_quantity = order_items.sum(:quantity)
     self.total_amount = order_items.sum { |item| item.quantity * item.price }
+  end
+  
+  # Определяет, нужно ли рассчитывать вознаграждение
+  def should_calculate_reward?
+    status_changed? && %w[received processing ready delivered].include?(status) && supplier.present?
+  end
+  
+  # Рассчитывает вознаграждение партнера
+  def calculate_partner_reward
+    return unless service_point&.partner&.is_active?
+    return unless supplier.present?
+    
+    service = RewardCalculationService.new(self)
+    
+    if service.reward_exists?
+      service.recalculate_existing_reward
+    else
+      service.calculate_and_create_reward
+    end
+  rescue => e
+    Rails.logger.error "Ошибка расчета вознаграждения для Order ##{ttn}: #{e.message}"
   end
 end 

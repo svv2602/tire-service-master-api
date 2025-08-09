@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_09_174033) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -580,6 +580,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
     t.json "metadata", comment: "Дополнительные данные в JSON формате"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "supplier_id"
     t.index "to_tsvector('russian'::regconfig, (customer_name)::text)", name: "idx_orders_customer_search", using: :gin
     t.index ["bas_id"], name: "index_orders_on_bas_id"
     t.index ["customer_phone"], name: "index_orders_on_customer_phone"
@@ -587,6 +588,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
     t.index ["point_id"], name: "index_orders_on_point_id"
     t.index ["service_point_id", "status"], name: "index_orders_on_service_point_id_and_status"
     t.index ["service_point_id"], name: "index_orders_on_service_point_id"
+    t.index ["supplier_id"], name: "index_orders_on_supplier_id"
     t.index ["ttn"], name: "index_orders_on_ttn", unique: true
   end
 
@@ -633,6 +635,98 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
     t.index ["processed_by_id"], name: "index_partner_applications_on_processed_by_id"
     t.index ["region_id"], name: "index_partner_applications_on_region_id"
     t.index ["status"], name: "index_partner_applications_on_status"
+  end
+
+  create_table "partner_rewards", force: :cascade do |t|
+    t.bigint "partner_id", null: false
+    t.bigint "supplier_id", null: false
+    t.bigint "reward_rule_id", null: false
+    t.bigint "tire_order_id"
+    t.bigint "order_id"
+    t.decimal "calculated_amount", precision: 10, scale: 2, null: false
+    t.string "payment_status", default: "pending", null: false
+    t.datetime "calculated_at", null: false
+    t.datetime "paid_at"
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["calculated_at"], name: "index_partner_rewards_on_calculated_at"
+    t.index ["order_id"], name: "index_partner_rewards_on_order_id"
+    t.index ["partner_id"], name: "index_partner_rewards_on_partner_id"
+    t.index ["payment_status"], name: "index_partner_rewards_on_payment_status"
+    t.index ["reward_rule_id"], name: "index_partner_rewards_on_reward_rule_id"
+    t.index ["supplier_id"], name: "index_partner_rewards_on_supplier_id"
+    t.index ["tire_order_id"], name: "index_partner_rewards_on_tire_order_id"
+    t.check_constraint "tire_order_id IS NOT NULL OR order_id IS NOT NULL", name: "partner_rewards_order_type_check"
+  end
+
+  create_table "partner_supplier_agreement_exception_brands", force: :cascade do |t|
+    t.bigint "partner_supplier_agreement_exception_id", null: false
+    t.integer "tire_brand_id", null: false, comment: "ID бренда шин"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["partner_supplier_agreement_exception_id", "tire_brand_id"], name: "idx_exception_brands_unique", unique: true
+    t.index ["partner_supplier_agreement_exception_id"], name: "idx_exception_brands_on_exception_id"
+    t.index ["tire_brand_id"], name: "idx_on_tire_brand_id_e79679fdc7"
+  end
+
+  create_table "partner_supplier_agreement_exception_diameters", force: :cascade do |t|
+    t.bigint "partner_supplier_agreement_exception_id", null: false
+    t.string "tire_diameter", limit: 10, null: false, comment: "Диаметр шин (например, \"15\", \"16\")"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["partner_supplier_agreement_exception_id", "tire_diameter"], name: "idx_exception_diameters_unique", unique: true
+    t.index ["partner_supplier_agreement_exception_id"], name: "idx_exception_diameters_on_exception_id"
+    t.index ["tire_diameter"], name: "idx_on_tire_diameter_fe90a5e0db"
+  end
+
+  create_table "partner_supplier_agreement_exceptions", force: :cascade do |t|
+    t.bigint "partner_supplier_agreement_id", null: false
+    t.integer "tire_brand_id", comment: "ID бренда шин (NULL = все бренды)"
+    t.string "tire_diameter", limit: 10, comment: "Диаметр шин (NULL = все диаметры)"
+    t.string "exception_type", default: "fixed_amount", null: false, comment: "Тип: fixed_amount, percentage"
+    t.decimal "exception_amount", precision: 10, scale: 2, comment: "Фиксированная сумма исключения"
+    t.decimal "exception_percentage", precision: 5, scale: 2, comment: "Процент исключения"
+    t.string "application_scope", default: "per_order", null: false, comment: "Область применения: per_order (весь заказ), per_item (каждая единица)"
+    t.integer "priority", default: 0, null: false, comment: "Приоритет применения (больше = выше приоритет)"
+    t.boolean "active", default: true, null: false, comment: "Активно ли исключение"
+    t.text "description", comment: "Описание исключения"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_partner_supplier_agreement_exceptions_on_active"
+    t.index ["partner_supplier_agreement_id"], name: "idx_exceptions_on_agreement_id"
+    t.index ["priority"], name: "index_partner_supplier_agreement_exceptions_on_priority"
+    t.index ["tire_brand_id", "tire_diameter"], name: "idx_exceptions_on_brand_diameter"
+    t.index ["tire_brand_id"], name: "index_partner_supplier_agreement_exceptions_on_tire_brand_id"
+    t.index ["tire_diameter"], name: "index_partner_supplier_agreement_exceptions_on_tire_diameter"
+    t.check_constraint "application_scope::text = ANY (ARRAY['per_order'::character varying, 'per_item'::character varying]::text[])", name: "check_application_scope_valid"
+    t.check_constraint "exception_type::text = 'fixed_amount'::text AND exception_amount IS NOT NULL AND exception_percentage IS NULL OR exception_type::text = 'percentage'::text AND exception_percentage IS NOT NULL AND exception_amount IS NULL", name: "check_exception_value_consistency"
+    t.check_constraint "exception_type::text = ANY (ARRAY['fixed_amount'::character varying, 'percentage'::character varying]::text[])", name: "check_exception_type_valid"
+  end
+
+  create_table "partner_supplier_agreements", force: :cascade do |t|
+    t.bigint "partner_id", null: false
+    t.bigint "supplier_id", null: false
+    t.date "start_date", null: false
+    t.date "end_date"
+    t.string "commission_type", default: "custom", null: false
+    t.boolean "active", default: true, null: false
+    t.text "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "order_types", default: "both", null: false, comment: "Типы заказов: cart_orders, pickup_orders, both"
+    t.decimal "commission_amount", precision: 10, scale: 2, comment: "Фиксированная сумма комиссии (если применимо)"
+    t.decimal "commission_percentage", precision: 5, scale: 2, comment: "Процент комиссии (если применимо)"
+    t.string "commission_unit", default: "per_order", comment: "За что начисляется: per_order, per_item"
+    t.index ["active"], name: "index_partner_supplier_agreements_on_active"
+    t.index ["order_types"], name: "index_partner_supplier_agreements_on_order_types"
+    t.index ["partner_id", "supplier_id"], name: "index_agreements_on_partner_supplier"
+    t.index ["partner_id"], name: "index_partner_supplier_agreements_on_partner_id"
+    t.index ["start_date"], name: "index_partner_supplier_agreements_on_start_date"
+    t.index ["supplier_id"], name: "index_partner_supplier_agreements_on_supplier_id"
+    t.check_constraint "commission_type::text = ANY (ARRAY['fixed_amount'::character varying, 'percentage'::character varying, 'custom'::character varying]::text[])", name: "check_commission_type_valid"
+    t.check_constraint "commission_unit::text = ANY (ARRAY['per_order'::character varying, 'per_item'::character varying]::text[])", name: "check_commission_unit_valid"
+    t.check_constraint "order_types::text = ANY (ARRAY['cart_orders'::character varying, 'pickup_orders'::character varying, 'both'::character varying]::text[])", name: "check_order_types_valid"
   end
 
   create_table "partners", force: :cascade do |t|
@@ -779,6 +873,22 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
     t.index ["service_point_id"], name: "index_reviews_on_service_point_id"
     t.index ["status"], name: "index_reviews_on_status"
     t.check_constraint "rating >= 1 AND rating <= 5", name: "check_rating_range"
+  end
+
+  create_table "reward_rules", force: :cascade do |t|
+    t.bigint "partner_supplier_agreement_id", null: false
+    t.string "rule_type", null: false
+    t.decimal "amount", precision: 10, scale: 2, null: false
+    t.text "conditions"
+    t.integer "priority", default: 0, null: false
+    t.boolean "active", default: true, null: false
+    t.text "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["partner_supplier_agreement_id"], name: "index_reward_rules_on_agreement"
+    t.index ["partner_supplier_agreement_id"], name: "index_reward_rules_on_partner_supplier_agreement_id"
+    t.index ["priority"], name: "index_reward_rules_on_priority"
+    t.index ["rule_type", "active"], name: "index_reward_rules_on_rule_type_and_active"
   end
 
   create_table "schedule_exceptions", force: :cascade do |t|
@@ -1402,9 +1512,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
   add_foreign_key "operators", "users"
   add_foreign_key "order_items", "orders"
   add_foreign_key "orders", "service_points"
+  add_foreign_key "orders", "suppliers"
   add_foreign_key "partner_applications", "cities", column: "city_record_id"
   add_foreign_key "partner_applications", "regions"
   add_foreign_key "partner_applications", "users", column: "processed_by_id"
+  add_foreign_key "partner_rewards", "orders"
+  add_foreign_key "partner_rewards", "partners"
+  add_foreign_key "partner_rewards", "reward_rules"
+  add_foreign_key "partner_rewards", "suppliers"
+  add_foreign_key "partner_rewards", "tire_orders"
+  add_foreign_key "partner_supplier_agreement_exception_brands", "partner_supplier_agreement_exceptions"
+  add_foreign_key "partner_supplier_agreement_exception_diameters", "partner_supplier_agreement_exceptions"
+  add_foreign_key "partner_supplier_agreement_exceptions", "partner_supplier_agreements"
+  add_foreign_key "partner_supplier_agreements", "partners"
+  add_foreign_key "partner_supplier_agreements", "suppliers"
   add_foreign_key "partners", "cities"
   add_foreign_key "partners", "regions"
   add_foreign_key "partners", "users"
@@ -1418,6 +1539,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_05_103803) do
   add_foreign_key "reviews", "bookings"
   add_foreign_key "reviews", "clients"
   add_foreign_key "reviews", "service_points"
+  add_foreign_key "reward_rules", "partner_supplier_agreements"
   add_foreign_key "schedule_exceptions", "service_points"
   add_foreign_key "schedule_slots", "service_points"
   add_foreign_key "schedule_slots", "service_posts"
