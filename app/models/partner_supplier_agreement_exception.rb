@@ -34,6 +34,9 @@ class PartnerSupplierAgreementException < ApplicationRecord
   # Валидация диаметра (должен быть числом)
   validates :tire_diameter, format: { with: /\A\d+(\.\d+)?\z/, message: 'должен быть числом' }, allow_blank: true
   
+  # Валидация уникальности пары бренд+диаметр в рамках одной договоренности
+  validate :unique_brand_diameter_combination
+  
   # Скоупы
   scope :active, -> { where(active: true) }
   scope :by_brand, ->(brand_id) { where(tire_brand_id: brand_id) }
@@ -251,5 +254,73 @@ class PartnerSupplierAgreementException < ApplicationRecord
     elsif percentage? && exception_percentage.blank?
       errors.add(:exception_percentage, 'должен быть указан для процентного типа')
     end
+  end
+  
+  # Валидация уникальности комбинации бренд+диаметр в рамках договоренности
+  def unique_brand_diameter_combination
+    return unless partner_supplier_agreement_id.present?
+    
+    # Проверяем только активные исключения
+    return unless active?
+    
+    # Нормализуем значения для сравнения
+    brand_id_to_check = tire_brand_id
+    diameter_to_check = tire_diameter&.to_s&.strip
+    
+    # Находим существующие исключения в этой же договоренности
+    existing_exceptions = PartnerSupplierAgreementException
+      .where(partner_supplier_agreement_id: partner_supplier_agreement_id, active: true)
+      .where.not(id: id) # Исключаем текущую запись при обновлении
+    
+    # Проверяем конфликты
+    conflicting_exceptions = existing_exceptions.select do |exception|
+      same_brand = (exception.tire_brand_id == brand_id_to_check)
+      same_diameter = (exception.tire_diameter&.to_s&.strip == diameter_to_check)
+      
+      # Учитываем случаи "для всех брендов" (nil) и "для всех диаметров" (nil)
+      brands_conflict = same_brand || 
+                       (brand_id_to_check.nil? && exception.tire_brand_id.present?) ||
+                       (brand_id_to_check.present? && exception.tire_brand_id.nil?)
+      
+      diameters_conflict = same_diameter ||
+                          (diameter_to_check.blank? && exception.tire_diameter.present?) ||
+                          (diameter_to_check.present? && exception.tire_diameter.blank?)
+      
+      brands_conflict && diameters_conflict
+    end
+    
+    # Добавляем ошибки с подробной информацией
+    conflicting_exceptions.each do |conflicting|
+      brand_text = get_brand_text_for_error(conflicting.tire_brand_id)
+      diameter_text = get_diameter_text_for_error(conflicting.tire_diameter)
+      
+      error_message = "Комбинация #{brand_text} + #{diameter_text} уже используется в исключении ##{conflicting.id}"
+      
+      # Добавляем ошибку к соответствующему полю
+      if brand_id_to_check.present? || conflicting.tire_brand_id.present?
+        errors.add(:tire_brand_id, error_message)
+      end
+      
+      if diameter_to_check.present? || conflicting.tire_diameter.present?
+        errors.add(:tire_diameter, error_message)
+      end
+      
+      # Общая ошибка
+      errors.add(:base, error_message)
+    end
+  end
+  
+  # Вспомогательные методы для формирования текста ошибок
+  def get_brand_text_for_error(brand_id)
+    if brand_id.present?
+      brand = TireBrand.find_by(id: brand_id)
+      brand ? "бренд \"#{brand.name}\"" : "бренд ID #{brand_id}"
+    else
+      "все бренды"
+    end
+  end
+  
+  def get_diameter_text_for_error(diameter)
+    diameter.present? ? "диаметр #{diameter}" : "все диаметры"
   end
 end

@@ -111,7 +111,13 @@ class Api::V1::AgreementsController < ApplicationController
   def partners
     authorize PartnerSupplierAgreement, :index?
     
-    @partners = Partner.active.includes(:user).order(:company_name)
+    # Включаем всех партнеров для редактирования существующих договоренностей
+    # Параметр only_active=true для создания новых договоренностей
+    if params[:only_active] == 'true'
+      @partners = Partner.active.includes(:user).order(:company_name)
+    else
+      @partners = Partner.includes(:user).order(:company_name)
+    end
     
     render json: {
       data: @partners.map { |partner|
@@ -119,7 +125,7 @@ class Api::V1::AgreementsController < ApplicationController
           id: partner.id,
           company_name: partner.company_name,
           contact_person: partner.contact_person,
-          phone: partner.phone,
+          phone: partner.user&.phone || '',
           is_active: partner.is_active?
         }
       }
@@ -156,7 +162,8 @@ class Api::V1::AgreementsController < ApplicationController
   def agreement_params
     params.require(:agreement).permit(
       :partner_id, :supplier_id, :start_date, :end_date, 
-      :commission_type, :order_types, :active, :description
+      :commission_type, :commission_amount, :commission_percentage, :commission_unit,
+      :order_types, :active, :description
     )
   end
   
@@ -170,6 +177,9 @@ class Api::V1::AgreementsController < ApplicationController
       start_date: agreement.start_date.to_s,
       end_date: agreement.end_date&.to_s,
       commission_type: agreement.commission_type,
+      commission_amount: agreement.commission_amount,
+      commission_percentage: agreement.commission_percentage,
+      commission_unit: agreement.commission_unit,
       order_types: agreement.order_types,
       active: agreement.active,
       description: agreement.description,
@@ -177,22 +187,22 @@ class Api::V1::AgreementsController < ApplicationController
       updated_at: agreement.updated_at.to_s,
       
       # Информация о партнере
-      partner_info: {
+      partner_info: agreement.partner.present? ? {
         id: agreement.partner.id,
         company_name: agreement.partner.company_name,
         contact_person: agreement.partner.contact_person,
         phone: agreement.partner.user&.phone || '',
         is_active: agreement.partner.is_active?
-      },
+      } : nil,
       
       # Информация о поставщике
-      supplier_info: {
+      supplier_info: agreement.supplier.present? ? {
         id: agreement.supplier.id,
         name: agreement.supplier.name,
         firm_id: agreement.supplier.firm_id,
         is_active: agreement.supplier.is_active,
         priority: agreement.supplier.priority
-      },
+      } : nil,
       
       # Локализованные тексты
       order_types_text: agreement.order_types_text(locale),

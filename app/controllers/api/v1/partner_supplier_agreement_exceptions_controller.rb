@@ -23,15 +23,19 @@ class Api::V1::PartnerSupplierAgreementExceptionsController < ApplicationControl
     page = params[:page]&.to_i || 1
     per_page = [params[:per_page]&.to_i || 20, 100].min
     
-    @pagy, @exceptions = pagy(@exceptions, items: per_page, page: page)
+    total_count = @exceptions.count
+    total_pages = (total_count.to_f / per_page).ceil
+    offset = (page - 1) * per_page
+    
+    @exceptions = @exceptions.offset(offset).limit(per_page)
     
     render json: {
       data: @exceptions.map { |exception| serialize_exception(exception) },
       meta: {
-        current_page: @pagy.page,
-        per_page: @pagy.items,
-        total_pages: @pagy.pages,
-        total_count: @pagy.count
+        current_page: page,
+        per_page: per_page,
+        total_pages: total_pages,
+        total_count: total_count
       }
     }
   end

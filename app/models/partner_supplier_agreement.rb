@@ -20,10 +20,7 @@ class PartnerSupplierAgreement < ApplicationRecord
               in: %w[cart_orders pickup_orders both], 
               message: 'должен быть одним из: cart_orders, pickup_orders, both' 
             }
-  validates :partner_id, uniqueness: { 
-    scope: :supplier_id, 
-    message: 'уже имеет договоренности с этим поставщиком' 
-  }
+  validate :unique_active_agreement_per_order_type
   validate :end_date_after_start_date, if: -> { end_date.present? }
   
   # Скоупы
@@ -219,5 +216,62 @@ class PartnerSupplierAgreement < ApplicationRecord
     if end_date <= start_date
       errors.add(:end_date, 'должна быть позже даты начала')
     end
+  end
+  
+  # Валидация уникальности активных договоренностей по типам заказов
+  def unique_active_agreement_per_order_type
+    return unless partner_id.present? && supplier_id.present? && active?
+    
+    # Находим существующие активные договоренности между этим партнером и поставщиком
+    existing_agreements = PartnerSupplierAgreement
+      .where(partner_id: partner_id, supplier_id: supplier_id, active: true)
+      .where.not(id: id) # Исключаем текущую запись при обновлении
+    
+    return if existing_agreements.empty?
+    
+    # Проверяем пересечения типов заказов
+    current_order_types = normalize_order_types(order_types)
+    
+    existing_agreements.each do |existing|
+      existing_order_types = normalize_order_types(existing.order_types)
+      
+      # Проверяем, есть ли пересечения
+      if order_types_overlap?(current_order_types, existing_order_types)
+        case order_types
+        when 'both'
+          errors.add(:order_types, "Нельзя создать договоренность на все типы заказов, так как уже существует активная договоренность на #{existing.order_types_text}")
+        when 'cart_orders'
+          if existing.order_types == 'both'
+            errors.add(:order_types, "Нельзя создать договоренность на заказы из корзины, так как уже существует активная договоренность на все типы заказов")
+          else
+            errors.add(:order_types, "Уже существует активная договоренность на заказы из корзины с этим поставщиком")
+          end
+        when 'pickup_orders'
+          if existing.order_types == 'both'
+            errors.add(:order_types, "Нельзя создать договоренность на выдачу товара, так как уже существует активная договоренность на все типы заказов")
+          else
+            errors.add(:order_types, "Уже существует активная договоренность на выдачу товара с этим поставщиком")
+          end
+        end
+        break # Достаточно одного конфликта
+      end
+    end
+  end
+  
+  # Нормализация типов заказов в массив
+  def normalize_order_types(order_type)
+    case order_type
+    when 'both'
+      ['cart_orders', 'pickup_orders']
+    when 'cart_orders', 'pickup_orders'
+      [order_type]
+    else
+      []
+    end
+  end
+  
+  # Проверка пересечения типов заказов
+  def order_types_overlap?(types1, types2)
+    (types1 & types2).any?
   end
 end
