@@ -121,6 +121,8 @@ class TireOrder < ApplicationRecord
   private
 
   def calculate_total_amount
+    # Перезагружаем ассоциацию для получения актуальных данных
+    tire_order_items.reload if tire_order_items.loaded?
     self.total_amount = tire_order_items.sum { |item| item.quantity * item.price_at_order }
   end
 
