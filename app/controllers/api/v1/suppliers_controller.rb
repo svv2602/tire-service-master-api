@@ -227,7 +227,7 @@ module Api
         products = if params[:sort_by] == 'updated_at'
           products.order(updated_at: :desc)
         else
-          products.order(:brand_normalized, :model, :price_uah)
+          products.order(:brand_normalized, :original_model, :price_uah)
         end
         
         result = paginate(products)
@@ -287,7 +287,7 @@ module Api
                    when 'supplier_name'
                      products.joins(:supplier).order('suppliers.name ASC')
                    else
-                     products.order(:brand_normalized, :model, :price_uah)
+                     products.order(:brand_normalized, :original_model, :price_uah)
                    end
         
         result = paginate(products)
