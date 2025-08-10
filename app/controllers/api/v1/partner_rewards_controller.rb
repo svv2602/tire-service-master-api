@@ -32,7 +32,14 @@ class Api::V1::PartnerRewardsController < ApplicationController
     @rewards = @rewards.offset((page - 1) * per_page).limit(per_page)
     
     render json: {
-      partner_rewards: PartnerRewardSerializer.new(@rewards).serializable_hash,
+      partner_rewards: PartnerRewardSerializer.new(@rewards, {
+        params: {
+          include_partner_info: true,
+          include_supplier_info: true,
+          include_order_details: true,
+          include_rule_info: true
+        }
+      }).serializable_hash,
       pagination: pagination_info(@rewards, page, per_page),
       statistics: current_user.partner? ? 
                     calculate_partner_statistics : 

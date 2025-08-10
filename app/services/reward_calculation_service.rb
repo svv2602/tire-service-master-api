@@ -117,7 +117,15 @@ class RewardCalculationService
     partner = if @order.is_a?(TireOrder)
                 # Для заказов через корзину - находим партнера через пользователя
                 user = @order.user
-                user&.partner? ? user.partner : nil
+                if user&.partner?
+                  # Если пользователь сам партнер
+                  user.partner
+                elsif user&.operator?
+                  # Если пользователь оператор партнера
+                  user.operator&.partner
+                else
+                  nil
+                end
               elsif @order.is_a?(Order)
                 # Для заказов интернет-магазинов - находим через сервисную точку
                 @order.service_point&.partner

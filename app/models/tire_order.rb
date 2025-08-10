@@ -138,7 +138,8 @@ class TireOrder < ApplicationRecord
   
   # Рассчитывает вознаграждение партнера
   def calculate_partner_reward
-    return unless user&.partner?
+    # Проверяем, что пользователь либо партнер, либо оператор партнера
+    return unless user&.partner? || user&.operator?
     
     service = RewardCalculationService.new(self)
     

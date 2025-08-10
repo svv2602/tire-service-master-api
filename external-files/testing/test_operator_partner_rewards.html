@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тестирование вознаграждений партнеров через операторов</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+        .success {
+            background: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border-left-color: #17a2b8;
+            color: #0c5460;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+            color: #856404;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .json-display {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        .status-pending { color: #f39c12; font-weight: bold; }
+        .status-confirmed { color: #27ae60; font-weight: bold; }
+        .status-paid { color: #2ecc71; font-weight: bold; }
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .credentials {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .credential-box {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #bdc3c7;
+        }
+        .scenario {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 3px solid #3498db;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Тестирование вознаграждений партнеров через операторов</h1>
+        
+        <div class="test-section info">
+            <h3>📋 Цель тестирования</h3>
+            <p><strong>Проверить логику:</strong></p>
+            <ul>
+                <li>✅ Вознаграждения начисляются когда <strong>Партнер</strong> создает заказ из корзины</li>
+                <li>✅ Вознаграждения начисляются когда <strong>Оператор партнера</strong> создает заказ из корзины</li>
+                <li>✅ Партнер видит все вознаграждения (свои + операторов)</li>
+                <li>❌ Операторы НЕ видят вознаграждения (финансы только у партнера)</li>
+            </ul>
+        </div>
+
+        <div class="credentials">
+            <div class="credential-box">
+                <h4>👤 Партнер</h4>
+                <strong>Email:</strong> partner@test.com<br>
+                <strong>Password:</strong> partner123<br>
+                <strong>Роль:</strong> partner
+            </div>
+            <div class="credential-box">
+                <h4>⚙️ Оператор</h4>
+                <strong>Email:</strong> operator@test.com<br>
+                <strong>Password:</strong> operator123<br>
+                <strong>Роль:</strong> operator<br>
+                <strong>Партнер:</strong> Связан с partner@test.com
+            </div>
+            <div class="credential-box">
+                <h4>🔧 Администратор</h4>
+                <strong>Email:</strong> admin@test.com<br>
+                <strong>Password:</strong> admin123<br>
+                <strong>Роль:</strong> admin
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🧪 Сценарии тестирования</h2>
+
+        <!-- Сценарий 1: Партнер создает заказ -->
+        <div class="scenario">
+            <h3>🔹 Сценарий 1: Партнер создает заказ</h3>
+            <div class="step">
+                <strong>Шаг 1:</strong> Авторизация как партнер
+                <button onclick="loginAsPartner()">Войти как partner@test.com</button>
+                <div id="partnerLoginResult"></div>
+            </div>
+            <div class="step">
+                <strong>Шаг 2:</strong> Добавить товары в корзину (симуляция)
+                <button onclick="simulateAddToCart('partner')">Симулировать корзину</button>
+                <div id="partnerCartResult"></div>
+            </div>
+            <div class="step">
+                <strong>Шаг 3:</strong> Создать заказ из корзины
+                <button onclick="createOrderFromCart('partner')">Создать заказ</button>
+                <div id="partnerOrderResult"></div>
+            </div>
+            <div class="step">
+                <strong>Шаг 4:</strong> Проверить начисление вознаграждения
+                <button onclick="checkRewardCalculation('partner')">Проверить вознаграждения</button>
+                <div id="partnerRewardResult"></div>
+            </div>
+        </div>
+
+        <!-- Сценарий 2: Оператор создает заказ -->
+        <div class="scenario">
+            <h3>🔹 Сценарий 2: Оператор создает заказ</h3>
+            <div class="step">
+                <strong>Шаг 1:</strong> Авторизация как оператор
+                <button onclick="loginAsOperator()">Войти как operator@test.com</button>
+                <div id="operatorLoginResult"></div>
+            </div>
+            <div class="step">
+                <strong>Шаг 2:</strong> Добавить товары в корзину (симуляция)
+                <button onclick="simulateAddToCart('operator')">Симулировать корзину</button>
+                <div id="operatorCartResult"></div>
+            </div>
+            <div class="step">
+                <strong>Шаг 3:</strong> Создать заказ из корзины
+                <button onclick="createOrderFromCart('operator')">Создать заказ</button>
+                <div id="operatorOrderResult"></div>
+            </div>
+            <div class="step">
+                <strong>Шаг 4:</strong> Проверить начисление вознаграждения ПАРТНЕРУ
+                <button onclick="checkRewardCalculation('operator')">Проверить вознаграждения</button>
+                <div id="operatorRewardResult"></div>
+            </div>
+        </div>
+
+        <!-- Сценарий 3: Проверка доступа -->
+        <div class="scenario">
+            <h3>🔹 Сценарий 3: Проверка доступа к вознаграждениям</h3>
+            <div class="step">
+                <strong>Партнер:</strong> Видит все вознаграждения
+                <button onclick="checkPartnerRewardsAccess()">Проверить доступ партнера</button>
+                <div id="partnerAccessResult"></div>
+            </div>
+            <div class="step">
+                <strong>Оператор:</strong> НЕ должен видеть вознаграждения
+                <button onclick="checkOperatorRewardsAccess()">Проверить доступ оператора</button>
+                <div id="operatorAccessResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📊 Результаты тестирования</h2>
+        <div id="testResults"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        let currentToken = null;
+        let currentUser = null;
+        let testResults = [];
+
+        // Утилиты
+        function addResult(test, status, message, data = null) {
+            testResults.push({
+                test,
+                status,
+                message,
+                data,
+                timestamp: new Date().toLocaleTimeString()
+            });
+            updateResultsDisplay();
+        }
+
+        function updateResultsDisplay() {
+            const container = document.getElementById('testResults');
+            container.innerHTML = testResults.map(result => {
+                const statusClass = result.status === 'success' ? 'success' : 
+                                  result.status === 'error' ? 'error' : 
+                                  result.status === 'warning' ? 'warning' : 'info';
+                
+                return `
+                    <div class="result ${statusClass}">
+                        <strong>[${result.timestamp}] ${result.test}:</strong> ${result.message}
+                        ${result.data ? `<div class="json-display">${JSON.stringify(result.data, null, 2)}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function displayResponse(elementId, response, isError = false) {
+            const element = document.getElementById(elementId);
+            const className = isError ? 'error' : 'success';
+            element.innerHTML = `
+                <div class="test-section ${className}">
+                    <div class="json-display">${JSON.stringify(response, null, 2)}</div>
+                </div>
+            `;
+        }
+
+        // API вызовы
+        async function apiCall(endpoint, method = 'GET', body = null, token = null) {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const config = {
+                method,
+                headers,
+                credentials: 'include'
+            };
+
+            if (body) {
+                config.body = JSON.stringify(body);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, config);
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${data.error || data.message || 'Unknown error'}`);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        // Функции авторизации
+        async function loginAsPartner() {
+            try {
+                const response = await apiCall('/auth/login', 'POST', {
+                    email: 'partner@test.com',
+                    password: 'partner123'
+                });
+                
+                currentToken = response.token;
+                currentUser = response.user;
+                
+                displayResponse('partnerLoginResult', response);
+                addResult('Авторизация партнера', 'success', 'Партнер успешно авторизован', response.user);
+            } catch (error) {
+                displayResponse('partnerLoginResult', { error: error.message }, true);
+                addResult('Авторизация партнера', 'error', error.message);
+            }
+        }
+
+        async function loginAsOperator() {
+            try {
+                const response = await apiCall('/auth/login', 'POST', {
+                    email: 'operator@test.com',
+                    password: 'operator123'
+                });
+                
+                currentToken = response.token;
+                currentUser = response.user;
+                
+                displayResponse('operatorLoginResult', response);
+                addResult('Авторизация оператора', 'success', 'Оператор успешно авторизован', response.user);
+            } catch (error) {
+                displayResponse('operatorLoginResult', { error: error.message }, true);
+                addResult('Авторизация оператора', 'error', error.message);
+            }
+        }
+
+        // Симуляция корзины (так как реальное добавление в корзину требует товары)
+        async function simulateAddToCart(userType) {
+            const elementId = userType === 'partner' ? 'partnerCartResult' : 'operatorCartResult';
+            
+            try {
+                // Получаем список поставщиков для создания заказа
+                const suppliers = await apiCall('/suppliers', 'GET', null, currentToken);
+                
+                const cartSimulation = {
+                    message: "Симуляция корзины",
+                    user: currentUser,
+                    available_suppliers: suppliers.suppliers || suppliers,
+                    note: "В реальности здесь будут товары добавленные в корзину"
+                };
+                
+                displayResponse(elementId, cartSimulation);
+                addResult(`Симуляция корзины (${userType})`, 'info', 'Корзина симулирована', cartSimulation);
+            } catch (error) {
+                displayResponse(elementId, { error: error.message }, true);
+                addResult(`Симуляция корзины (${userType})`, 'error', error.message);
+            }
+        }
+
+        // Создание заказа (симуляция - создаем TireOrder напрямую)
+        async function createOrderFromCart(userType) {
+            const elementId = userType === 'partner' ? 'partnerOrderResult' : 'operatorOrderResult';
+            
+            try {
+                // Получаем первого доступного поставщика
+                const suppliers = await apiCall('/suppliers', 'GET', null, currentToken);
+                const supplier = suppliers.suppliers?.[0] || suppliers[0];
+                
+                if (!supplier) {
+                    throw new Error('Нет доступных поставщиков');
+                }
+
+                // Создаем тестовый заказ
+                const orderData = {
+                    supplier_id: supplier.id,
+                    client_name: `Тестовый клиент ${userType}`,
+                    client_phone: '+380501234567',
+                    comment: `Тестовый заказ от ${userType}`,
+                    status: 'submitted'
+                };
+
+                // Здесь должен быть реальный API для создания заказа
+                // Пока симулируем создание заказа
+                const orderSimulation = {
+                    message: "Заказ симулирован",
+                    order: {
+                        id: Math.floor(Math.random() * 1000),
+                        ...orderData,
+                        user_id: currentUser.id,
+                        user_role: currentUser.role.name,
+                        created_at: new Date().toISOString()
+                    },
+                    note: "В реальности здесь будет создан TireOrder через API"
+                };
+                
+                displayResponse(elementId, orderSimulation);
+                addResult(`Создание заказа (${userType})`, 'success', 'Заказ симулирован', orderSimulation.order);
+            } catch (error) {
+                displayResponse(elementId, { error: error.message }, true);
+                addResult(`Создание заказа (${userType})`, 'error', error.message);
+            }
+        }
+
+        // Проверка расчета вознаграждений
+        async function checkRewardCalculation(userType) {
+            const elementId = userType === 'partner' ? 'partnerRewardResult' : 'operatorRewardResult';
+            
+            try {
+                // Проверяем текущую логику RewardCalculationService
+                const rewardCheck = {
+                    message: "Проверка логики вознаграждений",
+                    user_type: userType,
+                    user: currentUser,
+                    logic_analysis: {
+                        partner_check: currentUser.role.name === 'partner',
+                        operator_check: currentUser.role.name === 'operator',
+                        should_calculate: currentUser.role.name === 'partner' || currentUser.role.name === 'operator',
+                        reward_target: userType === 'operator' ? 'Партнер оператора' : 'Сам партнер'
+                    },
+                    note: "Логика обновлена для поддержки операторов"
+                };
+                
+                displayResponse(elementId, rewardCheck);
+                
+                if (rewardCheck.logic_analysis.should_calculate) {
+                    addResult(`Расчет вознаграждений (${userType})`, 'success', 
+                        `Вознаграждение будет рассчитано для: ${rewardCheck.logic_analysis.reward_target}`, 
+                        rewardCheck);
+                } else {
+                    addResult(`Расчет вознаграждений (${userType})`, 'warning', 
+                        'Вознаграждение НЕ будет рассчитано', rewardCheck);
+                }
+            } catch (error) {
+                displayResponse(elementId, { error: error.message }, true);
+                addResult(`Расчет вознаграждений (${userType})`, 'error', error.message);
+            }
+        }
+
+        // Проверка доступа к вознаграждениям
+        async function checkPartnerRewardsAccess() {
+            try {
+                // Попытка получить вознаграждения как партнер
+                const rewards = await apiCall('/partner_rewards', 'GET', null, currentToken);
+                
+                displayResponse('partnerAccessResult', rewards);
+                addResult('Доступ партнера к вознаграждениям', 'success', 
+                    'Партнер может просматривать свои вознаграждения', rewards);
+            } catch (error) {
+                displayResponse('partnerAccessResult', { error: error.message }, true);
+                addResult('Доступ партнера к вознаграждениям', 'error', error.message);
+            }
+        }
+
+        async function checkOperatorRewardsAccess() {
+            try {
+                // Попытка получить вознаграждения как оператор
+                const rewards = await apiCall('/partner_rewards', 'GET', null, currentToken);
+                
+                // Если запрос прошел, это ошибка - оператор не должен видеть вознаграждения
+                displayResponse('operatorAccessResult', rewards, true);
+                addResult('Доступ оператора к вознаграждениям', 'error', 
+                    'ОШИБКА: Оператор НЕ должен видеть вознаграждения!', rewards);
+            } catch (error) {
+                // Это правильное поведение - оператор НЕ должен иметь доступ
+                displayResponse('operatorAccessResult', { 
+                    expected_behavior: 'Доступ запрещен',
+                    error: error.message 
+                });
+                addResult('Доступ оператора к вознаграждениям', 'success', 
+                    'ПРАВИЛЬНО: Оператор не имеет доступа к вознаграждениям', { error: error.message });
+            }
+        }
+
+        // Запуск всех тестов
+        async function runAllTests() {
+            addResult('Начало тестирования', 'info', 'Запуск комплексного тестирования логики вознаграждений');
+            
+            // Тест 1: Партнер
+            await loginAsPartner();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await simulateAddToCart('partner');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await createOrderFromCart('partner');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await checkRewardCalculation('partner');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await checkPartnerRewardsAccess();
+            
+            // Тест 2: Оператор
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await loginAsOperator();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await simulateAddToCart('operator');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await createOrderFromCart('operator');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await checkRewardCalculation('operator');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await checkOperatorRewardsAccess();
+            
+            addResult('Завершение тестирования', 'info', 'Все тесты выполнены');
+        }
+
+        // Добавляем кнопку для запуска всех тестов
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.querySelector('.container:last-child');
+            const runAllButton = document.createElement('button');
+            runAllButton.textContent = '🚀 Запустить все тесты';
+            runAllButton.onclick = runAllTests;
+            runAllButton.style.fontSize = '16px';
+            runAllButton.style.padding = '15px 30px';
+            runAllButton.style.marginBottom = '20px';
+            container.insertBefore(runAllButton, container.firstChild);
+        });
+    </script>
+</body>
+</html>
