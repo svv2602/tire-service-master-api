@@ -86,7 +86,8 @@ test_goods = [
     brand: "Michelin",
     price: 2850,
     quantity: 4,
-    bas_id: "SH001"
+    bas_id: "SH001",
+    image_url: "https://example.com/images/michelin-energy-saver.jpg"
   },
   {
     artikul: "225/60R17-99H",
@@ -95,7 +96,8 @@ test_goods = [
     brand: "Continental", 
     price: 3200,
     quantity: 2,
-    bas_id: "SH002"
+    bas_id: "SH002",
+    image_url: "https://example.com/images/continental-wintercontact.jpg"
   },
   {
     artikul: "DIL-5W30-4L",
@@ -104,7 +106,8 @@ test_goods = [
     brand: "Shell",
     price: 890,
     quantity: 1,
-    bas_id: "OIL001"
+    bas_id: "OIL001",
+    image_url: "https://example.com/images/shell-helix-ultra.jpg"
   },
   {
     artikul: "DISC-280MM-VEN",
@@ -113,7 +116,8 @@ test_goods = [
     brand: "Zimmermann",
     price: 1250,
     quantity: 2,
-    bas_id: "BR001"
+    bas_id: "BR001",
+    image_url: "https://example.com/images/zimmermann-brake-disc.jpg"
   },
   {
     artikul: "FILTER-MANN-W712",
@@ -122,7 +126,8 @@ test_goods = [
     brand: "Mann-Filter",
     price: 320,
     quantity: 1,
-    bas_id: "FILT001"
+    bas_id: "FILT001",
+    image_url: "https://example.com/images/mann-oil-filter.jpg"
   },
   {
     artikul: "00000047875",
@@ -131,7 +136,8 @@ test_goods = [
     brand: "Bridgestone",
     price: 1872,
     quantity: 4,
-    bas_id: "ТО00-000170"
+    bas_id: "ТО00-000170",
+    image_url: "https://example.com/images/bridgestone-turanza.jpg"
   },
   {
     artikul: "BRAKE-PAD-FRONT",
@@ -140,7 +146,8 @@ test_goods = [
     brand: "Brembo",
     price: 1890,
     quantity: 1,
-    bas_id: "ТО00-000176"
+    bas_id: "ТО00-000176",
+    image_url: "https://example.com/images/brembo-brake-pads.jpg"
   },
   {
     artikul: "SPARK-PLUG-NGK",
@@ -149,7 +156,8 @@ test_goods = [
     brand: "NGK",
     price: 180,
     quantity: 4,
-    bas_id: "ТО00-000177"
+    bas_id: "ТО00-000177",
+    image_url: "https://example.com/images/ngk-spark-plugs.jpg"
   },
   {
     artikul: "AIR-FILTER-BOSCH",
@@ -158,7 +166,8 @@ test_goods = [
     brand: "Bosch",
     price: 450,
     quantity: 1,
-    bas_id: "ТО00-000178"
+    bas_id: "ТО00-000178",
+    image_url: "https://example.com/images/bosch-air-filter.jpg"
   },
   {
     artikul: "BATTERY-VARTA-12V",
@@ -167,7 +176,8 @@ test_goods = [
     brand: "Varta",
     price: 2150,
     quantity: 1,
-    bas_id: "ТО00-000179"
+    bas_id: "ТО00-000179",
+    image_url: "https://example.com/images/varta-battery.jpg"
   }
 ]
 
@@ -249,7 +259,8 @@ service_points.each_with_index do |service_point, sp_index|
         bas_id: good[:bas_id],
         name: good[:name],
         category: good[:category],
-        brand: good[:brand]
+        brand: good[:brand],
+        image_url: good[:image_url]
       )
     end
     
