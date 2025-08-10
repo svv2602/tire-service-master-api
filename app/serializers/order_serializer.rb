@@ -48,6 +48,10 @@ class OrderSerializer
       service_point_city: order.service_point&.city&.name,
       service_point_address: order.service_point&.address,
       
+      # Информация о поставщике
+      supplier_name: order.supplier&.name,
+      supplier_firm_id: order.supplier&.firm_id,
+      
       # Количество товаров
       items_count: order.order_items.count,
       items_summary: items_summary,

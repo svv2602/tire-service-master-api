@@ -181,6 +181,10 @@ test_goods = [
   }
 ]
 
+# Получаем поставщиков для случайного присвоения заказам
+suppliers = Supplier.where(is_active: true).to_a
+puts "📦 Найдено #{suppliers.count} активных поставщиков для присвоения заказам"
+
 # Создаем заказы
 created_orders = []
 
@@ -213,6 +217,9 @@ service_points.each_with_index do |service_point, sp_index|
   weights = [0.3, 0.2, 0.25, 0.2, 0.05] # Вероятности для каждого статуса
   status = statuses.sample
   
+  # Случайный поставщик (70% вероятность иметь поставщика)
+  supplier = suppliers.any? && rand < 0.7 ? suppliers.sample : nil
+  
   # Даты в зависимости от статуса
   order_date = rand(14.days.ago..Time.current)
   processed_at = status != 'received' ? order_date + rand(1..6).hours : nil
@@ -223,6 +230,7 @@ service_points.each_with_index do |service_point, sp_index|
   begin
     order = Order.create!(
       service_point: service_point,
+      supplier: supplier,
       status: status,
       order_date: order_date,
       ttn: ttn,
