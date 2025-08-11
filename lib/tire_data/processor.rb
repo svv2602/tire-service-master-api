@@ -491,13 +491,25 @@ module TireData
           if validate_tire_size(tire_size)
             valid_tire_sizes << tire_size
           else
+            # Определяем тип размера для правильного сообщения
+            width = tire_size[:width]
+            is_inch_size = width.is_a?(Numeric) && width < 100
+            
+            if is_inch_size
+              # Для дюймовых размеров просто выводим размеры (они валидны, но возможно не поддерживаются)
+              error_message = "width=#{tire_size[:width]}, height=#{tire_size[:height]}, diameter=#{tire_size[:diameter]}"
+            else
+              # Для метрических размеров выводим как ошибку
+              error_message = "Некорректный размер шин: width=#{tire_size[:width]}, height=#{tire_size[:height]}, diameter=#{tire_size[:diameter]}"
+            end
+            
             @validation_errors << {
               record_index: index + 1,
               brand: config[:brand_name],
               model: config[:model_name],
               tire_size_index: tire_index + 1,
               tire_size: tire_size,
-              error: "Некорректный размер шин: width=#{tire_size[:width]}, height=#{tire_size[:height]}, diameter=#{tire_size[:diameter]}"
+              error: error_message
             }
           end
         end
@@ -570,17 +582,17 @@ module TireData
       # Проверяем, что все значения присутствуют и являются числами
       return false unless width.is_a?(Numeric) && height.is_a?(Numeric) && diameter.is_a?(Numeric)
       
-      # Проверяем, что все значения положительные
-      return false unless width > 0 && height > 0 && diameter > 0
+      # Проверяем базовые ограничения
+      return false unless width > 0 && height >= 0 && diameter > 0  # height может быть 0 для дюймовых
       
-      # Проверяем разумные диапазоны для метрических размеров
+      # Определяем тип размера по ширине
       if width >= 100  # Метрические размеры (мм)
         return false unless width.between?(125, 355)    # ширина в мм
-        return false unless height.between?(25, 100)    # высота в %
+        return false unless height.between?(25, 100)    # высота в % (должна быть > 0)
         return false unless diameter.between?(10, 30)   # диаметр в дюймах
-      else  # Американские дюймовые размеры
+      else  # Дюймовые размеры (американские)
         return false unless width.between?(6, 50)       # ширина в дюймах
-        return false unless height.between?(6, 15)      # высота в дюймах
+        return false unless height.between?(0, 15)      # высота в дюймах (может быть 0)
         return false unless diameter.between?(10, 30)   # диаметр в дюймах
       end
       
@@ -866,10 +878,10 @@ module TireData
       fixed_diameter = diameter.to_f
       
       # 1. КРИТИЧЕСКАЯ ОШИБКА: Исправление нулевой высоты профиля
-      # Это самая частая ошибка, которая делает размер полностью невалидным
-      if fixed_height == 0.0
+      # НО ТОЛЬКО для метрических размеров! Для дюймовых (width < 100) height=0 валиден
+      if fixed_height == 0.0 && fixed_width >= 100  # только для метрических размеров
         fixed_height = 80.0  # 165/80R13, 175/80R14, и т.д.
-        Rails.logger.debug "🔧 Критическое исправление: height 0 → 80 для размера #{width}/#{height}R#{diameter}"
+        Rails.logger.debug "🔧 Критическое исправление: height 0 → 80 для метрического размера #{width}/#{height}R#{diameter}"
       end
       
       # 2. КРИТИЧЕСКАЯ ОШИБКА: Отрицательные значения
