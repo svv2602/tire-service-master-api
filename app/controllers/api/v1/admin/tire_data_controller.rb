@@ -10,12 +10,31 @@ module Api
         # GET /api/v1/admin/tire_data/status
         def status
           begin
+            # Получаем текущую активную версию
+            current_version_data = TireDataVersion.where(is_active: true).first
+            current_version_str = current_version_data&.version || 'Нет данных'
+            
+            # Показываем только версии, которые <= текущей активной версии
+            # Это скрывает "будущие" версии после отката
+            available_versions_data = if current_version_data
+              TireDataVersion.where('imported_at <= ?', current_version_data.imported_at)
+                             .order(imported_at: :desc)
+                             .limit(5)
+                             .pluck(:version, :imported_at)
+                             .map { |v, t| { version: v, imported_at: t.strftime('%d.%m.%Y %H:%M') } }
+            else
+              TireDataVersion.order(imported_at: :desc)
+                             .limit(5)
+                             .pluck(:version, :imported_at)
+                             .map { |v, t| { version: v, imported_at: t.strftime('%d.%m.%Y %H:%M') } }
+            end
+
             stats = {
               configurations_count: CarTireConfiguration.count,
               active_configurations: CarTireConfiguration.where(is_active: true).count,
-              current_version: TireDataVersion.where(is_active: true).first&.version || 'Нет данных',
-              last_update: TireDataVersion.where(is_active: true).first&.imported_at&.strftime('%d.%m.%Y %H:%M') || 'Никогда',
-              available_versions: TireDataVersion.order(imported_at: :desc).limit(5).pluck(:version, :imported_at).map { |v, t| { version: v, imported_at: t.strftime('%d.%m.%Y %H:%M') } }
+              current_version: current_version_str,
+              last_update: current_version_data&.imported_at&.strftime('%d.%m.%Y %H:%M') || 'Никогда',
+              available_versions: available_versions_data
             }
             
             render json: { status: 'success', data: stats }, status: :ok
