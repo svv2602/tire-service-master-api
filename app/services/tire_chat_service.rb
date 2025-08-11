@@ -149,17 +149,21 @@ class TireChatService
     end
 
     # Приоритеты и ценовые сегменты
-    if msg.match?(/цен.*качеств|соотношен|бюджет/i)
+    # ВАЖНО: Сначала проверяем более специфичные паттерны (budget), затем общие
+    if msg.match?(/дешев|дешёв|недорог|эконом|экономн|дёшев|дешеві|недорогі|cheap|budget(?!.*качеств)/i)
+      parameters[:price_segment] = 'budget'
+      intent_types << 'price_segment_request'
+    elsif msg.match?(/цен.*качеств|соотношен/i)
       parameters[:priority] = 'цена/качество'
       intent_types << 'priority_request'
+    elsif msg.match?(/бюджет/i) && !msg.match?(/цен.*качеств|соотношен/i)
+      parameters[:price_segment] = 'budget'
+      intent_types << 'price_segment_request'
     elsif msg.match?(/престиж|статус/i) && !intent_types.include?('brand_comparison_request')
       parameters[:priority] = 'престиж'
       intent_types << 'priority_request'
-    elsif msg.match?(/дорог|премиум|дорож|эксклюзив|элитн|люкс|дорогі|преміум|premium|expensive/i)
+    elsif msg.match?(/(?<!не)дорог|премиум|дорож|эксклюзив|элитн|люкс|(?<!не)дорогі|преміум|premium|expensive/i)
       parameters[:price_segment] = 'premium'
-      intent_types << 'price_segment_request'
-    elsif msg.match?(/дешев|дешёв|бюджет|недорог|эконом|экономн|дёшев|дешеві|бюджетні|недорогі|cheap|budget/i)
-      parameters[:price_segment] = 'budget'
       intent_types << 'price_segment_request'
     elsif msg.match?(/средн|обычн|нормальн|типов|стандарт|середн|звичайн|нормальн|середній|middle|average/i)
       parameters[:price_segment] = 'middle'
