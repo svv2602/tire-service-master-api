@@ -293,12 +293,15 @@ class TireChatService
       recommendations = get_tire_recommendations(available_products)
       
       if recommendations.any?
+        catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
         confirmation_msg = confirmations.any? ? "✅ Принято: #{confirmations.join(', ')}.\n\n" : ""
+        
         {
           message: "#{confirmation_msg}#{format_recommendations(recommendations)}",
           filters_updated: @current_filters,
           preferences_updated: @user_preferences,
           recommendations: recommendations,
+          catalog_button: catalog_button_data,
           action: 'show_recommendations_with_options'
         }
       else
@@ -377,10 +380,13 @@ class TireChatService
         recommendations = get_tire_recommendations
         
         if recommendations.any?
+          catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
+          
           return {
             message: "✅ #{localized_message('size_accepted', size: size)}\n\n#{format_recommendations(recommendations)}",
             filters_updated: @current_filters,
             recommendations: recommendations,
+            catalog_button: catalog_button_data,
             action: 'show_recommendations'
           }
         else
@@ -447,9 +453,12 @@ class TireChatService
     recommendations = get_tire_recommendations(available_products)
     
     if recommendations.any?
+      catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
+      
       {
         message: format_recommendations(recommendations),
         recommendations: recommendations,
+        catalog_button: catalog_button_data,
         action: 'show_recommendations_with_options'
       }
     else
@@ -465,7 +474,7 @@ class TireChatService
     Rails.logger.info "🔍 Поиск рекомендаций с фильтрами: #{@current_filters}"
     
     # Если продукты не переданы, ищем в базе
-    products_scope = available_products || SupplierTireProduct.in_stock.includes(:tire_brand, :tire_model, :country)
+    products_scope = available_products || SupplierTireProduct.in_stock.includes(:tire_brand, :tire_model, :country, :supplier)
     initial_count = products_scope.count
     Rails.logger.info "📦 Начальное количество товаров в наличии: #{initial_count}"
     
@@ -491,35 +500,119 @@ class TireChatService
       Rails.logger.info "🏷️ После фильтра брендов: #{products_scope.count} товаров"
     end
     
-    final_products = products_scope.limit(50)
-    Rails.logger.info "🎯 Итоговое количество для расчета: #{final_products.count}"
+    all_products = products_scope.limit(200) # Увеличиваем лимит для лучшего группирования
+    Rails.logger.info "🎯 Всего товаров для группировки: #{all_products.count}"
     
     # Если нет товаров после фильтрации, возвращаем пустой массив
-    if final_products.count == 0
+    if all_products.count == 0
       Rails.logger.warn "⚠️ Нет товаров после применения фильтров"
       return []
     end
     
-    # Рассчитываем рейтинги с приоритетами пользователя
-    priority_type = @user_preferences[:priority_type] || 'balanced'
+    # Группируем товары по уникальным параметрам шин
+    grouped_products = group_products_by_tire_params(all_products)
+    Rails.logger.info "🔄 Создано #{grouped_products.count} групп уникальных шин"
     
-    begin
-      # Получаем топ-10 товаров по рейтингу оптимальности
-      recommendations = TireOptimalityCalculator.calculate_batch_optimality(
-        final_products,
-        priority_type: priority_type
-      ).first(10)
+    # Получаем рекомендации с группировкой
+    priority_type = @user_preferences[:priority_type] || 'balanced'
+    recommendations = calculate_grouped_recommendations(grouped_products, priority_type)
+    
+    Rails.logger.info "🎯 Итоговых рекомендаций: #{recommendations.length}"
+    recommendations
+  end
+
+  # Группировка товаров по параметрам шин (размер + бренд + модель + индексы)
+  def group_products_by_tire_params(products)
+    grouped = products.group_by do |product|
+      {
+        brand: product.brand_normalized,
+        model: product.original_model,
+        width: product.width,
+        height: product.height,
+        diameter: product.diameter,
+        load_index: product.load_index,
+        speed_index: product.speed_index,
+        season: product.season
+      }
+    end
+    
+    grouped.map do |tire_params, tire_products|
+      # Выбираем самое дешевое предложение из группы
+      cheapest_product = tire_products.min_by { |p| p.price_uah || Float::INFINITY }
       
-      Rails.logger.info "🎯 Найдено #{recommendations.length} рекомендаций"
-      recommendations
-    rescue => e
-      Rails.logger.error "❌ Ошибка при расчете оптимальности: #{e.message}"
-      # Возвращаем простой список без расчета оптимальности
-      final_products.first(10).map do |product|
+      {
+        tire_params: tire_params,
+        best_product: cheapest_product,
+        all_products: tire_products,
+        suppliers_count: tire_products.map(&:supplier_id).uniq.count,
+        price_range: {
+          min: tire_products.map(&:price_uah).compact.min,
+          max: tire_products.map(&:price_uah).compact.max
+        }
+      }
+    end
+  end
+
+  # Расчет рекомендаций для сгруппированных товаров
+  def calculate_grouped_recommendations(grouped_products, priority_type)
+    begin
+      # Создаем рекомендации для лучших продуктов из каждой группы
+      recommendations = grouped_products.map do |group|
+        product = group[:best_product]
+        
+        # Рассчитываем оптимальность для лучшего продукта
+        optimality_result = TireOptimalityCalculator.calculate_batch_optimality(
+          [product], 
+          priority_type: priority_type
+        ).first
+        
+        # Добавляем информацию о группе
+        score = optimality_result ? optimality_result[:optimality_score] : 7.0
+        reasons = optimality_result ? optimality_result[:recommendation_reasons] : ['Доступен в наличии']
+        
+        # Добавляем причины связанные с группировкой
+        if group[:suppliers_count] > 1
+          reasons << "Доступен у #{group[:suppliers_count]} поставщиков"
+        end
+        
+        if group[:price_range][:min] && group[:price_range][:max] && 
+           group[:price_range][:max] > group[:price_range][:min]
+          savings = group[:price_range][:max] - group[:price_range][:min]
+          reasons << "Экономия до #{savings.to_i} грн по сравнению с другими поставщиками"
+        end
+        
         {
           product: product,
+          optimality_score: score,
+          recommendation_reasons: reasons,
+          tire_group_info: group[:tire_params],
+          suppliers_count: group[:suppliers_count],
+          price_savings: group[:price_range][:max] ? (group[:price_range][:max] - group[:price_range][:min]).to_i : 0
+        }
+      end
+      
+      # Сортируем по оптимальности и цене
+      recommendations.sort_by! do |rec|
+        [-rec[:optimality_score], rec[:product].price_uah || Float::INFINITY]
+      end
+      
+      # Возвращаем топ-5
+      recommendations.first(5)
+      
+    rescue => e
+      Rails.logger.error "❌ Ошибка при расчете групповой оптимальности: #{e.message}"
+      
+      # Fallback: простая сортировка по цене
+      grouped_products.sort_by { |group| group[:best_product].price_uah || Float::INFINITY }
+                     .first(5)
+                     .map do |group|
+        {
+          product: group[:best_product],
           optimality_score: 7.0,
-          recommendation_reasons: ['Доступен в наличии']
+          recommendation_reasons: ['Доступен в наличии', 'Лучшая цена в категории'],
+          tire_group_info: group[:tire_params],
+          suppliers_count: group[:suppliers_count],
+          price_savings: group[:price_range][:max] ? (group[:price_range][:max] - group[:price_range][:min]).to_i : 0
         }
       end
     end
@@ -536,23 +629,126 @@ class TireChatService
     recommendations.first(5).each_with_index do |item, index|
       product = item[:product]
       score = item[:optimality_score]
+      suppliers_count = item[:suppliers_count] || 1
+      price_savings = item[:price_savings] || 0
       
-      message += "**#{index + 1}. #{product.tire_brand&.name} #{product.tire_model&.name}** "
-      message += "#{product.size_designation}\n"
-      message += "   💰 #{product.formatted_price} | "
-      message += "⭐ Рейтинг: #{score}/10 | "
-      message += "🌍 #{product.country&.name}\n"
-      message += "   ✨ *#{product.recommendation_reasons.join(', ')}*\n\n"
+      # Основная информация о шине
+      message += "**#{index + 1}. #{product.brand_normalized} #{product.original_model}** "
+      message += "#{product.width}/#{product.height}R#{product.diameter} #{product.load_index}#{product.speed_index}\n"
+      
+      # Цена и основные характеристики
+      message += "   💰 **#{product.formatted_price}** | ⭐ Рейтинг: #{score.round(1)}/10"
+      
+      # Информация о поставщиках
+      if suppliers_count > 1
+        message += " | 🏪 У #{suppliers_count} поставщиков"
+      end
+      
+      # Экономия
+      if price_savings > 0
+        message += " | 💸 Экономия до #{price_savings} грн"
+      end
+      
+      message += "\n"
+      
+      # Страна производства
+      if product.country.present?
+        country_name = product.country.respond_to?(:name) ? product.country.name : product.country.to_s
+        message += "   🌍 #{country_name} | "
+      end
+      
+      # Поставщик (лучшее предложение)
+      if product.supplier.present?
+        message += "🏷️ #{product.supplier.name}"
+      end
+      
+      message += "\n"
+      
+      # Причины рекомендации
+      reasons = item[:recommendation_reasons] || ['Доступен в наличии']
+      message += "   ✨ *#{reasons.join(', ')}*\n\n"
     end
     
     message += "💡 **#{localized_message('recommendation_explanation_title')}**\n"
-    message += get_recommendation_explanation
+    message += get_recommendation_explanation_grouped
     message += "\n\n"
+    
+    # Добавляем кнопку каталога если есть фильтры размера и сезона
+    if @current_filters[:size].present? && @current_filters[:season].present?
+      message += format_catalog_button
+      message += "\n\n"
+    end
     
     # Добавляем опции для продолжения диалога
     message += format_continuation_options
     
     message
+  end
+
+  # Объяснение логики рекомендаций с учетом группировки
+  def get_recommendation_explanation_grouped
+    explanation = "Показаны лучшие предложения для каждой уникальной модели шин. "
+    explanation += "Для каждой модели выбрана самая низкая цена среди всех поставщиков.\n\n"
+    
+    case @user_preferences[:priority_type]
+    when 'price_quality'
+      explanation += "🎯 **Приоритет: цена/качество** - выбраны модели с лучшим соотношением цены и характеристик."
+    when 'prestige'
+      explanation += "🏆 **Приоритет: престиж** - рекомендованы премиум-бренды и топовые модели."
+    when 'functionality'
+      explanation += "⚙️ **Приоритет: функциональность** - упор на технические характеристики и эксплуатационные качества."
+    else
+      explanation += "⚖️ **Сбалансированный подход** - учтены цена, качество и репутация бренда."
+    end
+    
+    explanation
+  end
+
+  # Форматирование кнопки каталога для просмотра всех размеров
+  def format_catalog_button
+    size_info = @current_filters[:size]
+    season_info = @current_filters[:season]
+    
+    size_display = "#{size_info[:width]}/#{size_info[:height]}R#{size_info[:diameter]}"
+    season_display = get_season_display_name(season_info)
+    
+    message = "🔍 **Вы можете также просмотреть все размеры:**\n\n"
+    message += "📋 Показать все варианты: **#{size_display} #{season_display}**"
+    
+    message
+  end
+
+  # Получение отображаемого названия сезона
+  def get_season_display_name(season)
+    case season
+    when 'winter'
+      'Зимние'
+    when 'summer'
+      'Летние'  
+    when 'all_season'
+      'Всесезонные'
+    else
+      season.to_s.capitalize
+    end
+  end
+
+  # Получение данных для кнопки каталога
+  def get_catalog_button_data
+    return nil unless @current_filters[:size].present? && @current_filters[:season].present?
+    
+    size_info = @current_filters[:size]
+    season_info = @current_filters[:season]
+    
+    {
+      text: "📋 Показать все варианты: #{size_info[:width]}/#{size_info[:height]}R#{size_info[:diameter]} #{get_season_display_name(season_info)}",
+      filters: {
+        width: size_info[:width],
+        height: size_info[:height], 
+        diameter: size_info[:diameter],
+        season: season_info
+      },
+      action: 'apply_catalog_filters'
+    }
   end
 
   # Объяснение логики рекомендаций
@@ -814,10 +1010,13 @@ class TireChatService
       recommendations = get_tire_recommendations
       
       if recommendations.any?
+        catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
+        
         return {
           message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{format_recommendations(recommendations)}",
           filters_updated: @current_filters,
           recommendations: recommendations,
+          catalog_button: catalog_button_data,
           action: 'show_recommendations_with_options'
         }
       else
