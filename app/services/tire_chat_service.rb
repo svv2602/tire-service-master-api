@@ -89,17 +89,34 @@ class TireChatService
     parameters = {}
     intent_types = []
     
-    # Размер шин
-    if size_match = msg.match(/(\d{3})[\s\/]*(\d{2})[\s\/]*[rр]?(\d{2})/)
-      parameters[:size] = "#{size_match[1]}/#{size_match[2]}R#{size_match[3]}"
-      intent_types << 'size_request'
+    # Размер шин - ПРИОРИТЕТ ПЕРВЫЙ, улучшенные паттерны
+    # Поддерживаем форматы: "195/65R15", "195 65 15", "195 65 на 15", "195-65-15"
+    size_patterns = [
+      /(\d{3})[\s\/\-]*(\d{2})[\s\/\-]*[rр]?(\d{1,2})/,  # Стандартный: 195/65R15
+      /(\d{3})[\s]*(\d{2})[\s]*(?:на|на\s+)[\s]*(\d{1,2})/,  # С "на": 195 65 на 15
+      /(\d{2,3})[\s\/\-]+(\d{2})[\s\/\-]+(\d{1,2})/,  # Общий: 195/65/15 или 205-55-16
+    ]
+    
+    size_patterns.each do |pattern|
+      if size_match = msg.match(pattern)
+        # Проверяем, что это действительно размер шин (ширина от 145 до 345)
+        width = size_match[1].to_i
+        if width >= 145 && width <= 345
+          parameters[:size] = "#{size_match[1]}/#{size_match[2]}R#{size_match[3]}"
+          intent_types << 'size_request'
+          Rails.logger.info "🎯 Распознан размер шин: #{parameters[:size]} из '#{message}'"
+          break  # Найден размер, прекращаем поиск
+        end
+      end
     end
     
-    # Распознавание марок автомобилей
-    car_brands = detect_car_brand(msg)
-    if car_brands.any?
-      parameters[:car_model] = car_brands.join(' ')
-      intent_types << 'car_model_request'
+    # Распознавание марок автомобилей - ТОЛЬКО если НЕ найден размер шин
+    if !intent_types.include?('size_request')
+      car_brands = detect_car_brand(msg)
+      if car_brands.any?
+        parameters[:car_model] = car_brands.join(' ')
+        intent_types << 'car_model_request'
+      end
     end
     
     # Сезонность
@@ -661,7 +678,7 @@ class TireChatService
       'nissan' => ['альмера', 'кашкай', 'х-trail', 'мурано', 'патфайндер'],
       'hyundai' => ['солярис', 'элантра', 'туксон', 'санта фе', 'creta'],
       'kia' => ['рио', 'церато', 'спортейдж', 'соренто', 'пиканто'],
-      'mazda' => ['3', '6', 'cx-5', 'cx-3', 'cx-9'],
+      'mazda' => ['mazda 3', 'mazda 6', 'cx-5', 'cx-3', 'cx-9'],
       'ford' => ['фокус', 'мондео', 'куга', 'экспедишн', 'эскейп'],
       'skoda' => ['октавия', 'фабия', 'кодиак', 'карок', 'суперб'],
       'renault' => ['логан', 'сандеро', 'дастер', 'каптур', 'флюенс'],
@@ -695,9 +712,15 @@ class TireChatService
         detected << brand
       end
       
-      # Проверяем модели
+      # Проверяем модели - избегаем ложных срабатываний на числа размеров шин
       models.each do |model|
         if msg_lower.include?(model)
+          # Дополнительная проверка: если модель - это число, проверяем контекст
+          if model.match?(/^\d+$/) && msg_lower.match?(/\d+[\s\/\-]*\d+[\s\/\-]*\d+/)
+            # Если в сообщении есть паттерн размера шин (3 числа), пропускаем модель-число
+            Rails.logger.info "🚫 Пропускаем модель '#{model}' - обнаружен паттерн размера шин"
+            next
+          end
           detected << "#{brand} #{model}"
         end
       end
