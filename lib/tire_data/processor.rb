@@ -289,7 +289,10 @@ module TireData
         next if tire_id.nil? || kit_id.nil? || width.nil? || height.nil? || diameter.nil?
         next unless @raw_data[:kits][kit_id] # Пропускаем размеры без комплектации
         
-        # Применяем автоматическое исправление размеров если включено
+        # Всегда исправляем критические ошибки (height=0, недопустимые значения)
+        width, height, diameter = fix_critical_tire_errors(width, height, diameter)
+        
+        # Применяем полное автоматическое исправление размеров если включено
         if @options[:fix_suspicious_sizes]
           width, height, diameter = auto_fix_tire_size(width, height, diameter)
         end
@@ -854,8 +857,41 @@ module TireData
       end
       
       Rails.logger.info "✅ Построчное чтение завершено: обработано #{successful_rows} строк, пропущено #{@skipped_rows}"
+        end
+    
+    # Исправление критических ошибок в размерах шин (всегда выполняется)
+    def fix_critical_tire_errors(width, height, diameter)
+      fixed_width = width.to_f
+      fixed_height = height.to_f
+      fixed_diameter = diameter.to_f
+      
+      # 1. КРИТИЧЕСКАЯ ОШИБКА: Исправление нулевой высоты профиля
+      # Это самая частая ошибка, которая делает размер полностью невалидным
+      if fixed_height == 0.0
+        fixed_height = 80.0  # 165/80R13, 175/80R14, и т.д.
+        Rails.logger.debug "🔧 Критическое исправление: height 0 → 80 для размера #{width}/#{height}R#{diameter}"
+      end
+      
+      # 2. КРИТИЧЕСКАЯ ОШИБКА: Отрицательные значения
+      if fixed_width <= 0
+        fixed_width = 165.0  # минимальная разумная ширина
+        Rails.logger.debug "🔧 Критическое исправление: недопустимая ширина #{width} → 165"
+      end
+      
+      if fixed_diameter <= 0
+        fixed_diameter = 13.0  # минимальный стандартный диаметр
+        Rails.logger.debug "🔧 Критическое исправление: недопустимый диаметр #{diameter} → 13"
+      end
+      
+      # 3. КРИТИЧЕСКАЯ ОШИБКА: Экстремально большие значения (явные ошибки данных)
+      if fixed_height > 200  # явно ошибочное значение высоты
+        fixed_height = 80.0
+        Rails.logger.debug "🔧 Критическое исправление: экстремальная высота #{height} → 80"
+      end
+      
+      [fixed_width.to_i, fixed_height.to_i, fixed_diameter.to_i]
     end
-
+    
     # Автоисправление размеров шин
     def auto_fix_tire_size(width, height, diameter)
       fixed_width = width.to_f
