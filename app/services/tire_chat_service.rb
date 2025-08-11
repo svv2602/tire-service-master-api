@@ -131,11 +131,17 @@ class TireChatService
       intent_types << 'season_preference'
     end
     
+    # ВАЖНО: Сравнение брендов должно быть ПЕРЕД приоритетами!
+    # Сравнение брендов (более специфичные фразы)
+    if msg.match?(/сравни.*бренд|порівня.*бренд|сравнить.*бренд|порівняти.*бренд|сравни.*марк|порівня.*марк|сравнить.*марк|порівняти.*марк|какой бренд лучше|який бренд кращий|какую марку выбрать|яку марку обрати/i)
+      intent_types << 'brand_comparison_request'
+    end
+
     # Приоритеты и ценовые сегменты
     if msg.match?(/цен.*качеств|соотношен|бюджет/i)
       parameters[:priority] = 'цена/качество'
       intent_types << 'priority_request'
-    elsif msg.match?(/престиж|статус|бренд/i)
+    elsif msg.match?(/престиж|статус/i) && !intent_types.include?('brand_comparison_request')
       parameters[:priority] = 'престиж'
       intent_types << 'priority_request'
     elsif msg.match?(/дорог|премиум|дорож|эксклюзив|элитн|люкс|дорогі|преміум|premium|expensive/i)
@@ -158,6 +164,8 @@ class TireChatService
     if msg.match?(/какой размер|як.* розмір|выбрать размер|обрати розмір|размер выбрать|розмір обрати|как найти размер|як знайти розмір/i)
       intent_types << 'size_guide_request'
     end
+    
+
     
     # Запрос на новый поиск
     if msg.match?(/новый поиск|нов\w* поиск|начать заново|другие параметры|изменить критерии|сбросить|поиск другой|новий пошук|починати заново|інші параметри|скинути/i)
@@ -275,6 +283,8 @@ class TireChatService
       handle_car_model_request(intent[:parameters])
     when 'size_guide_request'
       handle_size_guide_request(intent[:parameters])
+    when 'brand_comparison_request'
+      handle_brand_comparison_request(intent[:parameters])
     else
       handle_general_question(intent[:parameters], available_products)
     end
@@ -286,6 +296,11 @@ class TireChatService
     intent_types = intent[:intent_types] || []
     
     Rails.logger.info "🎯 Обработка комплексного запроса: #{intent_types.join(', ')}"
+    
+    # Приоритетная обработка specific requests
+    if intent_types.include?('brand_comparison_request')
+      return handle_brand_comparison_request(parameters)
+    end
     
     # Обновляем фильтры и предпочтения
     update_filters_from_parameters(parameters)
@@ -1456,6 +1471,15 @@ class TireChatService
     }
   end
 
+  # Обработка запроса сравнения брендов
+  def handle_brand_comparison_request(parameters)
+    {
+      message: format_brand_comparison_message,
+      action: 'brand_comparison_shown',
+      next_step: 'brand_selection'
+    }
+  end
+
   # Получение локализованного сообщения
   def localized_message(key, **interpolations)
     messages = {
@@ -1530,6 +1554,43 @@ class TireChatService
         'size_guide_car_search_title' => 'Не знаете размер?',
         'size_guide_car_search_description' => 'Укажите марку и модель вашего автомобиля, и я помогу найти подходящий размер шин.',
         'size_guide_call_to_action' => 'Введите размер шин или марку автомобиля, чтобы начать подбор!',
+        
+        # Сравнение брендов
+        'brand_comparison_title' => 'Сравнение брендов шин',
+        'brand_comparison_intro' => 'Выбор бренда напрямую влияет на качество, безопасность и срок службы шин. Вот основные категории:',
+        'brand_comparison_premium_title' => 'Премиум сегмент (высший класс)',
+        'brand_comparison_middle_title' => 'Средний сегмент (оптимальное соотношение)',
+        'brand_comparison_budget_title' => 'Бюджетный сегмент (доступные цены)',
+        'brand_comparison_recommendations_title' => 'Как выбрать?',
+        'brand_comparison_recommendations_text' => '• **Для максимальной безопасности** → Премиум бренды\n• **Для ежедневного использования** → Средний сегмент\n• **Для экономии бюджета** → Бюджетные бренды\n• **Для зимы** → Nokian, Continental, Gislaved\n• **Для спорта** → Michelin, Bridgestone\n• **Для города** → Barum, Marshal, Fulda',
+        'brand_comparison_call_to_action' => 'Назовите ваш бюджет и потребности, и я подберу оптимальный бренд!',
+        
+        # Страны
+        'country_finland' => 'Финляндия',
+        'country_france' => 'Франция', 
+        'country_germany' => 'Германия',
+        'country_japan' => 'Япония',
+        'country_czech' => 'Чехия',
+        'country_korea' => 'Корея',
+        'country_sweden' => 'Швеция',
+        'country_ukraine' => 'Украина',
+        'country_russia' => 'Россия',
+        'country_china' => 'Китай',
+        'country_belarus' => 'Беларусь',
+        
+        # Описания брендов
+        'brand_nokian_desc' => 'Лидер зимних шин, превосходное качество',
+        'brand_michelin_desc' => 'Инновации и долговечность',
+        'brand_continental_desc' => 'Немецкое качество и технологии',
+        'brand_bridgestone_desc' => 'Спортивные и премиум шины',
+        'brand_fulda_desc' => 'Качественные шины по разумной цене',
+        'brand_barum_desc' => 'Надежность и комфорт',
+        'brand_marshal_desc' => 'Современные технологии, доступные цены',
+        'brand_gislaved_desc' => 'Отличные зимние шины',
+        'brand_rosava_desc' => 'Украинское производство, хорошее качество',
+        'brand_kama_desc' => 'Российский производитель, доступные цены',
+        'brand_linglong_desc' => 'Китайские шины с улучшенным качеством',
+        'brand_belshina_desc' => 'Белорусские шины, надежность',
         'no_results_suggest_changes' => 'К сожалению, по размеру %{size} и сезону %{season} шин не найдено. Попробуйте другой размер или проверьте наличие в других категориях.',
         'recommendations_title' => 'Вот мои рекомендации для вас:',
         'recommendation_explanation_title' => 'Почему именно эти шины?',
@@ -1614,6 +1675,43 @@ class TireChatService
         'size_guide_car_search_title' => 'Не знаєте розмір?',
         'size_guide_car_search_description' => 'Вкажіть марку та модель вашого автомобіля, і я допоможу знайти підходящий розмір шин.',
         'size_guide_call_to_action' => 'Введіть розмір шин або марку автомобіля, щоб почати підбір!',
+        
+        # Сравнение брендов
+        'brand_comparison_title' => 'Порівняння брендів шин',
+        'brand_comparison_intro' => 'Вибір бренду безпосередньо впливає на якість, безпеку та термін служби шин. Ось основні категорії:',
+        'brand_comparison_premium_title' => 'Преміум сегмент (вищий клас)',
+        'brand_comparison_middle_title' => 'Середній сегмент (оптимальне співвідношення)',
+        'brand_comparison_budget_title' => 'Бюджетний сегмент (доступні ціни)',
+        'brand_comparison_recommendations_title' => 'Як обрати?',
+        'brand_comparison_recommendations_text' => '• **Для максимальної безпеки** → Преміум бренди\n• **Для щоденного використання** → Середній сегмент\n• **Для економії бюджету** → Бюджетні бренди\n• **Для зими** → Nokian, Continental, Gislaved\n• **Для спорту** → Michelin, Bridgestone\n• **Для міста** → Barum, Marshal, Fulda',
+        'brand_comparison_call_to_action' => 'Назвіть ваш бюджет та потреби, і я підберу оптимальний бренд!',
+        
+        # Страны
+        'country_finland' => 'Фінляндія',
+        'country_france' => 'Франція', 
+        'country_germany' => 'Німеччина',
+        'country_japan' => 'Японія',
+        'country_czech' => 'Чехія',
+        'country_korea' => 'Корея',
+        'country_sweden' => 'Швеція',
+        'country_ukraine' => 'Україна',
+        'country_russia' => 'Росія',
+        'country_china' => 'Китай',
+        'country_belarus' => 'Білорусь',
+        
+        # Описания брендов
+        'brand_nokian_desc' => 'Лідер зимових шин, відмінна якість',
+        'brand_michelin_desc' => 'Інновації та довговічність',
+        'brand_continental_desc' => 'Німецька якість та технології',
+        'brand_bridgestone_desc' => 'Спортивні та преміум шини',
+        'brand_fulda_desc' => 'Якісні шини за розумною ціною',
+        'brand_barum_desc' => 'Надійність та комфорт',
+        'brand_marshal_desc' => 'Сучасні технології, доступні ціни',
+        'brand_gislaved_desc' => 'Відмінні зимові шини',
+        'brand_rosava_desc' => 'Українське виробництво, хороша якість',
+        'brand_kama_desc' => 'Російський виробник, доступні ціни',
+        'brand_linglong_desc' => 'Китайські шини з покращеною якістю',
+        'brand_belshina_desc' => 'Білоруські шини, надійність',
         'no_results_suggest_changes' => 'На жаль, за розміром %{size} та сезоном %{season} шин не знайдено. Спробуйте інший розмір або перевірте наявність в інших категоріях.',
         'recommendations_title' => 'Ось мої рекомендації для вас:',
         'recommendation_explanation_title' => 'Чому саме ці шини?',
@@ -1676,6 +1774,77 @@ class TireChatService
     message += "💬 #{localized_message('size_guide_call_to_action')}"
     
     message
+  end
+
+  # Форматирование сравнения брендов шин
+  def format_brand_comparison_message
+    message = "🏷️ **#{localized_message('brand_comparison_title')}**\n\n"
+    
+    # Объяснение важности выбора бренда
+    message += "🎯 #{localized_message('brand_comparison_intro')}\n\n"
+    
+    # Премиум бренды
+    message += "👑 **#{localized_message('brand_comparison_premium_title')}**\n"
+    premium_brands = get_premium_brands
+    premium_brands.each do |brand|
+      message += "• **#{brand[:name]}** (#{brand[:country]}) - #{brand[:description]}\n"
+    end
+    message += "\n"
+    
+    # Средний сегмент
+    message += "⚖️ **#{localized_message('brand_comparison_middle_title')}**\n"
+    middle_brands = get_middle_segment_brands
+    middle_brands.each do |brand|
+      message += "• **#{brand[:name]}** (#{brand[:country]}) - #{brand[:description]}\n"
+    end
+    message += "\n"
+    
+    # Бюджетные бренды
+    message += "💰 **#{localized_message('brand_comparison_budget_title')}**\n"
+    budget_brands = get_budget_brands
+    budget_brands.each do |brand|
+      message += "• **#{brand[:name]}** (#{brand[:country]}) - #{brand[:description]}\n"
+    end
+    message += "\n"
+    
+    # Рекомендации по выбору
+    message += "📋 **#{localized_message('brand_comparison_recommendations_title')}**\n"
+    message += "#{localized_message('brand_comparison_recommendations_text')}\n\n"
+    
+    # Призыв к действию
+    message += "💬 #{localized_message('brand_comparison_call_to_action')}"
+    
+    message
+  end
+
+  # Получение премиум брендов
+  def get_premium_brands
+    [
+      { name: "Nokian", country: localized_message('country_finland'), description: localized_message('brand_nokian_desc') },
+      { name: "Michelin", country: localized_message('country_france'), description: localized_message('brand_michelin_desc') },
+      { name: "Continental", country: localized_message('country_germany'), description: localized_message('brand_continental_desc') },
+      { name: "Bridgestone", country: localized_message('country_japan'), description: localized_message('brand_bridgestone_desc') }
+    ]
+  end
+
+  # Получение брендов среднего сегмента
+  def get_middle_segment_brands
+    [
+      { name: "Fulda", country: localized_message('country_germany'), description: localized_message('brand_fulda_desc') },
+      { name: "Barum", country: localized_message('country_czech'), description: localized_message('brand_barum_desc') },
+      { name: "Marshal", country: localized_message('country_korea'), description: localized_message('brand_marshal_desc') },
+      { name: "Gislaved", country: localized_message('country_sweden'), description: localized_message('brand_gislaved_desc') }
+    ]
+  end
+
+  # Получение бюджетных брендов
+  def get_budget_brands
+    [
+      { name: "Росава", country: localized_message('country_ukraine'), description: localized_message('brand_rosava_desc') },
+      { name: "Кама", country: localized_message('country_russia'), description: localized_message('brand_kama_desc') },
+      { name: "Linglong", country: localized_message('country_china'), description: localized_message('brand_linglong_desc') },
+      { name: "Белшина", country: localized_message('country_belarus'), description: localized_message('brand_belshina_desc') }
+    ]
   end
 
   # Получение популярных размеров шин
