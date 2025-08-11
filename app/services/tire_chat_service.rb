@@ -61,6 +61,17 @@ class TireChatService
 
   # Анализ намерения пользователя через OpenAI
   def analyze_user_intent(message)
+    # ПРИОРИТЕТ: Если запрос подходит для OpenAI чата, используем его
+    if should_use_openai_for_chat?(message)
+      Rails.logger.info "🤖 Приоритет OpenAI: запрос направлен на чат"
+      return { 
+        type: 'openai_chat_request', 
+        parameters: {},
+        confidence: 1.0,
+        original_message: message
+      }
+    end
+    
     # Сначала пробуем простой анализ по ключевым словам
     simple_intent = analyze_simple_intent(message)
     return simple_intent if simple_intent[:confidence] > 0.8
@@ -285,6 +296,8 @@ class TireChatService
       handle_size_guide_request(intent[:parameters])
     when 'brand_comparison_request'
       handle_brand_comparison_request(intent[:parameters])
+    when 'openai_chat_request'
+      handle_openai_chat_request(intent[:original_message] || '', intent[:parameters], available_products)
     else
       handle_general_question(intent[:parameters], available_products)
     end
@@ -1502,33 +1515,56 @@ class TireChatService
     return false if message.blank?
     
     # Используем OpenAI для:
-    # 1. Вопросов о конкретных моделях шин
+    # 1. Вопросов о конкретных моделях шин и брендах
     model_comparison_patterns = [
       /сравни.*модел|порівня.*модел|сравнить.*модел|порівняти.*модел/i,
+      /сравни.*бренд|порівня.*бренд|сравнить.*бренд|порівняти.*бренд/i,
       /особенност|характеристик|відмінност|різниц/i,
       /против|проти|vs|versus/i,
-      /лучше|кращ|лучш|краще/i
+      /лучше|кращ|лучш|краще/i,
+      /чем отличает|чим відрізня/i,
+      /в чем разниц|в чому різниц/i
     ]
     
     # 2. Сложных технических вопросов
     technical_patterns = [
       /какие.*характеристи|які.*характеристи/i,
+      /какие.*свойств|які.*властивост/i,
       /почему|чому|как работа|як працю/i,
       /разниц.*между|різниц.*між/i,
       /преимущест|переваг|недостат|недолік/i,
       /особенност|особливост/i,
       /важнее|важлив|важко/i,
-      /качеств|якіст/i
+      /качеств|якіст/i,
+      /технолог|техніч/i,
+      /состав|склад/i,
+      /материал|матеріал/i
     ]
     
     # 3. Запросов требующих экспертного анализа
     expert_patterns = [
       /рекомендац|порад|совет|підказ/i,
       /что лучше|що краще|что выбрать|що обрати/i,
-      /стоит ли|чи варто|имеет смысл|має сенс/i
+      /стоит ли|чи варто|имеет смысл|має сенс/i,
+      /посоветуй|порадь/i,
+      /помоги выбрать|допоможи обрати/i,
+      /какой.*подходит|який.*підходить/i,
+      /для.*лучше|для.*краще/i
     ]
     
-    all_patterns = model_comparison_patterns + technical_patterns + expert_patterns
+    # 4. Вопросы про бренды шин (автоматическое распознавание известных брендов)
+    tire_brand_patterns = get_tire_brand_patterns(message)
+    
+    # 5. Вопросительные и диалоговые формы
+    question_patterns = [
+      /\?.*\?|\?$/i,  # Содержит вопросительные знаки
+      /^(что|як|как|чому|почему|где|куда|когда|сколько|какой|який|чей|чий)/i,
+      /можно|можна|нужно|потрібно|стоит|варто/i,
+      /расскажи|розкажи|объясни|поясни/i,
+      /подскажи|підкажи|скажи|скажіть/i
+    ]
+    
+    all_patterns = model_comparison_patterns + technical_patterns + expert_patterns + tire_brand_patterns + question_patterns
     all_patterns.any? { |pattern| message.match?(pattern) }
   end
 
@@ -1564,6 +1600,50 @@ class TireChatService
       action: 'continue_discussion',
       next_step: 'discussion_mode'
     }
+  end
+
+  # Получение паттернов для распознавания брендов шин в сообщении
+  def get_tire_brand_patterns(message)
+    # Известные бренды шин
+    tire_brands = [
+      'michelin', 'continental', 'bridgestone', 'nokian', 'pirelli',
+      'goodyear', 'dunlop', 'hankook', 'kumho', 'toyo',
+      'yokohama', 'cooper', 'falken', 'nitto', 'bf goodrich',
+      'general', 'uniroyal', 'firestone', 'maxxis', 'nexen',
+      'бриджестоун', 'мишлен', 'континенталь', 'нокиан', 'пирелли',
+      'гудьир', 'данлоп', 'ханкук', 'кумхо', 'тойо',
+      'йокохама', 'купер', 'фалькен', 'нитто',
+      'близак', 'blizzak', 'альпин', 'alpin', 'пилот', 'pilot',
+      'примаси', 'primacy', 'энерджи', 'energy', 'латитуд', 'latitude',
+      'турансо', 'turanza', 'потенца', 'potenza', 'дуелер', 'dueler'
+    ]
+    
+    patterns = []
+    
+    # Ищем упоминания брендов в сообщении
+    tire_brands.each do |brand|
+      if message.downcase.include?(brand.downcase)
+        # Создаем паттерны для запросов с этим брендом
+        patterns << /#{Regexp.escape(brand)}/i
+        
+        # Добавляем паттерны для сравнений
+        patterns << /#{Regexp.escape(brand)}.*или|#{Regexp.escape(brand)}.*чи/i
+        patterns << /#{Regexp.escape(brand)}.*против|#{Regexp.escape(brand)}.*проти/i
+        patterns << /#{Regexp.escape(brand)}.*vs/i
+      end
+    end
+    
+    # Добавляем общие паттерны если найдены бренды
+    if patterns.any?
+      patterns += [
+        /что лучше.*#{tire_brands.map { |b| Regexp.escape(b) }.join('|')}/i,
+        /що краще.*#{tire_brands.map { |b| Regexp.escape(b) }.join('|')}/i,
+        /для города.*#{tire_brands.map { |b| Regexp.escape(b) }.join('|')}/i,
+        /для міста.*#{tire_brands.map { |b| Regexp.escape(b) }.join('|')}/i
+      ]
+    end
+    
+    patterns
   end
 
   # Получение локализованного сообщения
