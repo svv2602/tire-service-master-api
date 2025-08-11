@@ -100,6 +100,30 @@ class TireChatService
     parameters = {}
     intent_types = []
     
+    # ДЕТЕКЦИЯ "НОВОГО ПОИСКА" - очищаем состояние если пользователь начинает новый поиск
+    new_search_patterns = [
+      /шин[иы]?\s+(на|для)\s+\w+/,        # "шины на тигуан", "шины для бмв"
+      /рекоменд.*шин.*на\s+\w+/,          # "рекомендуй шины на тигуан"
+      /подбер.*шин.*для\s+\w+/,           # "подберите шины для"
+      /рекоменд.*мне.*шин/,               # "порекомендуй мне шины"
+      /что.*лучше.*для\s+\w+/,            # "что лучше для тигуана"
+      /хочу.*шин.*(?:на|для)\s+\w+/,      # "хочу шины на автомобиль"
+      /нужн.*шин.*(?:на|для)\s+\w+/,      # "нужны шины для машины"
+      /шин.*(?:тигуан|бмв|ауди|тойота|фольксваген|хонда|мазда|митсубиси|ниссан|форд|шевроле|лада|дэу|киа|хёндай|renault|peugeot|citroen|opel|skoda|seat|volkswagen|audi|bmw|mercedes|honda|toyota|mazda|nissan|mitsubishi|ford|chevrolet|lada|daewoo|kia|hyundai)/i, # Конкретные марки авто
+      /новый.*поиск/,                     # "новый поиск"
+      /другой.*размер/,                   # "другой размер"
+      /начать.*сначала/,                  # "начать сначала"
+      /забудь.*предыдущ/,                 # "забудь предыдущее"
+    ]
+    
+    if new_search_patterns.any? { |pattern| msg.match?(pattern) }
+      Rails.logger.info "🔄 Детекция нового поиска: очищаем фильтры и предпочтения"
+      # Сбрасываем состояние для нового поиска
+      @current_filters = initialize_filters({})
+      @user_preferences = {}
+      intent_types << 'new_search_request'
+    end
+    
     # Размер шин - ПРИОРИТЕТ ПЕРВЫЙ, улучшенные паттерны
     # Поддерживаем форматы: "195/65R15", "195 65 15", "195 65 на 15", "195-65-15"
     size_patterns = [
@@ -319,6 +343,11 @@ class TireChatService
       return handle_brand_comparison_request(parameters)
     end
     
+    # Приоритетная обработка запросов автомобилей (если нет размера)
+    if intent_types.include?('car_model_request') && !parameters[:size].present?
+      return handle_car_model_request(parameters)
+    end
+    
     # Обновляем фильтры и предпочтения
     update_filters_from_parameters(parameters)
     
@@ -344,8 +373,9 @@ class TireChatService
       end
       
       # Получаем рекомендации в зависимости от типа запроса
-      if intent_types.include?('price_segment_request')
-        price_segment = parameters[:price_segment]
+      # ВАЖНО: Проверяем как текущий интент, так и сохраненные предпочтения
+      if intent_types.include?('price_segment_request') || @user_preferences[:price_segment].present?
+        price_segment = parameters[:price_segment] || @user_preferences[:price_segment]
         recommendations = get_price_segment_recommendations(available_products, price_segment)
       else
         recommendations = get_tire_recommendations(available_products)
@@ -357,8 +387,9 @@ class TireChatService
         confirmation_msg = confirmations.any? ? "✅ #{accepted_text}: #{confirmations.join(', ')}.\n\n" : ""
         
         # Выбираем правильный формат сообщения
-        if intent_types.include?('price_segment_request')
-          price_segment = parameters[:price_segment]
+        # ВАЖНО: Проверяем как текущий интент, так и сохраненные предпочтения
+        if intent_types.include?('price_segment_request') || @user_preferences[:price_segment].present?
+          price_segment = parameters[:price_segment] || @user_preferences[:price_segment]
           recommendations_text = format_price_segment_recommendations(recommendations, price_segment)
           action = 'show_price_segment_recommendations'
         else
@@ -506,6 +537,22 @@ class TireChatService
         next_step: 'priority_request'
       }
     end
+  end
+
+  # Обработка запроса нового поиска (очистка предыдущих фильтров)
+  def handle_new_search_request(parameters)
+    Rails.logger.info "🆕 Обработка запроса нового поиска"
+    
+    # Состояние уже очищено в analyze_simple_intent
+    # Теперь анализируем что именно ищет пользователь
+    
+    {
+      message: "🔄 #{localized_message('new_search_started')}\n\n#{localized_message('need_car_or_size_info')}",
+      filters_updated: @current_filters,
+      preferences_updated: @user_preferences,
+      action: 'new_search_started',
+      next_step: 'specify_car_or_size'
+    }
   end
 
   # Обработка запроса ценового сегмента
@@ -1227,7 +1274,11 @@ class TireChatService
       'mitsubishi' => ['лансер', 'аутлендер', 'паджеро', 'l200', 'asx'],
       'subaru' => ['импреза', 'форестер', 'легаси', 'аутбек', 'xv'],
       'volvo' => ['s60', 's90', 'xc60', 'xc90', 'v40'],
+      'вольво' => ['s60', 's90', 'xc60', 'xc90', 'v40'],
       'lexus' => ['rx', 'nx', 'gx', 'lx', 'es', 'ls'],
+      'лексус' => ['rx', 'nx', 'gx', 'lx', 'es', 'ls'],
+      'buick' => ['enclave', 'encore', 'envision', 'lacrosse'],
+      'бьюик' => ['enclave', 'encore', 'envision', 'lacrosse'],
       'infiniti' => ['qx50', 'qx70', 'q50', 'qx80', 'fx'],
       'acura' => ['mdx', 'rdx', 'tlx', 'ilx'],
       'land rover' => ['range rover', 'discovery', 'defender', 'freelander'],
@@ -1239,7 +1290,13 @@ class TireChatService
       'alfa romeo' => ['giulia', 'stelvio', '159', '147'],
       'fiat' => ['500', 'panda', 'tipo', 'doblo'],
       'lada' => ['веста', 'гранта', 'калина', 'приора', 'нива'],
-      'uaz' => ['патриот', 'хантер', 'буханка']
+      'uaz' => ['патриот', 'хантер', 'буханка'],
+      'tesla' => ['model s', 'model 3', 'model x', 'model y'],
+      'тесла' => ['model s', 'model 3', 'model x', 'model y'],
+      'bentley' => ['continental', 'flying spur', 'mulsanne', 'bentayga'],
+      'бентли' => ['continental', 'flying spur', 'mulsanne', 'bentayga'],
+      'ferrari' => ['f8', '488', 'portofino', 'roma'],
+      'феррари' => ['f8', '488', 'portofino', 'roma']
     }
     
     detected = []
@@ -1253,7 +1310,10 @@ class TireChatService
       
       # Проверяем модели - избегаем ложных срабатываний на числа размеров шин
       models.each do |model|
-        if msg_lower.include?(model)
+        # Улучшенная проверка: ищем модель как отдельное слово или в начале/конце слова
+        model_regex = /\b#{Regexp.escape(model)}\b|\b#{Regexp.escape(model)}(?=\s)|(?<=\s)#{Regexp.escape(model)}\b/i
+        
+        if msg_lower.match?(model_regex)
           # Дополнительная проверка: если модель - это число, проверяем контекст
           if model.match?(/^\d+$/) && msg_lower.match?(/\d+[\s\/\-]*\d+[\s\/\-]*\d+/)
             # Если в сообщении есть паттерн размера шин (3 числа), пропускаем модель-число
@@ -1667,6 +1727,8 @@ class TireChatService
         'season_accepted' => 'Отлично, ищем %{season} шины.',
         'brands_accepted' => 'Учту ваши предпочтения по брендам: %{brands}.',
         'no_results' => 'К сожалению, по вашим критериям не найдено подходящих шин. Попробуйте изменить параметры поиска.',
+        'new_search_started' => 'Начинаем новый поиск шин!',
+        'need_car_or_size_info' => 'Мне нужна информация о вашем автомобиле или размере шин. Укажите:\n🚗 **Марку и модель автомобиля** - например: Toyota Camry\n📏 **Или размер шин** - например: 205/55R16',
         
         # Ценовые сегменты
         'price_segment_premium' => 'премиум',
@@ -1768,7 +1830,7 @@ class TireChatService
         'continue_discussion_option' => '💬 Обсудить эти варианты подробнее',
         'new_search_option' => '🔍 Начать новый поиск с другими параметрами',
         'continuation_prompt' => 'Просто напишите, что вас интересует!',
-        'new_search_started' => 'Начинаем новый поиск! Все предыдущие параметры сброшены.',
+
         'continue_discussion_ready' => 'Отлично! Давайте обсудим найденные варианты шин. Что бы вы хотели узнать подробнее? Например, особенности конкретных моделей, сравнение характеристик или рекомендации по установке.',
         'need_more_info' => 'Для подбора оптимальных шин мне нужно знать:',
         'missing_size_param' => '📏 **Размер шин** - например: 205/55R16, 225/60R17',
@@ -1788,6 +1850,8 @@ class TireChatService
         'season_accepted' => 'Відмінно, шукаємо %{season} шини.',
         'brands_accepted' => 'Врахую ваші переваги щодо брендів: %{brands}.',
         'no_results' => 'На жаль, за вашими критеріями не знайдено підходящих шин. Спробуйте змінити параметри пошуку.',
+        'new_search_started' => 'Розпочинаємо новий пошук шин!',
+        'need_car_or_size_info' => 'Мені потрібна інформація про ваш автомобіль або розмір шин. Вкажіть:\n🚗 **Марку та модель автомобіля** - наприклад: Toyota Camry\n📏 **Або розмір шин** - наприклад: 205/55R16',
         
         # Ценовые сегменты
         'price_segment_premium' => 'преміум',
@@ -1889,7 +1953,7 @@ class TireChatService
         'continue_discussion_option' => '💬 Обговорити ці варіанти детальніше',
         'new_search_option' => '🔍 Почати новий пошук з іншими параметрами',
         'continuation_prompt' => 'Просто напишіть, що вас цікавить!',
-        'new_search_started' => 'Починаємо новий пошук! Усі попередні параметри скинуто.',
+
         'continue_discussion_ready' => 'Відмінно! Давайте обговоримо знайдені варіанти шин. Що б ви хотіли дізнатися детальніше? Наприклад, особливості конкретних моделей, порівняння характеристик або рекомендації щодо встановлення.',
         'need_more_info' => 'Для підбору оптимальних шин мені потрібно знати:',
         'missing_size_param' => '📏 **Розмір шин** - наприклад: 205/55R16, 225/60R17',
