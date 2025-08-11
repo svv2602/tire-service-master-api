@@ -802,8 +802,8 @@ class TireChatService
     size_display = "#{size_info[:width]}/#{size_info[:height]}R#{size_info[:diameter]}"
     season_display = get_season_display_name(season_info)
     
-    message = "🔍 **Вы можете также просмотреть все размеры:**\n\n"
-    message += "📋 Показать все варианты: **#{size_display} #{season_display}**"
+    message = "🔍 **#{localized_message('catalog_button_title')}**\n\n"
+    message += "📋 #{localized_message('catalog_button_text', size: size_display, season: season_display)}"
     
     message
   end
@@ -829,8 +829,11 @@ class TireChatService
     size_info = @current_filters[:size]
     season_info = @current_filters[:season]
     
+    size_display = "#{size_info[:width]}/#{size_info[:height]}R#{size_info[:diameter]}"
+    season_display = get_season_display_name(season_info)
+    
     {
-      text: "📋 Показать все варианты: #{size_info[:width]}/#{size_info[:height]}R#{size_info[:diameter]} #{get_season_display_name(season_info)}",
+      text: "📋 #{localized_message('catalog_button_text', size: size_display, season: season_display)}",
       filters: {
         width: size_info[:width],
         height: size_info[:height], 
