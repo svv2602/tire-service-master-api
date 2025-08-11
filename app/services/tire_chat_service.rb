@@ -131,13 +131,22 @@ class TireChatService
       intent_types << 'season_preference'
     end
     
-    # Приоритеты
+    # Приоритеты и ценовые сегменты
     if msg.match?(/цен.*качеств|соотношен|бюджет/i)
       parameters[:priority] = 'цена/качество'
       intent_types << 'priority_request'
     elsif msg.match?(/престиж|статус|бренд/i)
       parameters[:priority] = 'престиж'
       intent_types << 'priority_request'
+    elsif msg.match?(/дорог|премиум|дорож|эксклюзив|элитн|люкс|premium|expensive/i)
+      parameters[:price_segment] = 'premium'
+      intent_types << 'price_segment_request'
+    elsif msg.match?(/дешев|дешёв|бюджет|недорог|эконом|экономн|дёшев|cheap|budget/i)
+      parameters[:price_segment] = 'budget'
+      intent_types << 'price_segment_request'
+    elsif msg.match?(/средн|обычн|нормальн|типов|стандарт|middle|average/i)
+      parameters[:price_segment] = 'middle'
+      intent_types << 'price_segment_request'
     end
     
     # Запрос рекомендаций
@@ -241,6 +250,8 @@ class TireChatService
       handle_size_request(intent[:parameters])
     when 'priority_request'
       handle_priority_request(intent[:parameters])
+    when 'price_segment_request'
+      handle_price_segment_request(intent[:parameters], available_products)
     when 'recommendation_request'
       handle_recommendation_request(intent[:parameters], available_products)
     when 'brand_preference'
@@ -273,8 +284,8 @@ class TireChatService
     update_filters_from_parameters(parameters)
     
     # Определяем, что показать пользователю
-    if intent_types.include?('recommendation_request') || ready_for_recommendations?
-      # Если просят рекомендации или есть все данные - показываем рекомендации
+    if intent_types.include?('recommendation_request') || intent_types.include?('price_segment_request') || ready_for_recommendations?
+      # Если просят рекомендации/ценовые сегменты или есть все данные - показываем рекомендации
       Rails.logger.info "🎯 Все данные готовы, показываем рекомендации"
       
       # Формируем сообщение подтверждения параметров
@@ -365,6 +376,11 @@ class TireChatService
       @user_preferences[:priority_type] = normalize_priority(parameters[:priority])
     end
     
+    if parameters[:price_segment].present?
+      @user_preferences[:price_segment] = parameters[:price_segment]
+      Rails.logger.info "💰 Установлен ценовой сегмент: #{@user_preferences[:price_segment]}"
+    end
+    
     Rails.logger.info "🔧 Обновленные фильтры: #{@current_filters}"
     Rails.logger.info "🎯 Обновленные предпочтения: #{@user_preferences}"
   end
@@ -429,6 +445,58 @@ class TireChatService
       {
         message: localized_message('priority_options'),
         next_step: 'priority_request'
+      }
+    end
+  end
+
+  # Обработка запроса ценового сегмента
+  def handle_price_segment_request(parameters, available_products)
+    price_segment = parameters[:price_segment]
+    
+    # Сохраняем ценовой сегмент в предпочтениях
+    @user_preferences[:price_segment] = price_segment
+    
+    # Проверяем есть ли все обязательные данные для показа результатов
+    if @current_filters[:size].blank?
+      segment_name = get_price_segment_name(price_segment)
+      return {
+        message: "👍 Понял, ищем #{segment_name} шины. Для подбора мне нужно знать:\n\n📏 **Размер шин** - например: 205/55R16, 225/60R17",
+        preferences_updated: @user_preferences,
+        next_step: 'size_request'
+      }
+    end
+    
+    if @current_filters[:season].blank?
+      segment_name = get_price_segment_name(price_segment)
+      return {
+        message: "👍 Понял, ищем #{segment_name} шины размера #{@current_filters[:size][:full_size]}. Укажите сезон:\n\n❄️ **Зимние шины**\n☀️ **Летние шины**\n🔄 **Всесезонные шины**",
+        preferences_updated: @user_preferences,
+        next_step: 'season_request'
+      }
+    end
+    
+    # Если все данные есть - показываем результаты по ценовому сегменту
+    recommendations = get_price_segment_recommendations(available_products, price_segment)
+    
+    if recommendations.any?
+      catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
+      segment_name = get_price_segment_name(price_segment)
+      
+      {
+        message: "👍 #{segment_name.capitalize} шины размера #{@current_filters[:size][:full_size]}:\n\n#{format_price_segment_recommendations(recommendations, price_segment)}",
+        preferences_updated: @user_preferences,
+        recommendations: recommendations,
+        catalog_button: catalog_button_data,
+        action: 'show_price_segment_recommendations'
+      }
+    else
+      segment_name = get_price_segment_name(price_segment)
+      size_info = @current_filters[:size][:full_size]
+      season_info = @current_filters[:season]
+      
+      {
+        message: "😔 К сожалению, #{segment_name} шины размера #{size_info} для #{get_season_display_name(season_info).downcase} сезона не найдены.\n\nПопробуйте расширить критерии поиска или выбрать другой ценовой сегмент.",
+        action: 'no_results'
       }
     end
   end
@@ -751,6 +819,215 @@ class TireChatService
     }
   end
 
+  # Получение названия ценового сегмента
+  def get_price_segment_name(segment)
+    case segment
+    when 'premium'
+      'премиум'
+    when 'budget'
+      'бюджетные'
+    when 'middle'
+      'средний ценовой сегмент'
+    else
+      segment.to_s
+    end
+  end
+
+  # Получение рекомендаций по ценовому сегменту
+  def get_price_segment_recommendations(available_products = nil, price_segment)
+    Rails.logger.info "💰 Поиск рекомендаций для ценового сегмента: #{price_segment}"
+    
+    products_scope = available_products || SupplierTireProduct.in_stock.includes(:tire_brand, :tire_model, :country, :supplier)
+    
+    # Применяем базовые фильтры
+    if @current_filters[:size].present?
+      size_info = @current_filters[:size]
+      products_scope = products_scope.where(width: size_info[:width], height: size_info[:height], diameter: size_info[:diameter])
+    end
+    
+    if @current_filters[:season].present?
+      products_scope = products_scope.where(season: @current_filters[:season])
+    end
+    
+    all_products = products_scope.limit(500) # Увеличиваем лимит для лучшего анализа цен
+    Rails.logger.info "🎯 Всего товаров для ценового анализа: #{all_products.count}"
+    
+    return [] if all_products.count == 0
+    
+    # Группируем продукты по уникальным характеристикам шин
+    grouped_products = group_products_by_tire_params(all_products)
+    Rails.logger.info "🔄 Создано #{grouped_products.count} групп уникальных шин"
+    
+    # Если продуктов <= 5, показываем все
+    if grouped_products.count <= 5
+      Rails.logger.info "📦 Мало продуктов (#{grouped_products.count}), показываем все"
+      return sort_products_by_price_segment(grouped_products, price_segment)
+    end
+    
+    # Рассчитываем ценовые диапазоны
+    prices = grouped_products.map { |group| group[:best_product].price_uah }.compact
+    min_price = prices.min
+    max_price = prices.max
+    delta = (max_price - min_price) / 3.0
+    
+    Rails.logger.info "💰 Ценовые диапазоны: min=#{min_price}, max=#{max_price}, delta=#{delta}"
+    
+    # Фильтруем по ценовому сегменту
+    filtered_groups = case price_segment
+    when 'premium'
+      # Премиум: от (max - delta) до max, сортировка по убыванию
+      grouped_products.select { |group| group[:best_product].price_uah >= (max_price - delta) }
+                     .sort_by { |group| -group[:best_product].price_uah }
+    when 'budget'
+      # Бюджетный: от min до (min + delta), сортировка по возрастанию
+      grouped_products.select { |group| group[:best_product].price_uah <= (min_price + delta) }
+                     .sort_by { |group| group[:best_product].price_uah }
+    when 'middle'
+      # Средний: от (max - delta) до (min + delta), сортировка по убыванию
+      grouped_products.select { |group| 
+        price = group[:best_product].price_uah
+        price >= (min_price + delta) && price <= (max_price - delta)
+      }.sort_by { |group| -group[:best_product].price_uah }
+    else
+      grouped_products
+    end
+    
+    Rails.logger.info "🎯 Отфильтровано #{filtered_groups.count} групп для сегмента #{price_segment}"
+    
+    # Берем первые 5
+    selected_groups = filtered_groups.first(5)
+    
+    # Преобразуем в формат рекомендаций
+    selected_groups.map do |group|
+      product = group[:best_product]
+      
+      {
+        product: product,
+        optimality_score: 8.0, # Высокий балл для ценовых сегментов
+        recommendation_reasons: get_price_segment_reasons(price_segment, group),
+        tire_group_info: group[:tire_params],
+        suppliers_count: group[:suppliers_count],
+        price_savings: group[:price_range][:max] ? (group[:price_range][:max] - group[:price_range][:min]).to_i : 0
+      }
+    end
+  end
+
+  # Сортировка продуктов по ценовому сегменту (для малого количества)
+  def sort_products_by_price_segment(grouped_products, price_segment)
+    case price_segment
+    when 'premium'
+      grouped_products.sort_by { |group| -group[:best_product].price_uah }
+    when 'budget'
+      grouped_products.sort_by { |group| group[:best_product].price_uah }
+    else
+      grouped_products.sort_by { |group| -group[:best_product].price_uah }
+    end.map do |group|
+      product = group[:best_product]
+      
+      {
+        product: product,
+        optimality_score: 8.0,
+        recommendation_reasons: get_price_segment_reasons(price_segment, group),
+        tire_group_info: group[:tire_params],
+        suppliers_count: group[:suppliers_count],
+        price_savings: group[:price_range][:max] ? (group[:price_range][:max] - group[:price_range][:min]).to_i : 0
+      }
+    end
+  end
+
+  # Получение причин рекомендации для ценового сегмента
+  def get_price_segment_reasons(segment, group)
+    reasons = []
+    
+    case segment
+    when 'premium'
+      reasons << 'Премиум качество'
+      reasons << 'Высокие характеристики'
+    when 'budget'
+      reasons << 'Лучшая цена'
+      reasons << 'Экономичный выбор'
+    when 'middle'
+      reasons << 'Оптимальное соотношение цена/качество'
+      reasons << 'Средний ценовой сегмент'
+    end
+    
+    if group[:suppliers_count] > 1
+      reasons << "Доступен у #{group[:suppliers_count]} поставщиков"
+    end
+    
+    if group[:price_range][:max] && group[:price_range][:min] && 
+       group[:price_range][:max] > group[:price_range][:min]
+      savings = group[:price_range][:max] - group[:price_range][:min]
+      reasons << "Экономия до #{savings.to_i} грн"
+    end
+    
+    reasons
+  end
+
+  # Форматирование рекомендаций ценового сегмента
+  def format_price_segment_recommendations(recommendations, price_segment)
+    if recommendations.empty?
+      return "😔 К сожалению, подходящие шины не найдены."
+    end
+
+    message = ""
+    
+    recommendations.each_with_index do |item, index|
+      product = item[:product]
+      suppliers_count = item[:suppliers_count] || 1
+      price_savings = item[:price_savings] || 0
+      
+      message += "**#{index + 1}. #{product.brand_normalized} #{product.original_model}** "
+      message += "#{product.width}/#{product.height}R#{product.diameter} #{product.load_index}#{product.speed_index}\n"
+      
+      message += "   💰 **#{product.formatted_price}**"
+      
+      if suppliers_count > 1
+        message += " | 🏪 У #{suppliers_count} поставщиков"
+      end
+      
+      if price_savings > 0
+        message += " | 💸 Экономия до #{price_savings} грн"
+      end
+      
+      message += "\n"
+      
+      if product.country.present?
+        country_name = product.country.respond_to?(:name) ? product.country.name : product.country.to_s
+        message += "   🌍 #{country_name} | "
+      end
+      
+      if product.supplier.present?
+        message += "🏷️ #{product.supplier.name}"
+      end
+      
+      message += "\n"
+      
+      reasons = item[:recommendation_reasons] || []
+      if reasons.any?
+        message += "   ✨ *#{reasons.join(', ')}*\n"
+      end
+      
+      message += "\n"
+    end
+    
+    segment_explanation = case price_segment
+    when 'premium'
+      "💎 Показаны самые дорогие и качественные модели в данном размере."
+    when 'budget'
+      "💰 Показаны самые доступные по цене модели в данном размере."
+    when 'middle'
+      "⚖️ Показаны модели среднего ценового сегмента с оптимальным соотношением цена/качество."
+    else
+      "🔍 Показаны подходящие модели в данном размере."
+    end
+    
+    message += "💡 **#{segment_explanation}**\n"
+    message += format_continuation_options
+    
+    message
+  end
+
   # Объяснение логики рекомендаций
   def get_recommendation_explanation
     priority = @user_preferences[:priority_type]
@@ -1007,26 +1284,46 @@ class TireChatService
     
     # Если у нас есть размер и сезон - сразу ищем и показываем результат
     if ready_for_recommendations?
-      recommendations = get_tire_recommendations
-      
-      if recommendations.any?
-        catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
+      # Если установлен ценовой сегмент - используем специальную логику
+      if @user_preferences[:price_segment].present?
+        recommendations = get_price_segment_recommendations(nil, @user_preferences[:price_segment])
         
-        return {
-          message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{format_recommendations(recommendations)}",
-          filters_updated: @current_filters,
-          recommendations: recommendations,
-          catalog_button: catalog_button_data,
-          action: 'show_recommendations_with_options'
-        }
+        if recommendations.any?
+          catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
+          segment_name = get_price_segment_name(@user_preferences[:price_segment])
+          
+          return {
+            message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{segment_name.capitalize} шины размера #{@current_filters[:size][:full_size]}:\n\n#{format_price_segment_recommendations(recommendations, @user_preferences[:price_segment])}",
+            filters_updated: @current_filters,
+            preferences_updated: @user_preferences,
+            recommendations: recommendations,
+            catalog_button: catalog_button_data,
+            action: 'show_price_segment_recommendations'
+          }
+        end
       else
-        size_info = @current_filters[:size] ? @current_filters[:size][:full_size] : 'неизвестный'
-        return {
-          message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{localized_message('no_results_suggest_changes', size: size_info, season: season)}",
-          filters_updated: @current_filters,
-          action: 'no_results',
-          next_step: 'parameter_adjustment'
-        }
+        # Обычная логика для стандартных рекомендаций
+        recommendations = get_tire_recommendations
+        
+        if recommendations.any?
+          catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
+          
+          return {
+            message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{format_recommendations(recommendations)}",
+            filters_updated: @current_filters,
+            recommendations: recommendations,
+            catalog_button: catalog_button_data,
+            action: 'show_recommendations_with_options'
+          }
+        else
+          size_info = @current_filters[:size] ? @current_filters[:size][:full_size] : 'неизвестный'
+          return {
+            message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{localized_message('no_results_suggest_changes', size: size_info, season: season)}",
+            filters_updated: @current_filters,
+            action: 'no_results',
+            next_step: 'parameter_adjustment'
+          }
+        end
       end
     else
       next_step = determine_next_step
