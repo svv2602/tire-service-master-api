@@ -1562,7 +1562,7 @@ class TireChatService
         'brand_comparison_middle_title' => 'Средний сегмент (оптимальное соотношение)',
         'brand_comparison_budget_title' => 'Бюджетный сегмент (доступные цены)',
         'brand_comparison_recommendations_title' => 'Как выбрать?',
-        'brand_comparison_recommendations_text' => '• **Для максимальной безопасности** → Премиум бренды\n• **Для ежедневного использования** → Средний сегмент\n• **Для экономии бюджета** → Бюджетные бренды\n• **Для зимы** → Nokian, Continental, Gislaved\n• **Для спорта** → Michelin, Bridgestone\n• **Для города** → Barum, Marshal, Fulda',
+        'brand_comparison_recommendations_text' => "• **Для максимальной безопасности** → Премиум бренды\n• **Для ежедневного использования** → Средний сегмент\n• **Для экономии бюджета** → Бюджетные бренды\n• **Для зимы** → Nokian, Continental, Gislaved\n• **Для спорта** → Michelin, Bridgestone\n• **Для города** → Barum, Marshal, Fulda",
         'brand_comparison_call_to_action' => 'Назовите ваш бюджет и потребности, и я подберу оптимальный бренд!',
         
         # Страны
@@ -1683,7 +1683,7 @@ class TireChatService
         'brand_comparison_middle_title' => 'Середній сегмент (оптимальне співвідношення)',
         'brand_comparison_budget_title' => 'Бюджетний сегмент (доступні ціни)',
         'brand_comparison_recommendations_title' => 'Як обрати?',
-        'brand_comparison_recommendations_text' => '• **Для максимальної безпеки** → Преміум бренди\n• **Для щоденного використання** → Середній сегмент\n• **Для економії бюджету** → Бюджетні бренди\n• **Для зими** → Nokian, Continental, Gislaved\n• **Для спорту** → Michelin, Bridgestone\n• **Для міста** → Barum, Marshal, Fulda',
+        'brand_comparison_recommendations_text' => "• **Для максимальної безпеки** → Преміум бренди\n• **Для щоденного використання** → Середній сегмент\n• **Для економії бюджету** → Бюджетні бренди\n• **Для зими** → Nokian, Continental, Gislaved\n• **Для спорту** → Michelin, Bridgestone\n• **Для міста** → Barum, Marshal, Fulda",
         'brand_comparison_call_to_action' => 'Назвіть ваш бюджет та потреби, і я підберу оптимальний бренд!',
         
         # Страны
