@@ -776,6 +776,8 @@ Rails.application.routes.draw do
         delete 'version/:version', to: 'tire_data#delete_version', constraints: { version: /[^\/]+/ }
         post 'rollback/:version', to: 'tire_data#rollback', constraints: { version: /[^\/]+/ }
         post :clean_models, to: 'tire_data#clean_models'
+        post :cleanup_old_versions, to: 'tire_data#cleanup_old_versions'
+        post :cleanup_hidden_versions, to: 'tire_data#cleanup_hidden_versions'
       end
     end
     end

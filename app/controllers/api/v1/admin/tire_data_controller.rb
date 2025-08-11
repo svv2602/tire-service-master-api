@@ -140,8 +140,11 @@ module Api
           csv_path = request_body['csv_path'] || params[:csv_path]
           # Генерируем версию в формате YYYY.N если не указана
           version = request_body['version'] || params[:version] || generate_auto_version
-          # Проверяем force_reload в продакшене
-          force_reload = request_body['force_reload'] || (params[:force_reload] == 'true')
+          # Читаем опции из вложенного объекта options или корня
+          options_data = request_body['options'] || {}
+          
+          # Проверяем force_reload в продакшене (читаем из options или корня)
+          force_reload = options_data['force_reload'] || request_body['force_reload'] || (params[:force_reload] == 'true')
           if force_reload && Rails.env.production?
             return render json: { 
               status: 'error', 
@@ -151,11 +154,11 @@ module Api
           end
           
           options = {
-            skip_invalid_rows: request_body['skip_invalid_rows'] || (params[:skip_invalid_rows] == 'true'),
-            fix_suspicious_sizes: request_body['fix_suspicious_sizes'] || (params[:fix_suspicious_sizes] == 'true'),
-            encoding_fallback: request_body['encoding_fallback'] || params[:encoding_fallback] || 'utf-8',
+            skip_invalid_rows: options_data['skip_invalid_rows'] || request_body['skip_invalid_rows'] || (params[:skip_invalid_rows] == 'true'),
+            fix_suspicious_sizes: options_data['fix_suspicious_sizes'] || request_body['fix_suspicious_sizes'] || (params[:fix_suspicious_sizes] == 'true'),
+            encoding_fallback: options_data['encoding_fallback'] || request_body['encoding_fallback'] || params[:encoding_fallback] || 'utf-8',
             force_reload: force_reload,
-            clear_only: request_body['clear_only'] || (params[:clear_only] == 'true')
+            clear_only: options_data['clear_only'] || request_body['clear_only'] || (params[:clear_only] == 'true')
           }
           
           # Для clear_only путь к CSV не обязателен
@@ -366,6 +369,89 @@ module Api
             
           rescue => e
             Rails.logger.error "Ошибка очистки моделей: #{e.message}"
+            render json: { status: 'error', message: e.message }, status: :internal_server_error
+          end
+        end
+
+        # POST /api/v1/admin/tire_data/cleanup_old_versions
+        def cleanup_old_versions
+          begin
+            # Находим версии старше 30 дней, которые можно безопасно удалить
+            deletable_versions = TireDataVersion.where.not(is_active: true)
+                                                .where('imported_at < ?', 30.days.ago)
+            
+            if deletable_versions.empty?
+              return render json: { 
+                status: 'info', 
+                message: 'Нет устаревших версий для удаления' 
+              }, status: :ok
+            end
+
+            deleted_count = 0
+            deleted_versions = []
+
+            deletable_versions.each do |version|
+              if version.can_be_deleted?
+                # Удаляем связанные конфигурации
+                CarTireConfiguration.where(data_version: version.version).delete_all
+                
+                deleted_versions << version.version
+                version.destroy
+                deleted_count += 1
+              end
+            end
+
+            render json: { 
+              status: 'success', 
+              message: "Удалено #{deleted_count} устаревших версий: #{deleted_versions.join(', ')}"
+            }, status: :ok
+          rescue => e
+            Rails.logger.error "Ошибка очистки устаревших версий: #{e.message}"
+            render json: { status: 'error', message: e.message }, status: :internal_server_error
+          end
+        end
+
+        # POST /api/v1/admin/tire_data/cleanup_hidden_versions  
+        def cleanup_hidden_versions
+          begin
+            current_version_data = TireDataVersion.where(is_active: true).first
+            
+            unless current_version_data
+              return render json: { 
+                status: 'error', 
+                message: 'Нет активной версии для определения скрытых версий' 
+              }, status: :bad_request
+            end
+
+            # Находим версии, которые скрыты (созданы после текущей активной)
+            hidden_versions = TireDataVersion.where('imported_at > ?', current_version_data.imported_at)
+                                             .where.not(is_active: true)
+
+            if hidden_versions.empty?
+              return render json: { 
+                status: 'info', 
+                message: 'Нет скрытых версий для удаления' 
+              }, status: :ok
+            end
+
+            deleted_count = 0
+            deleted_versions = []
+
+            hidden_versions.each do |version|
+              # Удаляем связанные конфигурации
+              CarTireConfiguration.where(data_version: version.version).delete_all
+              
+              deleted_versions << version.version
+              version.destroy
+              deleted_count += 1
+            end
+
+            render json: { 
+              status: 'success', 
+              message: "Удалено #{deleted_count} скрытых версий: #{deleted_versions.join(', ')}"
+            }, status: :ok
+          rescue => e
+            Rails.logger.error "Ошибка очистки скрытых версий: #{e.message}"
             render json: { status: 'error', message: e.message }, status: :internal_server_error
           end
         end
