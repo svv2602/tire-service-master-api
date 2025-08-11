@@ -1436,6 +1436,14 @@ class TireChatService
   end
 
   def handle_general_question(parameters, available_products)
+    # Для сложных запросов используем OpenAI
+    original_message = @conversation_history.last&.dig(:message) || ''
+    
+    if should_use_openai_for_chat?(original_message)
+      return handle_openai_chat_request(original_message, parameters, available_products)
+    end
+    
+    # Для простых запросов возвращаем стандартное приветствие
     {
       message: "👋 #{localized_message('welcome_message')}",
       next_step: 'size_request'
@@ -1455,6 +1463,14 @@ class TireChatService
 
   # Обработка запроса на продолжение обсуждения текущих результатов
   def handle_continue_discussion(parameters)
+    # Для сложных запросов используем OpenAI
+    original_message = @conversation_history.last&.dig(:message) || ''
+    
+    if should_use_openai_for_chat?(original_message)
+      return handle_openai_chat_request(original_message, parameters, nil)
+    end
+    
+    # Для простых запросов возвращаем стандартный ответ
     {
       message: "💬 #{localized_message('continue_discussion_ready')}",
       action: 'continue_discussion',
@@ -1477,6 +1493,76 @@ class TireChatService
       message: format_brand_comparison_message,
       action: 'brand_comparison_shown',
       next_step: 'brand_selection'
+    }
+  end
+
+  # Определение, нужно ли использовать OpenAI для запроса
+  def should_use_openai_for_chat?(message)
+    return false unless OpenaiService.available?
+    return false if message.blank?
+    
+    # Используем OpenAI для:
+    # 1. Вопросов о конкретных моделях шин
+    model_comparison_patterns = [
+      /сравни.*модел|порівня.*модел|сравнить.*модел|порівняти.*модел/i,
+      /особенност|характеристик|відмінност|різниц/i,
+      /против|проти|vs|versus/i,
+      /лучше|кращ|лучш|краще/i
+    ]
+    
+    # 2. Сложных технических вопросов
+    technical_patterns = [
+      /какие.*характеристи|які.*характеристи/i,
+      /почему|чому|как работа|як працю/i,
+      /разниц.*между|різниц.*між/i,
+      /преимущест|переваг|недостат|недолік/i,
+      /особенност|особливост/i,
+      /важнее|важлив|важко/i,
+      /качеств|якіст/i
+    ]
+    
+    # 3. Запросов требующих экспертного анализа
+    expert_patterns = [
+      /рекомендац|порад|совет|підказ/i,
+      /что лучше|що краще|что выбрать|що обрати/i,
+      /стоит ли|чи варто|имеет смысл|має сенс/i
+    ]
+    
+    all_patterns = model_comparison_patterns + technical_patterns + expert_patterns
+    all_patterns.any? { |pattern| message.match?(pattern) }
+  end
+
+  # Обработка запроса через OpenAI
+  def handle_openai_chat_request(message, parameters, available_products)
+    Rails.logger.info "🤖 Используем OpenAI для чата: #{message}"
+    
+    begin
+      openai_service = OpenaiService.new
+      response = openai_service.generate_tire_chat_response(message, @current_filters, @locale)
+      
+      if response.present?
+        Rails.logger.info "✅ OpenAI сгенерировал ответ для чата"
+        {
+          message: response,
+          action: 'openai_response',
+          next_step: 'continue_discussion'
+        }
+      else
+        # Fallback на стандартный ответ
+        fallback_response
+      end
+    rescue => e
+      Rails.logger.error "❌ Ошибка OpenAI в чате: #{e.message}"
+      fallback_response
+    end
+  end
+
+  # Fallback ответ при проблемах с OpenAI
+  def fallback_response
+    {
+      message: "💬 #{localized_message('continue_discussion_ready')}",
+      action: 'continue_discussion',
+      next_step: 'discussion_mode'
     }
   end
 

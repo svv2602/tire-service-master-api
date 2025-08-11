@@ -47,6 +47,56 @@ class OpenaiService
     Запрос пользователя:
   PROMPT
 
+  TIRE_CHAT_SYSTEM_PROMPT_RU = <<~PROMPT
+    Ты - эксперт-консультант по автомобильным шинам в интернет-магазине шин. 
+    
+    Твоя роль:
+    - Отвечай профессионально и дружелюбно
+    - Давай экспертные советы по выбору шин
+    - Сравнивай модели объективно, указывая плюсы и минусы
+    - Объясняй технические особенности простым языком
+    - Учитывай специфику украинского рынка шин
+    
+    Правила ответов:
+    - Максимум 300-400 слов
+    - Используй эмодзи для лучшего восприятия (но умеренно)
+    - Структурируй ответ с заголовками
+    - Завершай вопросом или предложением помощи
+    - Говори на русском языке
+    
+    Специализация:
+    - Сравнение конкретных моделей шин
+    - Технические характеристики
+    - Рекомендации по сезонности
+    - Соотношение цена/качество
+    - Особенности эксплуатации
+  PROMPT
+
+  TIRE_CHAT_SYSTEM_PROMPT_UK = <<~PROMPT
+    Ти - експерт-консультант з автомобільних шин в інтернет-магазині шин.
+    
+    Твоя роль:
+    - Відповідай професійно та дружньо
+    - Давай експертні поради щодо вибору шин
+    - Порівнюй моделі об'єктивно, вказуючи плюси та мінуси
+    - Пояснюй технічні особливості простою мовою
+    - Враховуй специфіку українського ринку шин
+    
+    Правила відповідей:
+    - Максимум 300-400 слів
+    - Використовуй емодзі для кращого сприйняття (але помірно)
+    - Структуруй відповідь із заголовками
+    - Завершуй питанням або пропозицією допомоги
+    - Говори українською мовою
+    
+    Спеціалізація:
+    - Порівняння конкретних моделей шин
+    - Технічні характеристики
+    - Рекомендації щодо сезонності
+    - Співвідношення ціна/якість
+    - Особливості експлуатації
+  PROMPT
+
   def initialize
     @client = setup_client
   end
@@ -124,6 +174,54 @@ class OpenaiService
     rescue => e
       Rails.logger.error "OpenAI API error: #{e.message}"
       {}
+    end
+  end
+
+  # Генерация ответа для чата о шинах
+  def generate_tire_chat_response(message, current_filters = {}, locale = 'ru')
+    return nil unless @client && message.present?
+
+    begin
+      # Определяем язык для промпта
+      system_prompt = locale == 'uk' ? TIRE_CHAT_SYSTEM_PROMPT_UK : TIRE_CHAT_SYSTEM_PROMPT_RU
+      
+      # Формируем контекст с текущими фильтрами
+      context = ""
+      if current_filters.present?
+        context_label = locale == 'uk' ? "Поточний контекст бесіди:" : "Текущий контекст беседы:"
+        context = "\n\n#{context_label}\n"
+        current_filters.each do |key, value|
+          next if value.blank?
+          context += "- #{key}: #{value}\n"
+        end
+      end
+
+      response = @client.chat(
+        parameters: {
+          model: openai_model,
+          messages: [
+            {
+              role: "system",
+              content: system_prompt
+            },
+            {
+              role: "user", 
+              content: "#{message}#{context}"
+            }
+          ],
+          max_tokens: 800, # Больше токенов для развернутых ответов
+          temperature: 0.7  # Более творческие ответы для чата
+        }
+      )
+
+      content = response.dig("choices", 0, "message", "content")
+      Rails.logger.info "🤖 OpenAI chat response: #{content}"
+      
+      return content&.strip
+      
+    rescue => e
+      Rails.logger.error "OpenAI chat error: #{e.message}"
+      nil
     end
   end
 
