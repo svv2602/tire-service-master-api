@@ -154,6 +154,11 @@ class TireChatService
       intent_types << 'recommendation_request'
     end
     
+    # Вопрос о выборе размера
+    if msg.match?(/какой размер|як.* розмір|выбрать размер|обрати розмір|размер выбрать|розмір обрати|как найти размер|як знайти розмір/i)
+      intent_types << 'size_guide_request'
+    end
+    
     # Запрос на новый поиск
     if msg.match?(/новый поиск|нов\w* поиск|начать заново|другие параметры|изменить критерии|сбросить|поиск другой|новий пошук|починати заново|інші параметри|скинути/i)
       intent_types << 'new_search_request'
@@ -268,6 +273,8 @@ class TireChatService
       handle_continue_discussion(intent[:parameters])
     when 'car_model_request'
       handle_car_model_request(intent[:parameters])
+    when 'size_guide_request'
+      handle_size_guide_request(intent[:parameters])
     else
       handle_general_question(intent[:parameters], available_products)
     end
@@ -1440,6 +1447,15 @@ class TireChatService
     }
   end
 
+  # Обработка запроса о том, как выбрать размер шин
+  def handle_size_guide_request(parameters)
+    {
+      message: format_size_guide_message,
+      action: 'size_guide_shown',
+      next_step: 'size_request'
+    }
+  end
+
   # Получение локализованного сообщения
   def localized_message(key, **interpolations)
     messages = {
@@ -1499,6 +1515,21 @@ class TireChatService
         # Кнопка каталога
         'catalog_button_text' => 'Показать все варианты: %{size} %{season}',
         'catalog_button_title' => 'Вы можете также просмотреть все размеры:',
+        
+        # Руководство по выбору размера
+        'size_guide_title' => 'Как выбрать правильный размер шин?',
+        'size_guide_how_to_find' => 'Размер шин указан на боковине покрышки в формате: **195/65R15**',
+        'size_guide_explanation_title' => 'Расшифровка размера:',
+        'size_guide_explanation' => '• **195** - ширина шины в миллиметрах\n• **65** - высота профиля в % от ширины\n• **R** - радиальная конструкция\n• **15** - диаметр диска в дюймах',
+        'size_guide_popular_title' => 'Популярные размеры:',
+        'size_guide_compact_cars' => 'компактные автомобили',
+        'size_guide_standard_cars' => 'стандартные легковые авто',
+        'size_guide_crossovers' => 'кроссоверы и внедорожники',
+        'size_guide_suvs' => 'большие внедорожники',
+        'size_guide_small_cars' => 'малолитражки',
+        'size_guide_car_search_title' => 'Не знаете размер?',
+        'size_guide_car_search_description' => 'Укажите марку и модель вашего автомобиля, и я помогу найти подходящий размер шин.',
+        'size_guide_call_to_action' => 'Введите размер шин или марку автомобиля, чтобы начать подбор!',
         'no_results_suggest_changes' => 'К сожалению, по размеру %{size} и сезону %{season} шин не найдено. Попробуйте другой размер или проверьте наличие в других категориях.',
         'recommendations_title' => 'Вот мои рекомендации для вас:',
         'recommendation_explanation_title' => 'Почему именно эти шины?',
@@ -1568,6 +1599,21 @@ class TireChatService
         # Кнопка каталога  
         'catalog_button_text' => 'Показати всі варіанти: %{size} %{season}',
         'catalog_button_title' => 'Ви можете також переглянути всі розміри:',
+        
+        # Руководство по выбору размера
+        'size_guide_title' => 'Як обрати правильний розмір шин?',
+        'size_guide_how_to_find' => 'Розмір шин вказаний на боковині покришки у форматі: **195/65R15**',
+        'size_guide_explanation_title' => 'Розшифровка розміру:',
+        'size_guide_explanation' => '• **195** - ширина шини в міліметрах\n• **65** - висота профілю в % від ширини\n• **R** - радіальна конструкція\n• **15** - діаметр диска в дюймах',
+        'size_guide_popular_title' => 'Популярні розміри:',
+        'size_guide_compact_cars' => 'компактні автомобілі',
+        'size_guide_standard_cars' => 'стандартні легкові авто',
+        'size_guide_crossovers' => 'кросовери та позашляховики',
+        'size_guide_suvs' => 'великі позашляховики',
+        'size_guide_small_cars' => 'малолітражки',
+        'size_guide_car_search_title' => 'Не знаєте розмір?',
+        'size_guide_car_search_description' => 'Вкажіть марку та модель вашого автомобіля, і я допоможу знайти підходящий розмір шин.',
+        'size_guide_call_to_action' => 'Введіть розмір шин або марку автомобіля, щоб почати підбір!',
         'no_results_suggest_changes' => 'На жаль, за розміром %{size} та сезоном %{season} шин не знайдено. Спробуйте інший розмір або перевірте наявність в інших категоріях.',
         'recommendations_title' => 'Ось мої рекомендації для вас:',
         'recommendation_explanation_title' => 'Чому саме ці шини?',
@@ -1601,6 +1647,48 @@ class TireChatService
     else
       'recommendation_request'
     end
+  end
+
+  # Форматирование руководства по выбору размера шин
+  def format_size_guide_message
+    message = "📏 **#{localized_message('size_guide_title')}**\n\n"
+    
+    # Объяснение как найти размер
+    message += "🔍 #{localized_message('size_guide_how_to_find')}\n\n"
+    
+    # Расшифровка размера
+    message += "📋 **#{localized_message('size_guide_explanation_title')}**\n"
+    message += "#{localized_message('size_guide_explanation')}\n\n"
+    
+    # Популярные размеры
+    message += "⭐ **#{localized_message('size_guide_popular_title')}**\n"
+    popular_sizes = get_popular_tire_sizes
+    popular_sizes.each_with_index do |size, index|
+      message += "#{index + 1}. **#{size[:display]}** - #{size[:description]}\n"
+    end
+    message += "\n"
+    
+    # Кнопка поиска по автомобилю (если есть функция)
+    message += "🚗 **#{localized_message('size_guide_car_search_title')}**\n"
+    message += "#{localized_message('size_guide_car_search_description')}\n\n"
+    
+    # Призыв к действию
+    message += "💬 #{localized_message('size_guide_call_to_action')}"
+    
+    message
+  end
+
+  # Получение популярных размеров шин
+  def get_popular_tire_sizes
+    popular_sizes = [
+      { display: "195/65R15", description: localized_message('size_guide_compact_cars') },
+      { display: "205/55R16", description: localized_message('size_guide_standard_cars') },
+      { display: "225/60R17", description: localized_message('size_guide_crossovers') },
+      { display: "235/55R18", description: localized_message('size_guide_suvs') },
+      { display: "175/70R13", description: localized_message('size_guide_small_cars') }
+    ]
+    
+    popular_sizes
   end
   
   # Определение следующего шага в диалоге
