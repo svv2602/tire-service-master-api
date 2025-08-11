@@ -590,6 +590,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.index ["point_id"], name: "index_orders_on_point_id"
     t.index ["service_point_id", "status"], name: "index_orders_on_service_point_id_and_status"
     t.index ["service_point_id"], name: "index_orders_on_service_point_id"
+    t.index ["supplier_id", "status"], name: "index_orders_on_supplier_id_and_status"
     t.index ["supplier_id"], name: "index_orders_on_supplier_id"
     t.index ["ttn"], name: "index_orders_on_ttn", unique: true
   end
