@@ -119,15 +119,15 @@ class TireChatService
       end
     end
     
-    # Сезонность
+    # Сезонность - нормализуем сразу к внутренним значениям
     if msg.match?(/летн|літн|лето|літо|summer/i)
-      parameters[:season] = 'летние'
+      parameters[:season] = 'summer'
       intent_types << 'season_preference'
     elsif msg.match?(/зимн|зимов|зима|winter/i)
-      parameters[:season] = 'зимние'
+      parameters[:season] = 'winter'
       intent_types << 'season_preference'
     elsif msg.match?(/всесезон|всесезон|all.season/i)
-      parameters[:season] = 'всесезонные'
+      parameters[:season] = 'all_season'
       intent_types << 'season_preference'
     end
     
@@ -138,13 +138,13 @@ class TireChatService
     elsif msg.match?(/престиж|статус|бренд/i)
       parameters[:priority] = 'престиж'
       intent_types << 'priority_request'
-    elsif msg.match?(/дорог|премиум|дорож|эксклюзив|элитн|люкс|premium|expensive/i)
+    elsif msg.match?(/дорог|премиум|дорож|эксклюзив|элитн|люкс|дорогі|преміум|premium|expensive/i)
       parameters[:price_segment] = 'premium'
       intent_types << 'price_segment_request'
-    elsif msg.match?(/дешев|дешёв|бюджет|недорог|эконом|экономн|дёшев|cheap|budget/i)
+    elsif msg.match?(/дешев|дешёв|бюджет|недорог|эконом|экономн|дёшев|дешеві|бюджетні|недорогі|cheap|budget/i)
       parameters[:price_segment] = 'budget'
       intent_types << 'price_segment_request'
-    elsif msg.match?(/средн|обычн|нормальн|типов|стандарт|middle|average/i)
+    elsif msg.match?(/средн|обычн|нормальн|типов|стандарт|середн|звичайн|нормальн|середній|middle|average/i)
       parameters[:price_segment] = 'middle'
       intent_types << 'price_segment_request'
     end
@@ -291,29 +291,49 @@ class TireChatService
       # Формируем сообщение подтверждения параметров
       confirmations = []
       if parameters[:size].present?
-        confirmations << "размер #{parameters[:size]}"
+        size_text = @locale == 'uk' ? 'розмір' : 'размер'
+        confirmations << "#{size_text} #{parameters[:size]}"
       end
       if parameters[:season].present?
-        confirmations << "#{parameters[:season]} шины"
+        season_name = get_season_display_name(parameters[:season]).downcase
+        tires_text = @locale == 'uk' ? 'шини' : 'шины'
+        confirmations << "#{season_name} #{tires_text}"
       end
       if parameters[:priority].present?
-        confirmations << "приоритет: #{parameters[:priority]}"
+        priority_text = @locale == 'uk' ? 'пріоритет' : 'приоритет'
+        confirmations << "#{priority_text}: #{parameters[:priority]}"
       end
       
-      # Получаем рекомендации
-      recommendations = get_tire_recommendations(available_products)
+      # Получаем рекомендации в зависимости от типа запроса
+      if intent_types.include?('price_segment_request')
+        price_segment = parameters[:price_segment]
+        recommendations = get_price_segment_recommendations(available_products, price_segment)
+      else
+        recommendations = get_tire_recommendations(available_products)
+      end
       
       if recommendations.any?
         catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
-        confirmation_msg = confirmations.any? ? "✅ Принято: #{confirmations.join(', ')}.\n\n" : ""
+        accepted_text = @locale == 'uk' ? 'Прийнято' : 'Принято'
+        confirmation_msg = confirmations.any? ? "✅ #{accepted_text}: #{confirmations.join(', ')}.\n\n" : ""
+        
+        # Выбираем правильный формат сообщения
+        if intent_types.include?('price_segment_request')
+          price_segment = parameters[:price_segment]
+          recommendations_text = format_price_segment_recommendations(recommendations, price_segment)
+          action = 'show_price_segment_recommendations'
+        else
+          recommendations_text = format_recommendations(recommendations)
+          action = 'show_recommendations_with_options'
+        end
         
         {
-          message: "#{confirmation_msg}#{format_recommendations(recommendations)}",
+          message: "#{confirmation_msg}#{recommendations_text}",
           filters_updated: @current_filters,
           preferences_updated: @user_preferences,
           recommendations: recommendations,
           catalog_button: catalog_button_data,
-          action: 'show_recommendations_with_options'
+          action: action
         }
       else
         confirmation_msg = confirmations.any? ? "✅ Принято: #{confirmations.join(', ')}.\n\n" : ""
@@ -460,7 +480,7 @@ class TireChatService
     if @current_filters[:size].blank?
       segment_name = get_price_segment_name(price_segment)
       return {
-        message: "👍 Понял, ищем #{segment_name} шины. Для подбора мне нужно знать:\n\n📏 **Размер шин** - например: 205/55R16, 225/60R17",
+        message: "👍 #{localized_message('price_segment_request_size', segment_name: segment_name)}",
         preferences_updated: @user_preferences,
         next_step: 'size_request'
       }
@@ -469,7 +489,7 @@ class TireChatService
     if @current_filters[:season].blank?
       segment_name = get_price_segment_name(price_segment)
       return {
-        message: "👍 Понял, ищем #{segment_name} шины размера #{@current_filters[:size][:full_size]}. Укажите сезон:\n\n❄️ **Зимние шины**\n☀️ **Летние шины**\n🔄 **Всесезонные шины**",
+        message: "👍 #{localized_message('price_segment_request_season', segment_name: segment_name, size: @current_filters[:size][:full_size])}",
         preferences_updated: @user_preferences,
         next_step: 'season_request'
       }
@@ -482,8 +502,10 @@ class TireChatService
       catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
       segment_name = get_price_segment_name(price_segment)
       
+      tires_text = @locale == 'uk' ? 'шини розміру' : 'шины размера'
+      
       {
-        message: "👍 #{segment_name.capitalize} шины размера #{@current_filters[:size][:full_size]}:\n\n#{format_price_segment_recommendations(recommendations, price_segment)}",
+        message: "👍 #{segment_name.capitalize} #{tires_text} #{@current_filters[:size][:full_size]}:\n\n#{format_price_segment_recommendations(recommendations, price_segment)}",
         preferences_updated: @user_preferences,
         recommendations: recommendations,
         catalog_button: catalog_button_data,
@@ -492,10 +514,10 @@ class TireChatService
     else
       segment_name = get_price_segment_name(price_segment)
       size_info = @current_filters[:size][:full_size]
-      season_info = @current_filters[:season]
+      season_info = get_season_display_name(@current_filters[:season]).downcase
       
       {
-        message: "😔 К сожалению, #{segment_name} шины размера #{size_info} для #{get_season_display_name(season_info).downcase} сезона не найдены.\n\nПопробуйте расширить критерии поиска или выбрать другой ценовой сегмент.",
+        message: "😔 #{localized_message('price_segment_no_results', segment_name: segment_name, size: size_info, season: season_info)}",
         action: 'no_results'
       }
     end
@@ -790,11 +812,11 @@ class TireChatService
   def get_season_display_name(season)
     case season
     when 'winter'
-      'Зимние'
+      localized_message('season_winter')
     when 'summer'
-      'Летние'  
+      localized_message('season_summer')
     when 'all_season'
-      'Всесезонные'
+      localized_message('season_all_season')
     else
       season.to_s.capitalize
     end
@@ -823,11 +845,11 @@ class TireChatService
   def get_price_segment_name(segment)
     case segment
     when 'premium'
-      'премиум'
+      localized_message('price_segment_premium')
     when 'budget'
-      'бюджетные'
+      localized_message('price_segment_budget')
     when 'middle'
-      'средний ценовой сегмент'
+      localized_message('price_segment_middle')
     else
       segment.to_s
     end
@@ -941,24 +963,24 @@ class TireChatService
     
     case segment
     when 'premium'
-      reasons << 'Премиум качество'
-      reasons << 'Высокие характеристики'
+      reasons << localized_message('reason_premium_quality')
+      reasons << localized_message('reason_high_performance')
     when 'budget'
-      reasons << 'Лучшая цена'
-      reasons << 'Экономичный выбор'
+      reasons << localized_message('reason_best_price')
+      reasons << localized_message('reason_economical')
     when 'middle'
-      reasons << 'Оптимальное соотношение цена/качество'
-      reasons << 'Средний ценовой сегмент'
+      reasons << localized_message('reason_optimal_ratio')
+      reasons << localized_message('reason_middle_segment')
     end
     
     if group[:suppliers_count] > 1
-      reasons << "Доступен у #{group[:suppliers_count]} поставщиков"
+      reasons << localized_message('reason_multiple_suppliers', count: group[:suppliers_count])
     end
     
     if group[:price_range][:max] && group[:price_range][:min] && 
        group[:price_range][:max] > group[:price_range][:min]
       savings = group[:price_range][:max] - group[:price_range][:min]
-      reasons << "Экономия до #{savings.to_i} грн"
+      reasons << localized_message('reason_savings', amount: savings.to_i)
     end
     
     reasons
@@ -967,7 +989,7 @@ class TireChatService
   # Форматирование рекомендаций ценового сегмента
   def format_price_segment_recommendations(recommendations, price_segment)
     if recommendations.empty?
-      return "😔 К сожалению, подходящие шины не найдены."
+      return "😔 #{localized_message('price_segment_not_found')}"
     end
 
     message = ""
@@ -983,11 +1005,13 @@ class TireChatService
       message += "   💰 **#{product.formatted_price}**"
       
       if suppliers_count > 1
-        message += " | 🏪 У #{suppliers_count} поставщиков"
+        suppliers_text = @locale == 'uk' ? 'постачальників' : 'поставщиков'
+        message += " | 🏪 У #{suppliers_count} #{suppliers_text}"
       end
       
       if price_savings > 0
-        message += " | 💸 Экономия до #{price_savings} грн"
+        savings_text = @locale == 'uk' ? 'Економія до' : 'Экономия до'
+        message += " | 💸 #{savings_text} #{price_savings} грн"
       end
       
       message += "\n"
@@ -1013,13 +1037,13 @@ class TireChatService
     
     segment_explanation = case price_segment
     when 'premium'
-      "💎 Показаны самые дорогие и качественные модели в данном размере."
+      "💎 #{localized_message('segment_explanation_premium')}"
     when 'budget'
-      "💰 Показаны самые доступные по цене модели в данном размере."
+      "💰 #{localized_message('segment_explanation_budget')}"
     when 'middle'
-      "⚖️ Показаны модели среднего ценового сегмента с оптимальным соотношением цена/качество."
+      "⚖️ #{localized_message('segment_explanation_middle')}"
     else
-      "🔍 Показаны подходящие модели в данном размере."
+      "🔍 #{localized_message('segment_explanation_default')}"
     end
     
     message += "💡 **#{segment_explanation}**\n"
@@ -1292,8 +1316,10 @@ class TireChatService
           catalog_button_data = get_catalog_button_data if @current_filters[:size].present? && @current_filters[:season].present?
           segment_name = get_price_segment_name(@user_preferences[:price_segment])
           
+          tires_text = @locale == 'uk' ? 'шини розміру' : 'шины размера'
+          
           return {
-            message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{segment_name.capitalize} шины размера #{@current_filters[:size][:full_size]}:\n\n#{format_price_segment_recommendations(recommendations, @user_preferences[:price_segment])}",
+            message: "✅ #{localized_message('season_accepted', season: season)}\n\n#{segment_name.capitalize} #{tires_text} #{@current_filters[:size][:full_size]}:\n\n#{format_price_segment_recommendations(recommendations, @user_preferences[:price_segment])}",
             filters_updated: @current_filters,
             preferences_updated: @user_preferences,
             recommendations: recommendations,
@@ -1428,6 +1454,48 @@ class TireChatService
         'season_accepted' => 'Отлично, ищем %{season} шины.',
         'brands_accepted' => 'Учту ваши предпочтения по брендам: %{brands}.',
         'no_results' => 'К сожалению, по вашим критериям не найдено подходящих шин. Попробуйте изменить параметры поиска.',
+        
+        # Ценовые сегменты
+        'price_segment_premium' => 'премиум',
+        'price_segment_budget' => 'бюджетные',
+        'price_segment_middle' => 'средний ценовой сегмент',
+        'price_segment_request_size' => 'Понял, ищем %{segment_name} шины. Для подбора мне нужно знать:
+
+📏 **Размер шин** - например: 205/55R16, 225/60R17',
+        'price_segment_request_season' => 'Понял, ищем %{segment_name} шины размера %{size}. Укажите сезон:
+
+❄️ **Зимние шины**
+☀️ **Летние шины**
+🔄 **Всесезонные шины**',
+        'price_segment_no_results' => 'К сожалению, %{segment_name} шины размера %{size} для %{season} сезона не найдены.
+
+Попробуйте расширить критерии поиска или выбрать другой ценовой сегмент.',
+        'price_segment_not_found' => 'К сожалению, подходящие шины не найдены.',
+        
+        # Объяснения ценовых сегментов
+        'segment_explanation_premium' => 'Показаны самые дорогие и качественные модели в данном размере.',
+        'segment_explanation_budget' => 'Показаны самые доступные по цене модели в данном размере.',
+        'segment_explanation_middle' => 'Показаны модели среднего ценового сегмента с оптимальным соотношением цена/качество.',
+        'segment_explanation_default' => 'Показаны подходящие модели в данном размере.',
+        
+        # Названия сезонов
+        'season_winter' => 'Зимние',
+        'season_summer' => 'Летние',
+        'season_all_season' => 'Всесезонные',
+        
+        # Причины рекомендаций
+        'reason_premium_quality' => 'Премиум качество',
+        'reason_high_performance' => 'Высокие характеристики',
+        'reason_best_price' => 'Лучшая цена',
+        'reason_economical' => 'Экономичный выбор',
+        'reason_optimal_ratio' => 'Оптимальное соотношение цена/качество',
+        'reason_middle_segment' => 'Средний ценовой сегмент',
+        'reason_multiple_suppliers' => 'Доступен у %{count} поставщиков',
+        'reason_savings' => 'Экономия до %{amount} грн',
+        
+        # Кнопка каталога
+        'catalog_button_text' => 'Показать все варианты: %{size} %{season}',
+        'catalog_button_title' => 'Вы можете также просмотреть все размеры:',
         'no_results_suggest_changes' => 'К сожалению, по размеру %{size} и сезону %{season} шин не найдено. Попробуйте другой размер или проверьте наличие в других категориях.',
         'recommendations_title' => 'Вот мои рекомендации для вас:',
         'recommendation_explanation_title' => 'Почему именно эти шины?',
@@ -1455,6 +1523,48 @@ class TireChatService
         'season_accepted' => 'Відмінно, шукаємо %{season} шини.',
         'brands_accepted' => 'Врахую ваші переваги щодо брендів: %{brands}.',
         'no_results' => 'На жаль, за вашими критеріями не знайдено підходящих шин. Спробуйте змінити параметри пошуку.',
+        
+        # Ценовые сегменты
+        'price_segment_premium' => 'преміум',
+        'price_segment_budget' => 'бюджетні',
+        'price_segment_middle' => 'середній ціновий сегмент',
+        'price_segment_request_size' => 'Зрозумів, шукаємо %{segment_name} шини. Для підбору мені потрібно знати:
+
+📏 **Розмір шин** - наприклад: 205/55R16, 225/60R17',
+        'price_segment_request_season' => 'Зрозумів, шукаємо %{segment_name} шини розміру %{size}. Вкажіть сезон:
+
+❄️ **Зимові шини**
+☀️ **Літні шини**  
+🔄 **Всесезонні шини**',
+        'price_segment_no_results' => 'На жаль, %{segment_name} шини розміру %{size} для %{season} сезону не знайдені.
+
+Спробуйте розширити критерії пошуку або вибрати інший ціновий сегмент.',
+        'price_segment_not_found' => 'На жаль, підходящі шини не знайдені.',
+        
+        # Объяснения ценовых сегментов
+        'segment_explanation_premium' => 'Показані найдорожчі та якісні моделі в даному розмірі.',
+        'segment_explanation_budget' => 'Показані найдоступніші за ціною моделі в даному розмірі.',
+        'segment_explanation_middle' => 'Показані моделі середнього цінового сегменту з оптимальним співвідношенням ціна/якість.',
+        'segment_explanation_default' => 'Показані підходящі моделі в даному розмірі.',
+        
+        # Названия сезонов
+        'season_winter' => 'Зимові',
+        'season_summer' => 'Літні',
+        'season_all_season' => 'Всесезонні',
+        
+        # Причины рекомендаций
+        'reason_premium_quality' => 'Преміум якість',
+        'reason_high_performance' => 'Високі характеристики',
+        'reason_best_price' => 'Найкраща ціна',
+        'reason_economical' => 'Економічний вибір',
+        'reason_optimal_ratio' => 'Оптимальне співвідношення ціна/якість',
+        'reason_middle_segment' => 'Середній ціновий сегмент',
+        'reason_multiple_suppliers' => 'Доступен у %{count} постачальників',
+        'reason_savings' => 'Економія до %{amount} грн',
+        
+        # Кнопка каталога  
+        'catalog_button_text' => 'Показати всі варіанти: %{size} %{season}',
+        'catalog_button_title' => 'Ви можете також переглянути всі розміри:',
         'no_results_suggest_changes' => 'На жаль, за розміром %{size} та сезоном %{season} шин не знайдено. Спробуйте інший розмір або перевірте наявність в інших категоріях.',
         'recommendations_title' => 'Ось мої рекомендації для вас:',
         'recommendation_explanation_title' => 'Чому саме ці шини?',
