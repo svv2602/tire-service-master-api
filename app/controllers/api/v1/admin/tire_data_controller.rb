@@ -25,6 +25,68 @@ module Api
           end
         end
 
+        # POST /api/v1/admin/tire_data/upload_files
+        def upload_files
+          Rails.logger.info "🔧 Получен запрос на загрузку CSV файлов"
+          
+          # Проверяем наличие файлов в запросе
+          unless params[:files].present?
+            return render json: { 
+              status: 'error', 
+              message: 'Не переданы файлы для загрузки' 
+            }, status: :bad_request
+          end
+
+          begin
+            # Создаем временную папку для загруженных файлов
+            upload_session_id = SecureRandom.hex(8)
+            upload_dir = Rails.root.join('tmp', 'tire_data_uploads', upload_session_id)
+            FileUtils.mkdir_p(upload_dir)
+
+            uploaded_files = {}
+            
+            # Обрабатываем каждый загруженный файл
+            params[:files].each do |key, file|
+              next unless file.respond_to?(:read) # Проверяем что это файл
+              
+              # Проверяем что файл CSV
+              unless file.original_filename.end_with?('.csv')
+                return render json: { 
+                  status: 'error', 
+                  message: "Файл #{file.original_filename} не является CSV файлом" 
+                }, status: :bad_request
+              end
+
+              # Сохраняем файл
+              file_path = upload_dir.join(file.original_filename)
+              File.open(file_path, 'wb') do |f|
+                f.write(file.read)
+              end
+
+              uploaded_files[key] = {
+                filename: file.original_filename,
+                path: file_path.to_s,
+                size: file.size
+              }
+            end
+
+            Rails.logger.info "✅ Загружено файлов: #{uploaded_files.size}"
+
+            render json: { 
+              status: 'success', 
+              data: {
+                upload_session_id: upload_session_id,
+                upload_path: upload_dir.to_s,
+                uploaded_files: uploaded_files
+              }
+            }, status: :ok
+
+          rescue => e
+            Rails.logger.error "❌ Ошибка загрузки файлов: #{e.message}"
+            render json: { status: 'error', message: e.message }, status: :internal_server_error
+          end
+        end
+
         # POST /api/v1/admin/tire_data/validate_files
         def validate_files
           csv_path = params[:csv_path]
@@ -92,14 +154,19 @@ module Api
             result = processor.process_and_update
 
             if result[:success]
+              # Определяем статус ответа в зависимости от наличия ошибок
+              response_status = result[:validation_errors]&.any? ? 'warning' : 'success'
+              
               render json: { 
-                status: 'success', 
-                message: 'Данные успешно импортированы',
+                status: response_status, 
+                message: result[:message] || 'Данные успешно импортированы',
                 data: {
                   version: result[:version],
                   statistics: result[:statistics],
                   warnings: result[:warnings] || [],
-                  skipped_rows: result[:skipped_rows] || 0
+                  skipped_rows: result[:skipped_rows] || 0,
+                  validation_errors: result[:validation_errors] || [],
+                  has_validation_errors: result[:validation_errors]&.any? || false
                 }
               }, status: :ok
             else

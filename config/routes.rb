@@ -770,6 +770,7 @@ Rails.application.routes.draw do
       # Управление данными шин
       scope :tire_data do
         get :status, to: 'tire_data#status'
+        post :upload_files, to: 'tire_data#upload_files'
         post :validate_files, to: 'tire_data#validate_files'
         post :import, to: 'tire_data#import'
         delete 'version/:version', to: 'tire_data#delete_version'

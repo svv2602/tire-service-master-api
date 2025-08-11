@@ -68,13 +68,20 @@ module TireData
         
         Rails.logger.info "✅ Обработка данных завершена успешно. Версия: #{@version}"
         
+        # Собираем все предупреждения
+        warnings = []
+        warnings << "Пропущено поврежденных строк при чтении CSV: #{@skipped_rows}" if @skipped_rows > 0
+        warnings << "Пропущено конфигураций при сохранении: #{@statistics[:configurations_skipped]}" if @statistics[:configurations_skipped] && @statistics[:configurations_skipped] > 0
+        
         {
           success: true,
           version: @version,
           statistics: @statistics,
           skipped_rows: @skipped_rows,
-          warnings: @skipped_rows > 0 ? ["Пропущено поврежденных строк: #{@skipped_rows}"] : [],
-          message: "Данные успешно обновлены до версии #{@version}"
+          validation_errors: @validation_errors || [],
+          warnings: warnings,
+          message: "Данные успешно обновлены до версии #{@version}" + 
+                   (@validation_errors&.any? ? " (с пропуском #{@validation_errors.size} ошибочных записей)" : "")
         }
         
       rescue => e
@@ -445,22 +452,75 @@ module TireData
       model_mapping = create_model_mapping(brand_mapping)
       
       saved_count = 0
+      skipped_count = 0
+      @validation_errors = [] # Инициализируем массив ошибок
       
-      configurations.each do |config|
+      configurations.each_with_index do |config, index|
         db_brand_id = brand_mapping[config[:brand_id]]
         db_model_id = model_mapping[config[:model_id]]
         
-        next unless db_brand_id && db_model_id
+        unless db_brand_id && db_model_id
+          skipped_count += 1
+          @validation_errors << {
+            record_index: index + 1,
+            brand: config[:brand_name],
+            model: config[:model_name],
+            error: "Не найден бренд или модель в базе данных"
+          }
+          next
+        end
+        
+        # Предварительная валидация tire_sizes
+        if config[:tire_sizes].blank?
+          skipped_count += 1
+          @validation_errors << {
+            record_index: index + 1,
+            brand: config[:brand_name],
+            model: config[:model_name],
+            error: "Отсутствуют размеры шин"
+          }
+          next
+        end
+        
+        # Валидируем каждый размер шин
+        valid_tire_sizes = []
+        config[:tire_sizes].each_with_index do |tire_size, tire_index|
+          if validate_tire_size(tire_size)
+            valid_tire_sizes << tire_size
+          else
+            @validation_errors << {
+              record_index: index + 1,
+              brand: config[:brand_name],
+              model: config[:model_name],
+              tire_size_index: tire_index + 1,
+              tire_size: tire_size,
+              error: "Некорректный размер шин: width=#{tire_size[:width]}, height=#{tire_size[:height]}, diameter=#{tire_size[:diameter]}"
+            }
+          end
+        end
+        
+        # Пропускаем конфигурацию если нет валидных размеров
+        if valid_tire_sizes.empty?
+          skipped_count += 1
+          @validation_errors << {
+            record_index: index + 1,
+            brand: config[:brand_name],
+            model: config[:model_name],
+            error: "Все размеры шин невалидны"
+          }
+          next
+        end
         
         # Создаем поисковые токены
         search_tokens = generate_search_tokens(config[:brand_name], config[:model_name], config[:search_aliases])
         
-        tire_config = CarTireConfiguration.create!(
+        # Используем create вместо create! для graceful error handling
+        tire_config = CarTireConfiguration.create(
           brand_id: db_brand_id,
           model_id: db_model_id,
           year_from: config[:year_from],
           year_to: config[:year_to],
-          tire_sizes: config[:tire_sizes],
+          tire_sizes: valid_tire_sizes, # Используем только валидные размеры
           search_aliases: config[:search_aliases],
           search_tokens: search_tokens,
           data_version: @version,
@@ -470,11 +530,61 @@ module TireData
           is_deprecated: false
         )
         
-        saved_count += 1
+        if tire_config.persisted?
+          saved_count += 1
+        else
+          skipped_count += 1
+          error_messages = tire_config.errors.full_messages.join('; ')
+          @validation_errors << {
+            record_index: index + 1,
+            brand: config[:brand_name],
+            model: config[:model_name],
+            error: "Ошибка сохранения в БД: #{error_messages}"
+          }
+          Rails.logger.warn "⚠️ Пропущена конфигурация #{index + 1} (#{config[:brand_name]} #{config[:model_name]}): #{error_messages}"
+        end
       end
       
       @statistics[:configurations_saved] = saved_count
+      @statistics[:configurations_skipped] = skipped_count
+      @statistics[:validation_errors_count] = @validation_errors.size
+      
       Rails.logger.info "✅ Сохранено конфигураций в БД: #{saved_count}"
+      if skipped_count > 0
+        Rails.logger.warn "⚠️ Пропущено конфигураций: #{skipped_count}"
+        Rails.logger.warn "📋 Ошибок валидации: #{@validation_errors.size}"
+      end
+    end
+    
+    # Валидация размера шин
+    def validate_tire_size(tire_size)
+      return false unless tire_size.is_a?(Hash)
+      
+      width = tire_size[:width]
+      height = tire_size[:height]
+      diameter = tire_size[:diameter]
+      
+      # Проверяем, что все значения присутствуют и являются числами
+      return false unless width.is_a?(Numeric) && height.is_a?(Numeric) && diameter.is_a?(Numeric)
+      
+      # Проверяем, что все значения положительные
+      return false unless width > 0 && height > 0 && diameter > 0
+      
+      # Проверяем разумные диапазоны для метрических размеров
+      if width >= 100  # Метрические размеры (мм)
+        return false unless width.between?(125, 355)    # ширина в мм
+        return false unless height.between?(25, 100)    # высота в %
+        return false unless diameter.between?(10, 30)   # диаметр в дюймах
+      else  # Американские дюймовые размеры
+        return false unless width.between?(6, 50)       # ширина в дюймах
+        return false unless height.between?(6, 15)      # высота в дюймах
+        return false unless diameter.between?(10, 30)   # диаметр в дюймах
+      end
+      
+      true
+    rescue => e
+      Rails.logger.debug "🔍 Ошибка валидации размера шин #{tire_size}: #{e.message}"
+      false
     end
     
     # Создание маппинга брендов
