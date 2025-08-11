@@ -222,8 +222,9 @@ class SupplierXmlProcessor
     
     # Подготавливаем атрибуты для обновления/создания
     attributes = {
-      brand: data[:vendor],
-      model: model,
+      original_brand: data[:vendor],
+      brand_normalized: SupplierTireProduct.normalize_brand(data[:vendor]),
+      original_model: model,
       name: data[:name],
       width: data[:width],
       height: data[:height],
@@ -237,7 +238,7 @@ class SupplierXmlProcessor
       description: data[:description],
       image_url: data[:image_url],
       product_url: data[:product_url],
-      country: data[:country],
+      original_country: data[:country],
       year_week: data[:year_week],
       raw_data: item_node.to_h, # сохраняем исходные данные
       updated_at: Time.current
