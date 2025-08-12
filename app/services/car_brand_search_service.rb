@@ -39,6 +39,7 @@ class CarBrandSearchService
       
       # Маппинг алиасов для популярных моделей
       model_aliases = {
+        # BMW
         '320i' => '3 Series',
         '320d' => '3 Series',
         '325i' => '3 Series',
@@ -49,23 +50,88 @@ class CarBrandSearchService
         '530i' => '5 Series',
         '535i' => '5 Series',
         '740i' => '7 Series',
-        '750i' => '7 Series'
+        '750i' => '7 Series',
+        
+        # Mercedes GLE модификации (английские и русские варианты)
+        # Базовые модели без модификаций
+        'gle' => 'GLE-Class',
+        'жле' => 'GLE-Class',
+        'гле' => 'GLE-Class',
+        # Модификации
+        'gle 200d' => 'GLE-Class',
+        'gle 220d' => 'GLE-Class',
+        'gle 250d' => 'GLE-Class',
+        'gle 300d' => 'GLE-Class',
+        'gle 350d' => 'GLE-Class',
+        'gle 400d' => 'GLE-Class',
+        'gle 450d' => 'GLE-Class',
+        'gle 400' => 'GLE-Class',
+        'gle 450' => 'GLE-Class',
+        'gle 500' => 'GLE-Class',
+        'gle 580' => 'GLE-Class',
+        'gle 63 amg' => 'GLE-Class AMG',
+        'gle 63s amg' => 'GLE-Class AMG',
+        'gle amg 63' => 'GLE-Class AMG',
+        'gle amg 63s' => 'GLE-Class AMG',
+        # Русские варианты
+        'жле 200д' => 'GLE-Class',
+        'жле 220д' => 'GLE-Class',
+        'жле 250д' => 'GLE-Class',
+        'жле 300д' => 'GLE-Class',
+        'жле 350д' => 'GLE-Class',
+        'жле 400д' => 'GLE-Class',
+        'жле 450д' => 'GLE-Class',
+        'жле 400' => 'GLE-Class',
+        'жле 450' => 'GLE-Class',
+        'жле 500' => 'GLE-Class',
+        'жле 580' => 'GLE-Class',
+        'гле 200д' => 'GLE-Class',
+        'гле 220д' => 'GLE-Class',
+        'гле 250д' => 'GLE-Class',
+        'гле 300д' => 'GLE-Class',
+        'гле 350д' => 'GLE-Class',
+        'гле 400д' => 'GLE-Class',
+        'гле 450д' => 'GLE-Class',
+        'гле 400' => 'GLE-Class',
+        'гле 450' => 'GLE-Class',
+        'гле 500' => 'GLE-Class',
+        'гле 580' => 'GLE-Class',
+        
+        # Mercedes GLE Coupe модификации
+        'gle coupe 350d' => 'GLE-Class Coupe',
+        'gle coupe 400d' => 'GLE-Class Coupe',
+        'gle coupe 450d' => 'GLE-Class Coupe',
+        'gle coupe 500' => 'GLE-Class Coupe',
+        'gle coupe 63 amg' => 'GLE-Class Coupe AMG',
+        'gle coupe 63s amg' => 'GLE-Class Coupe AMG'
       }
       
-      # Проверяем алиасы
-      search_terms = [normalized_model]
+      # Проверяем алиасы - они имеют приоритет!
       if model_aliases[normalized_model]
-        search_terms << model_aliases[normalized_model].downcase
+        exact_model_name = model_aliases[normalized_model]
+        # Ищем точное совпадение по алиасу
+        exact_models = CarModel.where(brand_id: brand_ids)
+                              .where('name = ?', exact_model_name)
+                              .includes(:brand)
+        
+        if exact_models.any?
+          # Если нашли точное совпадение по алиасу - возвращаем только его
+          return exact_models.map do |model|
+            {
+              id: model.id,
+              name: model.name,
+              brand_name: model.brand.name,
+              brand_id: model.brand_id,
+              configs_count: CarTireConfiguration.where(model_id: model.id).count
+            }
+          end
+        end
       end
 
-      # Ищем по всем вариантам
-      models = []
-      search_terms.each do |term|
-        found_models = CarModel.where(brand_id: brand_ids)
-                              .where('name ILIKE ?', "%#{term}%")
-                              .includes(:brand)
-        models.concat(found_models.to_a)
-      end
+      # Если алиаса нет или точное совпадение не найдено, ищем по частичному совпадению
+      models = CarModel.where(brand_id: brand_ids)
+                      .where('name ILIKE ?', "%#{normalized_model}%")
+                      .includes(:brand)
       
       # Убираем дубликаты и форматируем результат
       models.uniq.map do |model|

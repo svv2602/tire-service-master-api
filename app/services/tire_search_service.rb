@@ -151,7 +151,7 @@ class TireSearchService
       ['gle class amg', 'gle-class amg'] => 'GLE-Class AMG',
       ['gle amg'] => 'GLE AMG',
       ['gle coupe', 'gle-class coupe'] => 'GLE-Class Coupe',
-      ['gle', 'гле', 'gle class', 'gle-class'] => 'GLE-Class',
+      ['gle', 'гле', 'жле', 'gle class', 'gle-class'] => 'GLE-Class',
       ['gle w166', 'gle-class w166'] => 'GLE-ClassW166',
       ['gle coupe c292'] => 'GLE CoupeC292',
       
