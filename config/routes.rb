@@ -102,8 +102,8 @@ Rails.application.routes.draw do
       end
       
       # Telegram интеграция
-      post 'telegram_webhook', to: 'telegram_webhook#webhook'
-      get 'telegram_webhook', to: 'telegram_webhook#show_config'
+      post 'telegram/webhook', to: 'telegram_webhook#webhook'
+      get 'telegram/webhook', to: 'telegram_webhook#show_config'
       
       # Управление настройками Telegram
       resource :telegram_settings, only: [:show, :update] do
