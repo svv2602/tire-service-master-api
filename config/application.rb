@@ -77,7 +77,18 @@ module TireServiceMasterApi
     # Настройка аудита
     config.audit_async_default = Rails.env.production?
 
-      # <== ВАЖНО Добавил строку
+    # <== ВАЖНО Добавил строку
     config.active_storage.routes_prefix = '/api/rails/active_storage'
+
+    # Security headers
+    config.action_dispatch.default_headers = {
+      'X-Frame-Options' => 'DENY',
+      'X-Content-Type-Options' => 'nosniff',
+      'X-XSS-Protection' => '1; mode=block',
+      'X-Download-Options' => 'noopen',
+      'X-Permitted-Cross-Domain-Policies' => 'none',
+      'Referrer-Policy' => 'strict-origin-when-cross-origin',
+      'Permissions-Policy' => 'geolocation=(), microphone=(), camera=()'
+    }
   end
 end
