@@ -14,8 +14,8 @@ module Api
         login = auth_params[:login] || auth_params[:email]  # ✅ Поддерживаем и старый формат
         password = auth_params[:password]
         
-        Rails.logger.info("Auth#login: Attempting login for: #{login}")
-        Rails.logger.info("Auth#login: cookies available: #{cookies.present?}")
+        # Security: log only non-sensitive info
+        Rails.logger.debug "Auth#login: attempting login"
         
         unless login.present? && password.present?
           render json: { error: I18n.t('auth.errors.credentials_required') }, status: :unprocessable_entity
@@ -26,19 +26,19 @@ module Api
         user = User.find_by_login(login)
         
         unless user
-          Rails.logger.info("Auth#login: User not found for login: #{login}")
+          Rails.logger.debug "Auth#login: user not found"
           render json: { error: I18n.t('auth.errors.user_not_found') }, status: :not_found
           return
         end
 
         unless user.authenticate(password)
-          Rails.logger.info("Auth#login: Authentication failed for user: #{user.id}")
+          Rails.logger.debug "Auth#login: authentication failed for user_id=#{user.id}"
           render json: { error: I18n.t('auth.errors.invalid_credentials') }, status: :unauthorized
           return
         end
 
         unless user.is_active?
-          Rails.logger.info("Auth#login: User account is inactive: #{user.id}")
+          Rails.logger.debug "Auth#login: user_id=#{user.id} is inactive"
           render json: { error: I18n.t('auth.errors.account_blocked') }, status: :forbidden
           return
         end
@@ -66,7 +66,7 @@ module Api
         access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
         refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
         
-        Rails.logger.info("Auth#login: Generated tokens for user: #{user.id}")
+        Rails.logger.debug "Auth#login: tokens generated for user_id=#{user.id}"
         
         # Устанавливаем refresh токен в HttpOnly куки
         cookies[:refresh_token] = {
@@ -151,7 +151,7 @@ module Api
             }
           }, status: :ok
         rescue Auth::TokenExpiredError, Auth::TokenInvalidError, JWT::DecodeError, ActiveRecord::RecordNotFound => e
-          Rails.logger.error "Auth#refresh error: #{e.message}"
+          Rails.logger.debug "Auth#refresh: token invalid or expired"
           # Очищаем недействительные cookies
           cookies.delete(:access_token)
           cookies.delete(:refresh_token)
@@ -179,7 +179,7 @@ module Api
         cookies.delete(:refresh_token)
         cookies.delete(:access_token)
         
-        Rails.logger.info("Auth#logout: User logged out successfully, all cookies cleared")
+        Rails.logger.debug "Auth#logout: user logged out"
         render json: { message: I18n.t('auth.messages.logout_success') }, status: :ok
       end
       
@@ -297,7 +297,7 @@ module Api
         # Если передан email и у пользователя нет email, добавляем его
         if params[:car][:email].present? && (current_user.email.blank? || current_user.email.include?("guest_"))
           current_user.update(email: params[:car][:email])
-          Rails.logger.info("Updated user #{current_user.id} email to #{params[:car][:email]}")
+          Rails.logger.debug "Auth: updated user_id=#{current_user.id} email"
         end
 
         if car.save
@@ -478,7 +478,7 @@ module Api
         
         if favorite_point.save
           # Логируем действие
-          Rails.logger.info "Пользователь #{current_user.id} (роль: #{current_user.role.name}) добавил сервисную точку #{service_point.id} в избранное"
+          Rails.logger.debug "Auth: user_id=#{current_user.id} added service_point_id=#{service_point.id} to favorites"
           
           render json: {
             id: favorite_point.id,
@@ -511,7 +511,7 @@ module Api
         service_point_name = favorite_point.service_point.name
         
         if favorite_point.destroy
-          Rails.logger.info "Пользователь #{current_user.id} (роль: #{current_user.role.name}) удалил сервисную точку #{favorite_point.service_point_id} из избранного"
+          Rails.logger.debug "Auth: user_id=#{current_user.id} removed service_point_id=#{favorite_point.service_point_id} from favorites"
           
           render json: { 
             message: "#{service_point_name} удалена из избранного"
@@ -550,7 +550,7 @@ module Api
       def ensure_client_profile
         return if current_user.client.present?
         
-        Rails.logger.info("Создаем клиентский профиль для пользователя #{current_user.id} (роль: #{current_user.role.name})")
+        Rails.logger.debug "Auth: creating client profile for user_id=#{current_user.id}"
         
         # Создаем клиентский профиль с настройками по умолчанию
         Client.create!(
@@ -562,9 +562,9 @@ module Api
         # Обновляем ассоциацию в текущем объекте
         current_user.reload
         
-        Rails.logger.info("Клиентский профиль создан для пользователя #{current_user.id}")
+        Rails.logger.debug "Auth: client profile created for user_id=#{current_user.id}"
       rescue => e
-        Rails.logger.error "Ошибка создания клиентского профиля: #{e.message}"
+        Rails.logger.error "Auth: failed to create client profile for user_id=#{current_user.id}"
         raise
       end
 

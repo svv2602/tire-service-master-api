@@ -9,8 +9,8 @@ module Api
       def forgot
         login = params[:login]
         
-        Rails.logger.info("Password reset request for login: #{login}")
-        Rails.logger.info("SMTP settings: address=#{ENV['SMTP_ADDRESS']}, port=#{ENV['SMTP_PORT']}, username=#{ENV['SMTP_USERNAME']}")
+        # Security: log only non-sensitive info
+        Rails.logger.debug "Password: reset requested"
         
         unless login.present?
           render json: { error: I18n.t('auth.errors.credentials_required') }, status: :unprocessable_entity
@@ -35,7 +35,7 @@ module Api
         reset_token = SecureRandom.urlsafe_base64(32)
         reset_expires_at = 2.hours.from_now
         
-        Rails.logger.info("Generated reset token for user #{user.id}: #{reset_token[0..10]}...")
+        Rails.logger.debug "Password: generated reset token for user_id=#{user.id}"
         
         # Сохраняем токен и время истечения
         if user.update(password_reset_token: reset_token, password_reset_sent_at: reset_expires_at)
@@ -43,10 +43,9 @@ module Api
           if user.email.present? && login.include?('@')
             # Отправляем email
             begin
-              Rails.logger.info("Attempting to send password reset email to: #{user.email}")
               # Используем EmailTemplateMailer вместо PasswordResetMailer для единообразия
               EmailTemplateMailer.password_reset(user.id, reset_token).deliver_now
-              Rails.logger.info("Password reset email sent successfully to: #{user.email}")
+              Rails.logger.debug "Password: reset email sent for user_id=#{user.id}"
               render json: { message: I18n.t('auth.messages.password_reset_sent_email') }
             rescue => e
               Rails.logger.error "Failed to send password reset email: #{e.class.name}: #{e.message}"
@@ -58,7 +57,7 @@ module Api
             begin
               result = SmsService.send_password_reset(user.phone, reset_token)
               if result[:success]
-                Rails.logger.info("Password reset SMS sent to: #{user.phone}")
+                Rails.logger.debug "Password: reset SMS sent for user_id=#{user.id}"
                 render json: { message: I18n.t('auth.messages.password_reset_sent_sms') }
               else
                 Rails.logger.error "Failed to send SMS: #{result[:error]}"

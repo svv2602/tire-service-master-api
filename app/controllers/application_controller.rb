@@ -18,42 +18,42 @@ class ApplicationController < ActionController::API
   protected
   
   def authenticate_request
-    # Сначала пробуем получить токен из cookies (приоритет)
+    # Security: log only presence, never token values
     access_token = cookies[:access_token]
-    Rails.logger.info("Auth: access_token from cookies: #{access_token.present? ? 'present' : 'nil'}")
-    
+    Rails.logger.debug "Auth: cookie_token=#{access_token.present?}"
+
     # Если нет в cookies, пробуем из заголовка Authorization (для обратной совместимости)
     if access_token.nil?
       header = request.headers['Authorization']
       access_token = header.split(' ').last if header
-      Rails.logger.info("Auth: access_token from header: #{access_token.present? ? 'present' : 'nil'}")
+      Rails.logger.debug "Auth: header_token=#{access_token.present?}"
     end
-    
+
     if access_token.nil?
-      Rails.logger.info("Auth: No token found, returning unauthorized")
+      Rails.logger.debug "Auth: no token found"
       render json: { error: 'Токен не предоставлен' }, status: :unauthorized
       return
     end
-    
+
     begin
       decoded = Auth::JsonWebToken.decode(access_token)
-      
+
       # Проверяем, что это access токен
       unless decoded[:token_type] == 'access'
         render json: { error: 'Неверный тип токена' }, status: :unauthorized
         return
       end
-      
+
       @current_user = User.find(decoded[:user_id])
-      Rails.logger.info("Auth: Successfully authenticated user: #{@current_user.email} (ID: #{@current_user.id})")
-      
+      Rails.logger.debug "Auth: authenticated user_id=#{@current_user.id}"
+
       # Проверяем, что пользователь активен
       unless @current_user.is_active
-        Rails.logger.info("Auth: User account is inactive")
+        Rails.logger.debug "Auth: user_id=#{@current_user.id} is inactive"
         render json: { error: 'Учетная запись отключена' }, status: :forbidden
         return
       end
-      
+
     rescue Auth::TokenExpiredError => e
       # Пробуем обновить токен из refresh cookie
       if try_refresh_token
@@ -66,7 +66,7 @@ class ApplicationController < ActionController::API
     rescue ActiveRecord::RecordNotFound => e
       render json: { error: 'Пользователь не найден' }, status: :unauthorized
     end
-    end
+  end
 
   # Строгая аутентификация (вызывает исключение при ошибке)
   def authenticate_request!
@@ -88,18 +88,18 @@ class ApplicationController < ActionController::API
     # Создаем уникальный ключ для пользователя (используем refresh_token как идентификатор)
     user_key = Digest::SHA256.hexdigest(refresh_token)[0..16]
     
-    # 🔧 УСИЛЕННАЯ ЗАЩИТА от зацикливания - используем глобальную переменную класса с мьютексом
+    # Защита от зацикливания - используем глобальную переменную класса с мьютексом
     @@token_refresh_mutex.synchronize do
       last_attempt = @@token_refresh_attempts[user_key]
       # Увеличиваем интервал защиты с 10 секунд до 2 минут для предотвращения зацикливания
       if last_attempt && Time.current - last_attempt < 2.minutes
-        Rails.logger.warn("🚫 Token refresh attempt too frequent for user #{user_key}, skipping to prevent loop (last attempt: #{last_attempt}, interval: #{Time.current - last_attempt} seconds)")
+        Rails.logger.debug "TokenRefresh: too frequent, skipping"
         return false
       end
-      
+
       # Записываем время попытки
       @@token_refresh_attempts[user_key] = Time.current
-      
+
       # Очищаем старые записи (старше 1 часа)
       @@token_refresh_attempts.delete_if { |k, v| Time.current - v > 1.hour }
     end
@@ -117,7 +117,7 @@ class ApplicationController < ActionController::API
         path: '/'
       }
       
-      Rails.logger.info("✅ Token auto-refreshed successfully for user #{user_key}")
+      Rails.logger.debug "TokenRefresh: success"
       
       # 🔧 ИСПРАВЛЕНИЕ: НЕ сбрасываем счетчик попыток после успешного обновления
       # Это предотвращает зацикливание - токен будет обновлен только раз в 2 минуты
@@ -133,7 +133,7 @@ class ApplicationController < ActionController::API
       # Оставляем защиту активной для предотвращения повторных попыток
       # @@token_refresh_attempts.delete(user_key) - УБРАНО для предотвращения зацикливания
       
-      Rails.logger.warn("❌ Failed to refresh token for user #{user_key}: #{e.message}")
+      Rails.logger.debug "TokenRefresh: failed"
       return false
     end
   end

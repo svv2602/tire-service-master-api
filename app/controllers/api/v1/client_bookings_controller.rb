@@ -782,29 +782,26 @@ module Api
 
       # Опциональная аутентификация - пытается аутентифицировать пользователя, но не требует этого
       def optional_authenticate_request
-        # Сначала пробуем получить токен из cookies (приоритет)
+        # Security: log only presence, never token values
         access_token = cookies.encrypted[:access_token]
-        Rails.logger.info("Optional Auth: access_token from cookies: #{access_token.present? ? 'present' : 'nil'}")
-        
+
         # Если нет в cookies, пробуем из заголовка Authorization
         if access_token.nil?
           header = request.headers['Authorization']
           access_token = header.split(' ').last if header
-          Rails.logger.info("Optional Auth: access_token from header: #{access_token.present? ? 'present' : 'nil'}")
         end
-        
+
         # Если токен есть, пытаемся аутентифицировать пользователя
         if access_token.present?
           begin
             decoded = Auth::JsonWebToken.decode(access_token)
             @current_user = User.find(decoded[:user_id])
-            Rails.logger.info("Optional Auth: Successfully authenticated user ID: #{@current_user.id}")
+            Rails.logger.debug "OptionalAuth: authenticated user_id=#{@current_user.id}"
           rescue => e
-            Rails.logger.info("Optional Auth: Failed to authenticate: #{e.message}")
+            Rails.logger.debug "OptionalAuth: authentication failed"
             @current_user = nil
           end
         else
-          Rails.logger.info("Optional Auth: No token found, proceeding as guest")
           @current_user = nil
         end
       end

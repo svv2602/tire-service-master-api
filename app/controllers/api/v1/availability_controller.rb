@@ -467,51 +467,26 @@ class Api::V1::AvailabilityController < ApplicationController
   # Метод для опционального получения текущего пользователя
   def try_get_current_user
     begin
-      Rails.logger.info "🔍 try_get_current_user: starting..."
-      
-      # Сначала пробуем получить токен из cookies (приоритет)
+      # Security: log only presence, never token values
       access_token = cookies.encrypted[:access_token]
-      Rails.logger.info "🔍 try_get_current_user: cookies token = #{access_token ? 'present' : 'nil'}"
-      
+
       # Если нет в cookies, пробуем из заголовка Authorization (для обратной совместимости)
       if access_token.nil?
         header = request.headers['Authorization']
-        Rails.logger.info "🔍 try_get_current_user: Authorization header = #{header ? 'present' : 'nil'}"
         access_token = header.split(' ').last if header
-        Rails.logger.info "🔍 try_get_current_user: extracted token = #{access_token ? 'present' : 'nil'}"
       end
-      
-      if access_token.nil?
-        Rails.logger.info "🔍 try_get_current_user: no token found, returning nil"
-        return nil
-      end
-      
-      Rails.logger.info "🔍 try_get_current_user: decoding token..."
+
+      return nil if access_token.nil?
+
       decoded = Auth::JsonWebToken.decode(access_token)
-      Rails.logger.info "🔍 try_get_current_user: token decoded successfully, token_type=#{decoded[:token_type]}, user_id=#{decoded[:user_id]}"
-      
       return nil unless decoded[:token_type] == 'access'
-      Rails.logger.info "🔍 try_get_current_user: token type is access, finding user..."
-      
+
       user = User.find(decoded[:user_id])
-      Rails.logger.info "🔍 try_get_current_user: user found: #{user.email}, is_active=#{user.is_active}"
-      
-      if user&.is_active
-        Rails.logger.info "🔍 try_get_current_user: user is active, returning user"
-        return user
-      else
-        Rails.logger.info "🔍 try_get_current_user: user is not active, returning nil"
-        return nil
-      end
-    rescue JWT::DecodeError => e
-      Rails.logger.warn "🔍 try_get_current_user: JWT decode error: #{e.message}"
-      nil
-    rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.warn "🔍 try_get_current_user: User not found: #{e.message}"
+      user&.is_active ? user : nil
+    rescue JWT::DecodeError, ActiveRecord::RecordNotFound
       nil
     rescue => e
-      Rails.logger.error "🚨 try_get_current_user: unexpected error: #{e.class}: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "try_get_current_user: #{e.class}"
       nil
     end
   end
