@@ -64,30 +64,34 @@ class DatabaseSequences
     end
     
     # Исправление последовательности для конкретной таблицы
+    # Security: table names are validated against whitelist in get_tables_with_sequences
     def fix_table_sequence(table)
-      max_id = ActiveRecord::Base.connection.execute(
-        "SELECT MAX(id) FROM #{table}"
-      ).first['max'] || 0
-      
+      conn = ActiveRecord::Base.connection
+      quoted_table = conn.quote_table_name(table)
       sequence_name = "#{table}_id_seq"
-      
-      # Проверяем существование последовательности
-      sequence_exists = ActiveRecord::Base.connection.execute(
-        "SELECT 1 FROM pg_sequences WHERE sequencename = '#{sequence_name}'"
-      ).ntuples > 0
-      
+      quoted_sequence = conn.quote_table_name(sequence_name)
+
+      max_id = conn.execute(
+        "SELECT MAX(id) FROM #{quoted_table}"
+      ).first['max'] || 0
+
+      # Проверяем существование последовательности (используем параметризованный запрос)
+      sequence_exists = conn.select_value(
+        "SELECT 1 FROM pg_sequences WHERE sequencename = $1", 'Check sequence', [[nil, sequence_name]]
+      )
+
       return { fixed: false, reason: 'sequence_not_found' } unless sequence_exists
-      
-      current_val = ActiveRecord::Base.connection.execute(
-        "SELECT last_value FROM #{sequence_name}"
+
+      current_val = conn.execute(
+        "SELECT last_value FROM #{quoted_sequence}"
       ).first['last_value']
-      
+
       if current_val <= max_id
         next_val = max_id + 1
-        ActiveRecord::Base.connection.execute(
-          "SELECT setval('#{sequence_name}', #{next_val})"
+        conn.execute(
+          conn.sanitize_sql_array(["SELECT setval(?, ?)", sequence_name, next_val])
         )
-        
+
         {
           fixed: true,
           table: table,
@@ -101,29 +105,34 @@ class DatabaseSequences
     end
     
     # Проверка последовательности для конкретной таблицы
+    # Security: table names are validated against whitelist in get_tables_with_sequences
     def check_table_sequence(table)
-      max_id = ActiveRecord::Base.connection.execute(
-        "SELECT MAX(id) FROM #{table}"
-      ).first['max'] || 0
-      
+      conn = ActiveRecord::Base.connection
+      quoted_table = conn.quote_table_name(table)
       sequence_name = "#{table}_id_seq"
-      
-      sequence_exists = ActiveRecord::Base.connection.execute(
-        "SELECT 1 FROM pg_sequences WHERE sequencename = '#{sequence_name}'"
-      ).ntuples > 0
-      
+      quoted_sequence = conn.quote_table_name(sequence_name)
+
+      max_id = conn.execute(
+        "SELECT MAX(id) FROM #{quoted_table}"
+      ).first['max'] || 0
+
+      # Используем параметризованный запрос для проверки последовательности
+      sequence_exists = conn.select_value(
+        "SELECT 1 FROM pg_sequences WHERE sequencename = $1", 'Check sequence', [[nil, sequence_name]]
+      )
+
       return { table: table, has_problem: false, reason: 'no_sequence' } unless sequence_exists
-      
-      current_val = ActiveRecord::Base.connection.execute(
-        "SELECT last_value FROM #{sequence_name}"
+
+      current_val = conn.execute(
+        "SELECT last_value FROM #{quoted_sequence}"
       ).first['last_value']
-      
-      record_count = ActiveRecord::Base.connection.execute(
-        "SELECT COUNT(*) FROM #{table}"
+
+      record_count = conn.execute(
+        "SELECT COUNT(*) FROM #{quoted_table}"
       ).first['count']
-      
+
       has_problem = current_val <= max_id
-      
+
       {
         table: table,
         has_problem: has_problem,

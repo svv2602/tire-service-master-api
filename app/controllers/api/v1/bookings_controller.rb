@@ -456,8 +456,8 @@ module Api
           return
         end
 
-        # Проверяем существование статуса
-        unless BookingStatus.exists?(status_id)
+        # Проверяем существование статуса (безопасный запрос)
+        unless BookingStatus.exists?(id: status_id.to_i)
           render json: { errors: { status_id: ["must exist"] } }, status: :unprocessable_entity
           return
         end

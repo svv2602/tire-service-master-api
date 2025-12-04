@@ -1,4 +1,9 @@
 class PageContent < ApplicationRecord
+  include ContentSanitizable
+
+  # Sanitize HTML content fields to prevent XSS attacks
+  sanitize_fields :content
+
   # Подключение Active Storage для загрузки файлов
   has_one_attached :image
   has_many_attached :gallery_images

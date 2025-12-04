@@ -28,40 +28,45 @@ Rails.application.configure do
         
         tables.each do |table|
           begin
+            conn = ActiveRecord::Base.connection
+
             # Проверяем существование таблицы
-            next unless ActiveRecord::Base.connection.table_exists?(table)
-            next unless ActiveRecord::Base.connection.column_exists?(table, :id)
-            
-            # Получаем данные
-            max_id = ActiveRecord::Base.connection.execute(
-              "SELECT MAX(id) FROM #{table}"
-            ).first['max'] || 0
-            
+            next unless conn.table_exists?(table)
+            next unless conn.column_exists?(table, :id)
+
+            # Security: use quote_table_name to prevent SQL injection
+            quoted_table = conn.quote_table_name(table)
             sequence_name = "#{table}_id_seq"
-            
-            # Проверяем существование последовательности
-            sequence_exists = ActiveRecord::Base.connection.execute(
-              "SELECT 1 FROM pg_sequences WHERE sequencename = '#{sequence_name}'"
-            ).ntuples > 0
-            
+            quoted_sequence = conn.quote_table_name(sequence_name)
+
+            # Получаем данные
+            max_id = conn.execute(
+              "SELECT MAX(id) FROM #{quoted_table}"
+            ).first['max'] || 0
+
+            # Проверяем существование последовательности (параметризованный запрос)
+            sequence_exists = conn.select_value(
+              "SELECT 1 FROM pg_sequences WHERE sequencename = $1", 'Check sequence', [[nil, sequence_name]]
+            )
+
             next unless sequence_exists
-            
-            current_val = ActiveRecord::Base.connection.execute(
-              "SELECT last_value FROM #{sequence_name}"
+
+            current_val = conn.execute(
+              "SELECT last_value FROM #{quoted_sequence}"
             ).first['last_value']
-            
+
             # Исправляем последовательность если нужно
             if current_val <= max_id
               next_val = max_id + 1
-              ActiveRecord::Base.connection.execute(
-                "SELECT setval('#{sequence_name}', #{next_val})"
+              conn.execute(
+                conn.sanitize_sql_array(["SELECT setval(?, ?)", sequence_name, next_val])
               )
-              
+
               Rails.logger.info "  ✅ #{table}: исправлена последовательность #{current_val} → #{next_val}"
               problems_found += 1
               fixed_count += 1
             end
-            
+
           rescue => e
             Rails.logger.warn "  ❌ Ошибка при проверке #{table}: #{e.message}"
           end

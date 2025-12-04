@@ -1,4 +1,9 @@
 class Article < ApplicationRecord
+  include ContentSanitizable
+
+  # Sanitize HTML content fields to prevent XSS attacks
+  sanitize_fields :content, :content_uk
+
   # Константы для категорий
   CATEGORIES = {
     'seasonal' => {
