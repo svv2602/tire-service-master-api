@@ -39,6 +39,9 @@ gem "bootsnap", require: false
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS)
 gem "rack-cors"
 
+# Security - Rate limiting
+gem "rack-attack"
+
 # Authentication
 gem "jwt"
 gem "dotenv-rails"

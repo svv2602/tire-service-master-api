@@ -270,6 +270,8 @@ GEM
       activesupport (>= 3.0.0)
     racc (1.8.1)
     rack (3.1.15)
+    rack-attack (6.8.0)
+      rack (>= 1.0, < 4)
     rack-cors (3.0.0)
       logger
       rack (>= 3.0.14)
@@ -446,6 +448,7 @@ DEPENDENCIES
   pry-rails
   puma (~> 6.0)
   pundit (~> 2.3)
+  rack-attack
   rack-cors
   rails (~> 8.0.2)
   redis (~> 5.0)
