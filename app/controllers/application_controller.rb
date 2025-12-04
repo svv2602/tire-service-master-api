@@ -1,9 +1,13 @@
 class ApplicationController < ActionController::API
   include ActionController::MimeResponds
   include ActionController::Cookies
+  include ActionController::RequestForgeryProtection
   include Pundit::Authorization
   include RequestLogging
   include ActionController::HttpAuthentication::Token::ControllerMethods
+
+  # CSRF protection for cookie-based auth
+  before_action :set_csrf_cookie
   
   # Обработка ошибок
   rescue_from ActiveRecord::RecordNotFound, with: :not_found
@@ -177,5 +181,16 @@ class ApplicationController < ActionController::API
   
   def json_request?
     request.format.json?
+  end
+
+  # Set CSRF token in cookie for JavaScript to read
+  def set_csrf_cookie
+    cookies['XSRF-TOKEN'] = {
+      value: form_authenticity_token,
+      same_site: :lax,
+      secure: Rails.env.production?,
+      httponly: false,  # Must be readable by JavaScript
+      path: '/'
+    }
   end
 end

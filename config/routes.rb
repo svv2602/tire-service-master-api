@@ -23,6 +23,9 @@ Rails.application.routes.draw do
       end
       # Health check endpoint для Docker
       get '/health', to: 'health#index'
+
+      # CSRF token endpoint for cookie-based auth
+      get 'csrf', to: 'csrf#show'
       
       # Поиск шин
       post 'tire_search', to: 'tire_search#search'

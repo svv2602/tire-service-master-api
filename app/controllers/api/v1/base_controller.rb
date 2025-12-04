@@ -3,11 +3,32 @@ module Api
     class BaseController < ApplicationController
       include ActionController::HttpAuthentication::Token::ControllerMethods
 
+      before_action :verify_csrf_for_cookie_auth
       before_action :authenticate_request
 
       attr_reader :current_user
 
       private
+
+      # Verify CSRF token only for cookie-based authentication
+      # Skip for Authorization header auth (API tokens)
+      def verify_csrf_for_cookie_auth
+        # Skip for safe methods (GET, HEAD, OPTIONS)
+        return if request.get? || request.head? || request.options?
+
+        # Skip if Authorization header is present (token-based auth)
+        return if request.headers['Authorization'].present?
+
+        # If using cookie auth, verify CSRF token
+        if cookies[:access_token].present?
+          csrf_token = request.headers['X-XSRF-TOKEN']
+
+          unless valid_authenticity_token?(session, csrf_token)
+            Rails.logger.warn "CSRF: invalid token for cookie auth, ip=#{request.remote_ip}"
+            render json: { error: 'Invalid CSRF token' }, status: :forbidden
+          end
+        end
+      end
 
       def authenticate_request
         # Пытаемся получить токен из заголовка Authorization
