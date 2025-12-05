@@ -1,7 +1,7 @@
 FactoryBot.define do
   factory :price_list do
-    name { "#{Faker::Commerce.product_name} Price List" }
-    description { Faker::Lorem.paragraph }
+    sequence(:name) { |n| "Price List #{n}" }
+    sequence(:description) { |n| "Test price list description #{n}" }
     partner { association :partner, :with_new_user }
     start_date { Date.current - 1.month }
     end_date { Date.current + 1.month }

@@ -5,7 +5,6 @@ FactoryBot.define do
     # Делаем car необязательным и nil по умолчанию
     car { nil }
     association :car_type, factory: :car_type
-    association :status, factory: :booking_status, name: 'pending'
     
     before(:build) do |booking|
       # Ensure all statuses exist
@@ -37,7 +36,14 @@ FactoryBot.define do
     
     # Пропускаем валидации доступности в тестах
     skip_availability_check { true }
-    skip_status_validation { true }
+    skip_notifications { true }
+    status { 'pending' }
+
+    # Обязательные поля для получателя услуги
+    service_recipient_first_name { 'Test' }
+    service_recipient_last_name { 'Recipient' }
+    sequence(:service_recipient_phone) { |n| "+38067#{100_0000 + n}" }
+    sequence(:service_recipient_email) { |n| "recipient#{n}@example.com" }
     
     trait :with_services do
       after(:create) do |booking|

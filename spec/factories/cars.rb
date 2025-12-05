@@ -2,13 +2,13 @@ FactoryBot.define do
   factory :car do
     association :client
     association :car_type
-    brand { Faker::Vehicle.make }
-    model { Faker::Vehicle.model }
+    sequence(:brand) { |n| "Brand#{n}" }
+    sequence(:model) { |n| "Model#{n}" }
     year { rand(2010..Date.current.year) }
-    sequence(:license_plate) { |n| "AA#{n}BB#{rand(100..999)}" }
-    vin { Faker::Vehicle.vin }
-    color { Faker::Vehicle.color }
-    notes { Faker::Lorem.paragraph }
+    sequence(:license_plate) { |n| "AA#{n.to_s.rjust(4, '0')}BB" }
+    sequence(:vin) { |n| "1HGCM82633A00#{n.to_s.rjust(4, '0')}" }
+    color { %w[White Black Silver Blue Red].sample }
+    sequence(:notes) { |n| "Test car notes #{n}" }
     is_active { true }
     
     trait :inactive do

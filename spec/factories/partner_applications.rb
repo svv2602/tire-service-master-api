@@ -1,14 +1,14 @@
 FactoryBot.define do
   factory :partner_application do
-    company_name { Faker::Company.name }
-    business_description { Faker::Lorem.paragraph(sentence_count: 3) }
-    contact_person { Faker::Name.name }
-    email { Faker::Internet.unique.email }
-    phone { "+380#{Faker::Number.number(digits: 9)}" }
-    city { Faker::Address.city }
-    address { Faker::Address.street_address }
-    website { Faker::Internet.url }
-    additional_info { Faker::Lorem.paragraph }
+    sequence(:company_name) { |n| "Partner Company #{n}" }
+    sequence(:business_description) { |n| "Business description #{n}. This is a detailed description of the business." }
+    sequence(:contact_person) { |n| "Contact Person #{n}" }
+    sequence(:email) { |n| "partner_application#{n}@example.com" }
+    sequence(:phone) { |n| "+38067#{100_0000 + n}" }
+    sequence(:city) { |n| "City #{n}" }
+    sequence(:address) { |n| "Test Address #{n}" }
+    sequence(:website) { |n| "https://company#{n}.example.com" }
+    sequence(:additional_info) { |n| "Additional info #{n}" }
     expected_service_points { rand(1..5) }
     status { 'new' }
 
@@ -53,8 +53,6 @@ FactoryBot.define do
     # Трейт для полных данных
     trait :complete do
       with_location
-      website { Faker::Internet.url }
-      additional_info { Faker::Lorem.paragraph }
     end
 
     # Трейт для минимальных данных

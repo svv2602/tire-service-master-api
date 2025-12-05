@@ -2,7 +2,7 @@ FactoryBot.define do
   factory :manager do
     user
     partner { association :partner, :with_new_user }
-    position { Faker::Job.position }
+    sequence(:position) { |n| "Manager Position #{n}" }
     access_level { 2 } # FULL_ACCESS по умолчанию
     
     trait :read_only do

@@ -1,8 +1,11 @@
 # Интеграция настроек email из базы данных с ActionMailer
 Rails.application.configure do
   config.after_initialize do
+    # Пропускаем настройку email если выполняются задачи БД или тесты без БД
+    next if Rails.env.test? && ENV['SKIP_DB_INITIALIZERS']
+
     # Проверяем, что модель EmailSetting существует и таблица создана
-    if defined?(EmailSetting) && EmailSetting.table_exists?
+    if defined?(EmailSetting) && ActiveRecord::Base.connection_pool.with_connection { EmailSetting.table_exists? rescue false }
       begin
         email_setting = EmailSetting.first
         

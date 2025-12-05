@@ -36,7 +36,7 @@ class NotificationService
     end
 
     # Создание уведомления о бронировании
-    def self.booking_notification(booking, type, additional_data = {})
+    def booking_notification(booking, type, additional_data = {})
       case type
       when :created
         send_booking_created(booking, additional_data)
@@ -54,7 +54,7 @@ class NotificationService
     # Системные уведомления
     def system_notification(recipients, title, message, priority: 'normal', category: 'system')
       recipients = [recipients] unless recipients.is_a?(Array)
-      
+
       recipients.map do |recipient|
         send_notification(recipient, 'system_notification', {
           title: title,
@@ -63,11 +63,12 @@ class NotificationService
           category: category,
           channels: ['push', 'email']
         })
+      end
     end
 
     # Методы для конкретных типов уведомлений
     
-    def self.send_booking_created(booking, data)
+    def send_booking_created(booking, data)
       send_notification(booking.client, 'booking_created', {
         title: 'Бронювання створено',
         message: "Ваш запис на #{booking.booking_date} о #{booking.start_time} створено",
@@ -78,8 +79,8 @@ class NotificationService
         channels: ['push', 'email']
       }.merge(data))
     end
-    
-    def self.send_booking_confirmed(booking, data)
+
+    def send_booking_confirmed(booking, data)
       send_notification(booking.client, 'booking_confirmed', {
         title: 'Бронювання підтверджено',
         message: "Ваш запис на #{booking.booking_date} о #{booking.start_time} підтверджено",
@@ -90,8 +91,8 @@ class NotificationService
         channels: ['push', 'email', 'sms']
       }.merge(data))
     end
-    
-    def self.send_booking_cancelled(booking, data)
+
+    def send_booking_cancelled(booking, data)
       send_notification(booking.client, 'booking_cancelled', {
         title: 'Бронювання скасовано',
         message: "Ваш запис на #{booking.booking_date} о #{booking.start_time} скасовано",
@@ -102,8 +103,8 @@ class NotificationService
         channels: ['push', 'email', 'sms']
       }.merge(data))
     end
-    
-    def self.send_booking_reminder(booking, data)
+
+    def send_booking_reminder(booking, data)
       send_notification(booking.client, 'booking_reminder', {
         title: 'Нагадування про запис',
         message: "Нагадуємо про ваш запис завтра о #{booking.start_time}",
@@ -115,7 +116,7 @@ class NotificationService
       }.merge(data))
     end
     
-    def self.send_booking_completed(booking, data)
+    def send_booking_completed(booking, data)
       send_notification(booking.client, 'booking_completed', {
         title: 'Обслуговування завершено',
         message: 'Дякуємо за візит! Будь ласка, оцініть наш сервіс',
@@ -127,24 +128,8 @@ class NotificationService
       }.merge(data))
     end
 
-    # Создание уведомления о бронировании
-    def self.booking_notification(booking, type, additional_data = {})
-      case type
-      when :created
-        send_booking_created(booking, additional_data)
-      when :confirmed
-        send_booking_confirmed(booking, additional_data)
-      when :cancelled
-        send_booking_cancelled(booking, additional_data)
-      when :reminder
-        send_booking_reminder(booking, additional_data)
-      when :completed
-        send_booking_completed(booking, additional_data)
-      end
-    end
-
     # Строит переменные для бронирования (используется в EmailTemplate)
-    def self.build_booking_variables(booking)
+    def build_booking_variables(booking)
       variables = {
         # Системные переменные
         'company_name' => 'Tire Service Master',
@@ -580,4 +565,4 @@ class NotificationService
     base_url = Rails.application.credentials.frontend_url || 'http://localhost:3008'
     "#{base_url}#{path}"
   end
-end end
+end

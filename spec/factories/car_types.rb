@@ -1,7 +1,7 @@
 FactoryBot.define do
   factory :car_type do
-    sequence(:name) { |n| "CarType-#{Time.now.to_f}-#{n}" }
-    description { Faker::Lorem.sentence }
+    sequence(:name) { |n| "CarType #{n}" }
+    sequence(:description) { |n| "Test car type description #{n}" }
     is_active { true }
     
     # Helper traits for common car types

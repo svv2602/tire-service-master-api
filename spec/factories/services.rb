@@ -1,7 +1,7 @@
 FactoryBot.define do
   factory :service do
-    sequence(:name) { |n| "Услуга #{n} - #{['Замена шин', 'Балансировка', 'Ремонт проколов', 'Диагностика подвески'].sample}" }
-    description { Faker::Lorem.paragraph }
+    sequence(:name) { |n| "Service #{n}" }
+    sequence(:description) { |n| "Test service description #{n}. This is a longer description for the service." }
 
     sort_order { rand(0..10) }
     is_active { true }

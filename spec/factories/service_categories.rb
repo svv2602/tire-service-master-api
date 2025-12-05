@@ -1,7 +1,7 @@
 FactoryBot.define do
   factory :service_category do
-    sequence(:name) { |n| "Category #{n} - #{['Шиномонтаж', 'Диагностика', 'Ремонт тормозов', 'Замена масла'].sample}" }
-    description { Faker::Lorem.sentence }
+    sequence(:name) { |n| "Category #{n}" }
+    sequence(:description) { |n| "Test service category description #{n}" }
     is_active { true }
     sort_order { rand(0..10) }
     

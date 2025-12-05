@@ -2,17 +2,17 @@ FactoryBot.define do
   factory :partner do
     # По умолчанию создаем пользователя с ролью партнера
     user do
-      partner_role = UserRole.find_by(name: 'partner') || 
+      partner_role = UserRole.find_by(name: 'partner') ||
                     FactoryBot.create(:user_role, name: 'partner', description: 'Partner role for business owners')
-      
+
       FactoryBot.create(:user, role_id: partner_role.id)
     end
-    
-    company_name { Faker::Company.name }
-    company_description { Faker::Lorem.paragraph }
-    contact_person { Faker::Name.name }
-    legal_address { Faker::Address.full_address }
-    website { Faker::Internet.url }
+
+    sequence(:company_name) { |n| "Test Company #{n}" }
+    sequence(:company_description) { |n| "Test company description #{n}" }
+    sequence(:contact_person) { |n| "Contact Person #{n}" }
+    sequence(:legal_address) { |n| "Legal Address #{n}, City, 12345" }
+    sequence(:website) { |n| "https://company#{n}.example.com" }
     tax_number { nil } # Теперь по умолчанию пустой
     is_active { true }
     
@@ -33,7 +33,7 @@ FactoryBot.define do
     
     # Трейт для партнера с налоговым номером
     trait :with_tax_number do
-      tax_number { "#{Faker::Number.number(digits: 10)}" }
+      sequence(:tax_number) { |n| "123456#{n.to_s.rjust(4, '0')}" }
     end
     
     # Трейт для полных данных

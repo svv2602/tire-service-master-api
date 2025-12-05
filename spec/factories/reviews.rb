@@ -4,7 +4,7 @@ FactoryBot.define do
     association :booking
     association :client
     rating { rand(1..5) }
-    comment { Faker::Lorem.paragraph }
+    sequence(:comment) { |n| "Test review comment #{n}. This is a longer comment for the review." }
     is_published { true }
     
     trait :unpublished do

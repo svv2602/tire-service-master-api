@@ -1,24 +1,24 @@
 FactoryBot.define do
   factory :article do
-    title { Faker::Lorem.sentence(word_count: 4) }
-    content { Faker::Lorem.paragraphs(number: 5).join("\n\n") }
-    excerpt { Faker::Lorem.paragraph(sentence_count: 2) }
+    sequence(:title) { |n| "Test Article Title #{n}" }
+    sequence(:content) { |n| "Test article content #{n}. This is the first paragraph.\n\nThis is the second paragraph with more content.\n\nThis is the third paragraph." }
+    sequence(:excerpt) { |n| "Test article excerpt #{n}. This is a brief summary of the article." }
     category { %w[seasonal tips maintenance selection safety].sample }
     status { 'published' }
     featured { false }
     published_at { Time.current }
     views_count { 0 }
     reading_time { 3 }
-    
+
     # Связь с автором (админ)
     association :author, factory: [:user, :admin]
 
     # Дополнительные поля для SEO
     meta_title { title }
     meta_description { excerpt }
-    
+
     # Изображения (опционально)
-    featured_image_url { Faker::Internet.url }
+    sequence(:featured_image_url) { |n| "https://example.com/images/article#{n}.jpg" }
     
     trait :published do
       status { 'published' }
@@ -37,7 +37,7 @@ FactoryBot.define do
     end
 
     trait :with_long_content do
-      content { Faker::Lorem.paragraphs(number: 20).join("\n\n") }
+      content { "This is a very long article content.\n\n" * 20 }
       reading_time { 8 }
     end
 
@@ -71,7 +71,7 @@ FactoryBot.define do
 
     trait :tips do
       category { 'tips' }
-      title { "#{Faker::Number.between(from: 5, to: 10)} советов по выбору шиномонтажа" }
+      title { "5 советов по выбору шиномонтажа" }
     end
 
     trait :maintenance do
