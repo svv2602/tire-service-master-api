@@ -1,3 +1,18 @@
+# frozen_string_literal: true
+
+# TireSearchService - Backward-compatible facade for modular tire search
+#
+# This class delegates to TireSearch::Service while maintaining the original API.
+# All new functionality should be added to TireSearch::Service.
+#
+# Architecture:
+#   - TireSearch::QueryBuilder - ActiveRecord query construction
+#   - TireSearch::ResultProcessor - Pagination and formatting
+#   - TireSearch::CompatibilityCalculator - Tire-vehicle compatibility
+#   - TireSearch::SuggestionEngine - Autocomplete and suggestions
+#   - TireSearch::QueryParser - Text query parsing
+#   - TireSearch::Service - Main orchestrator
+#
 class TireSearchService
   # Константы алиасов для брендов
   BRAND_ALIASES = {
@@ -66,11 +81,11 @@ class TireSearchService
     # Зимние шины - русский и украинский
     ['зимние', 'зима', 'зимняя', 'зимних', 'зимой', 'winter', 'зимняя резина', 'snow',
      'зимові', 'зимова', 'зимовые', 'взимку', 'зимові шини'] => 'winter',
-    
-    # Летние шины - русский и украинский  
+
+    # Летние шины - русский и украинский
     ['летние', 'лето', 'летняя', 'летних', 'летом', 'summer', 'летняя резина',
      'літні', 'літо', 'літня', 'влітку', 'літні шини'] => 'summer',
-     
+
     # Всесезонные шины - русский и украинский
     ['всесезонные', 'всесезон', 'всесезонная', 'всесезонка', 'круглогодичные', 'круглый год',
      'all season', 'all-season', 'всесезонная резина',
