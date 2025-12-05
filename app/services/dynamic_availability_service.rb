@@ -1,6 +1,17 @@
+# frozen_string_literal: true
+
 # app/services/dynamic_availability_service.rb
 # Сервис для динамического расчета доступности без создания физических слотов
-
+#
+# Architecture:
+#   - Availability::ScheduleResolver - обработка расписания и рабочего времени
+#   - Availability::SlotCalculator - расчет временных слотов
+#   - Availability::OccupancyTracker - отслеживание загруженности
+#   - Availability::Service - главный оркестратор
+#
+# Original implementation preserved for backward compatibility.
+# New modular architecture available via Availability::Service.
+#
 class DynamicAvailabilityService
   # Минимальный интервал проверки в минутах (для обратной совместимости)
   MIN_TIME_INTERVAL = 15
