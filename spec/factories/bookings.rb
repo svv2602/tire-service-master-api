@@ -94,18 +94,27 @@ FactoryBot.define do
     end
     
     trait :completed do
-      association :status, factory: :booking_status, name: 'completed'
+      status { 'completed' }
       booking_date { Date.current - 1.day }
       start_time { "10:00" }
       end_time { "11:00" }
-    end
-    
-    trait :canceled_by_client do
-      association :status, factory: :booking_status, name: 'canceled_by_client'
       before(:build) do |booking|
         booking.status_id = BookingStatus.find_or_create_by(
-          name: 'canceled_by_client',
-          description: 'Canceled by client status',
+          name: 'completed',
+          description: 'Completed status',
+          color: '#8BC34A',
+          is_active: true,
+          sort_order: 4
+        ).id
+      end
+    end
+
+    trait :canceled_by_client do
+      status { 'cancelled_by_client' }
+      before(:build) do |booking|
+        booking.status_id = BookingStatus.find_or_create_by(
+          name: 'cancelled_by_client',
+          description: 'Cancelled by client status',
           color: '#F44336',
           is_active: true,
           sort_order: 5
@@ -113,12 +122,13 @@ FactoryBot.define do
         booking.cancellation_reason = create(:cancellation_reason)
       end
     end
-    
+
     trait :canceled_by_partner do
+      status { 'cancelled_by_partner' }
       before(:build) do |booking|
         booking.status_id = BookingStatus.find_or_create_by(
-          name: 'canceled_by_partner',
-          description: 'Canceled by partner status',
+          name: 'cancelled_by_partner',
+          description: 'Cancelled by partner status',
           color: '#FF5722',
           is_active: true,
           sort_order: 6
@@ -126,9 +136,9 @@ FactoryBot.define do
         booking.cancellation_reason = create(:cancellation_reason)
       end
     end
-    
+
     trait :no_show do
-      association :status, factory: :booking_status, name: 'no_show'
+      status { 'no_show' }
       before(:build) do |booking|
         booking.status_id = BookingStatus.find_or_create_by(
           name: 'no_show',

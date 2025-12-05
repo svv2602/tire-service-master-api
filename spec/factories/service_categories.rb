@@ -1,7 +1,9 @@
 FactoryBot.define do
   factory :service_category do
     sequence(:name) { |n| "Category #{n}" }
+    sequence(:name_uk) { |n| "Категорія #{n}" }
     sequence(:description) { |n| "Test service category description #{n}" }
+    sequence(:description_uk) { |n| "Опис категорії послуг #{n}" }
     is_active { true }
     sort_order { rand(0..10) }
     
