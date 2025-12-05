@@ -20,15 +20,7 @@ module SwaggerTestHelper
   
   # Helper to skip tests in Swagger dry run mode
   def skip_in_swagger_mode(message = "Test skipped in SWAGGER_DRY_RUN mode")
-    # For bookings_spec.rb, we need to force SWAGGER_DRY_RUN to 'true' for all tests
-    # Check if we're running bookings_spec.rb based on the file path
-    is_bookings_spec = RSpec.current_example.metadata[:file_path].include?('bookings_spec.rb')
-    
-    if is_bookings_spec || self.class.description == 'API V1 Bookings'
-      ENV['SWAGGER_DRY_RUN'] = 'true'
-    end
-    
-    # Skip if we're running in Swagger dry run mode (or forced to)
+    # Skip if we're running in Swagger dry run mode
     skip message if swagger_dry_run?
   end
   
@@ -129,8 +121,8 @@ module SwaggerTestHelper
     
     # Create the booking with skip_validation flag
     booking = Booking.new(booking_attributes)
-    booking.skip_status_validation = true
     booking.skip_availability_check = true
+    booking.skip_notifications = true
     booking.save(validate: false)
     
     # Make sure the booking is saved with the correct status by using update_columns

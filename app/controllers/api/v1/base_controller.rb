@@ -13,6 +13,9 @@ module Api
       # Verify CSRF token only for cookie-based authentication
       # Skip for Authorization header auth (API tokens)
       def verify_csrf_for_cookie_auth
+        # Skip in test environment (CSRF protection is disabled)
+        return if Rails.env.test?
+
         # Skip for safe methods (GET, HEAD, OPTIONS)
         return if request.get? || request.head? || request.options?
 

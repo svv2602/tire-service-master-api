@@ -93,6 +93,17 @@ class Booking < ApplicationRecord
   scope :today, -> { where(booking_date: Date.current) }
   scope :by_client, ->(client_id) { where(client_id: client_id) }
   scope :by_service_point, ->(service_point_id) { where(service_point_id: service_point_id) }
+  # Scope for filtering by status - supports both status_id (integer) and status name (string)
+  scope :by_status, ->(status_param) {
+    if status_param.is_a?(Integer) || status_param.to_s =~ /\A\d+\z/
+      # If it's an integer (status_id), look up the status name from BookingStatus table
+      status_record = BookingStatus.find_by(id: status_param.to_i)
+      where(status: status_record&.name)
+    else
+      # If it's a string, filter directly by status name
+      where(status: status_param.to_s)
+    end
+  }
   
   # Scope для изоляции данных по партнерам
   scope :for_partner, ->(partner_id) { 

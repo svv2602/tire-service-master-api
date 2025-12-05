@@ -28,6 +28,10 @@ Rails.application.configure do
   # Disable request forgery protection in test environment.
   config.action_controller.allow_forgery_protection = false
 
+  # Allow all hosts in test environment (RSpec uses www.example.com by default)
+  config.hosts.clear
+  config.hosts = [".localhost", ".test", ".example.com", "example.com", "www.example.com", "localhost", "127.0.0.1"]
+
   # Store uploaded files on the local file system in a temporary directory.
   config.active_storage.service = :test
 
