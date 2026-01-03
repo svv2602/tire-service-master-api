@@ -39,6 +39,9 @@ class Order < ApplicationRecord
   
   # Коллбэки для автоматического расчета вознаграждений
   after_update :calculate_partner_reward, if: :should_calculate_reward?
+
+  # Коллбэки для уведомлений клиентов о статусе заказа
+  after_update :notify_customer_on_status_change, if: :saved_change_to_status?
   
   # Методы для работы со статусами
   def can_mark_as_ready?
@@ -86,9 +89,9 @@ class Order < ApplicationRecord
   def calculate_partner_reward
     return unless service_point&.partner&.is_active?
     return unless supplier.present?
-    
+
     service = RewardCalculationService.new(self)
-    
+
     if service.reward_exists?
       service.recalculate_existing_reward
     else
@@ -96,5 +99,24 @@ class Order < ApplicationRecord
     end
   rescue => e
     Rails.logger.error "Ошибка расчета вознаграждения для Order ##{ttn}: #{e.message}"
+  end
+
+  # Sends SMS/Push notifications to customer on order status changes
+  def notify_customer_on_status_change
+    return unless customer_phone.present?
+
+    case status
+    when 'ready'
+      # Order is ready for pickup
+      OrderNotificationJob.perform_later(id, 'order_ready')
+    when 'delivered'
+      # Order has been delivered
+      OrderNotificationJob.perform_later(id, 'order_delivered')
+    when 'canceled'
+      # Order was canceled
+      OrderNotificationJob.perform_later(id, 'order_canceled')
+    end
+  rescue => e
+    Rails.logger.error "Ошибка отправки уведомления для Order ##{ttn}: #{e.message}"
   end
 end 

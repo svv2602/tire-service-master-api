@@ -172,13 +172,34 @@ module Api
         
         # Проверяем обязательные поля
         unless provider.present? && token.present? && provider_user_id.present? && email.present?
-          render json: { 
+          render json: {
             error: 'Недостаточно данных для авторизации',
             details: 'Обязательные поля: provider, token, provider_user_id, email'
           }, status: :unprocessable_entity
           return
         end
-        
+
+        # Verify Google token for security (if Google provider)
+        if provider == 'google' && ENV['GOOGLE_CLIENT_ID'].present?
+          begin
+            verified_info = GoogleOAuthService.verify(token)
+            Rails.logger.info "✅ Google token verified for: #{verified_info[:email]}"
+
+            # Use verified data from Google instead of client-provided data
+            provider_user_id = verified_info[:provider_user_id]
+            email = verified_info[:email]
+            first_name = verified_info[:first_name] if verified_info[:first_name].present?
+            last_name = verified_info[:last_name] if verified_info[:last_name].present?
+          rescue GoogleOAuthService::TokenVerificationError => e
+            Rails.logger.warn "⚠️ Google token verification failed: #{e.message}"
+            render json: {
+              error: 'Ошибка верификации токена Google',
+              details: e.message
+            }, status: :unauthorized
+            return
+          end
+        end
+
         begin
           User.transaction do
             user = nil
