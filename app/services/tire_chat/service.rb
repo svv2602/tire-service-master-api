@@ -50,8 +50,10 @@ module TireChat
     # @param user_message [String] User's message
     # @param available_products [ActiveRecord::Relation, nil] Optional products scope
     # @param is_quick_question [Boolean] True if this is a standalone quick question
+    # @param is_brand_comparison [Boolean] True if this is a brand comparison request
     # @return [Hash] Response with message, filters, recommendations, etc.
-    def process_message(user_message, available_products = nil, is_quick_question: false)
+    def process_message(user_message, available_products = nil, is_quick_question: false, is_brand_comparison: false)
+      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       Rails.logger.info "🤖 Обработка сообщения: #{user_message} (быстрый вопрос: #{is_quick_question})"
 
       reset_for_quick_question if is_quick_question
@@ -68,6 +70,11 @@ module TireChat
 
       response = handle_intent(intent, available_products)
       @conversation_manager.add_message(:assistant, response[:message])
+
+      # Track analytics
+      end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      response_time_ms = ((end_time - start_time) * 1000).to_i
+      track_analytics(user_message, intent, response, response_time_ms, is_quick_question, is_brand_comparison)
 
       response
     rescue StandardError => e
@@ -128,6 +135,44 @@ module TireChat
     def reset_for_quick_question
       Rails.logger.info "🔄 Сброс параметров для быстрого вопроса"
       @conversation_manager.reset_filters
+    end
+
+    # Track analytics for the interaction
+    def track_analytics(user_message, intent, response, response_time_ms, is_quick_question, is_brand_comparison)
+      products = response[:recommendations] || []
+      response_type = determine_response_type(intent, response)
+
+      AnalyticsService.track_message(
+        session_id: session_id,
+        conversation: conversation,
+        user_query: user_message,
+        intent: intent[:type],
+        response_type: response_type,
+        products_shown: products,
+        response_time_ms: response_time_ms,
+        is_quick_question: is_quick_question,
+        is_brand_comparison: is_brand_comparison,
+        filters_used: current_filters,
+        metadata: {
+          intent_confidence: intent[:confidence],
+          parameters: intent[:parameters]
+        }
+      )
+    rescue StandardError => e
+      Rails.logger.warn "[Analytics] Failed to track: #{e.message}"
+    end
+
+    # Determine response type based on intent and response
+    def determine_response_type(intent, response)
+      return 'error' if response[:error].present?
+      return 'fallback' if response[:message]&.include?('не могу') || response[:message]&.include?('ошибка')
+      return 'brand_comparison' if intent[:type] == 'brand_comparison_request'
+      return 'product_recommendation' if response[:recommendations]&.any?
+      return 'size_selection' if intent[:type] == 'size_request' || intent[:type] == 'size_guide_request'
+      return 'seasonal_advice' if intent[:type] == 'season_preference'
+      return 'price_inquiry' if intent[:type] == 'price_segment_request'
+
+      'general'
     end
 
     # Route intent to appropriate handler

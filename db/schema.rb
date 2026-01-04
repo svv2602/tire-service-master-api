@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
+ActiveRecord::Schema[8.0].define(version: 2026_01_04_100002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -166,6 +166,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.string "license_plate", comment: "Номер автомобиля для гостевых бронирований"
     t.string "status", default: "pending", null: false
     t.boolean "is_service_booking", default: false, null: false
+    t.string "google_calendar_event_id"
+    t.datetime "review_request_sent_at"
     t.index ["booking_date", "start_time", "end_time"], name: "idx_bookings_time_range"
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_brand", "car_model"], name: "index_bookings_on_car_brand_model"
@@ -174,9 +176,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.index ["client_id", "status", "booking_date"], name: "idx_bookings_client_status_date"
     t.index ["client_id"], name: "index_bookings_guest_only", where: "(client_id IS NULL)"
     t.index ["client_id"], name: "index_bookings_on_client_id"
+    t.index ["google_calendar_event_id"], name: "index_bookings_on_google_calendar_event_id"
     t.index ["is_service_booking"], name: "index_bookings_on_is_service_booking"
     t.index ["license_plate"], name: "index_bookings_on_license_plate"
     t.index ["payment_status_id"], name: "index_bookings_on_payment_status_id"
+    t.index ["review_request_sent_at"], name: "index_bookings_on_review_request_sent_at"
     t.index ["service_category_id"], name: "index_bookings_on_service_category_id"
     t.index ["service_point_id", "booking_date", "start_time"], name: "idx_bookings_service_point_date_time"
     t.index ["service_point_id", "booking_date"], name: "idx_bookings_point_date"
@@ -277,6 +281,34 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.index ["client_id"], name: "index_cars_on_client_id"
   end
 
+  create_table "chat_analytics", force: :cascade do |t|
+    t.bigint "conversation_id"
+    t.bigint "conversation_message_id"
+    t.string "session_id", null: false
+    t.text "user_query", null: false
+    t.text "normalized_query"
+    t.string "response_type", default: "general", null: false
+    t.string "intent"
+    t.jsonb "products_shown", default: []
+    t.integer "products_count", default: 0
+    t.integer "response_time_ms"
+    t.boolean "had_results", default: false
+    t.boolean "is_quick_question", default: false
+    t.boolean "is_brand_comparison", default: false
+    t.jsonb "filters_used", default: {}
+    t.jsonb "metadata", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["conversation_id"], name: "index_chat_analytics_on_conversation_id"
+    t.index ["conversation_message_id"], name: "index_chat_analytics_on_conversation_message_id"
+    t.index ["created_at"], name: "index_chat_analytics_on_created_at"
+    t.index ["had_results"], name: "index_chat_analytics_on_had_results"
+    t.index ["intent"], name: "index_chat_analytics_on_intent"
+    t.index ["normalized_query", "had_results"], name: "index_chat_analytics_on_normalized_query_and_had_results"
+    t.index ["response_type"], name: "index_chat_analytics_on_response_type"
+    t.index ["session_id"], name: "index_chat_analytics_on_session_id"
+  end
+
   create_table "cities", force: :cascade do |t|
     t.bigint "region_id", null: false
     t.string "name", null: false
@@ -328,6 +360,32 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_clients_on_user_id", unique: true
+  end
+
+  create_table "conversation_messages", force: :cascade do |t|
+    t.bigint "conversation_id", null: false
+    t.string "role", null: false
+    t.text "content", null: false
+    t.jsonb "metadata", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["conversation_id"], name: "index_conversation_messages_on_conversation_id"
+    t.index ["created_at"], name: "index_conversation_messages_on_created_at"
+    t.index ["role"], name: "index_conversation_messages_on_role"
+  end
+
+  create_table "conversations", force: :cascade do |t|
+    t.bigint "user_id"
+    t.string "session_id", null: false
+    t.string "status", default: "active", null: false
+    t.jsonb "metadata", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_conversations_on_created_at"
+    t.index ["session_id"], name: "index_conversations_on_session_id"
+    t.index ["status"], name: "index_conversations_on_status"
+    t.index ["user_id", "status"], name: "index_conversations_on_user_id_and_status"
+    t.index ["user_id"], name: "index_conversations_on_user_id"
   end
 
   create_table "countries", force: :cascade do |t|
@@ -404,6 +462,21 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.index ["template_type", "language", "channel_type"], name: "index_email_templates_newsletter_only", where: "((template_type)::text = 'newsletter'::text)"
     t.index ["template_type", "language", "channel_type"], name: "index_email_templates_on_type_language_channel_excl_newsletter", unique: true, where: "((template_type)::text <> 'newsletter'::text)"
     t.check_constraint "channel_type::text = ANY (ARRAY['email'::character varying::text, 'telegram'::character varying::text, 'push'::character varying::text])", name: "check_channel_type"
+  end
+
+  create_table "google_calendar_settings", force: :cascade do |t|
+    t.bigint "partner_id"
+    t.bigint "service_point_id"
+    t.text "access_token"
+    t.text "refresh_token"
+    t.datetime "token_expires_at"
+    t.string "calendar_id"
+    t.boolean "sync_enabled", default: true, null: false
+    t.boolean "sync_confirmed_only", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["partner_id"], name: "index_google_calendar_settings_on_partner_id", unique: true, where: "(partner_id IS NOT NULL)"
+    t.index ["service_point_id"], name: "index_google_calendar_settings_on_service_point_id", unique: true, where: "(service_point_id IS NOT NULL)"
   end
 
   create_table "google_oauth_settings", force: :cascade do |t|
@@ -505,6 +578,28 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.index ["sent_at"], name: "index_notifications_on_sent_at"
   end
 
+  create_table "operator_schedules", force: :cascade do |t|
+    t.bigint "operator_id", null: false
+    t.bigint "service_point_id", null: false
+    t.date "schedule_date", null: false
+    t.time "start_time", null: false
+    t.time "end_time", null: false
+    t.string "shift_type", default: "regular"
+    t.text "notes"
+    t.boolean "is_confirmed", default: false
+    t.bigint "confirmed_by_id"
+    t.datetime "confirmed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["confirmed_by_id"], name: "index_operator_schedules_on_confirmed_by_id"
+    t.index ["operator_id", "schedule_date"], name: "index_operator_schedules_on_operator_id_and_schedule_date"
+    t.index ["operator_id"], name: "index_operator_schedules_on_operator_id"
+    t.index ["schedule_date", "service_point_id"], name: "index_operator_schedules_on_schedule_date_and_service_point_id"
+    t.index ["service_point_id", "schedule_date"], name: "index_operator_schedules_on_service_point_id_and_schedule_date"
+    t.index ["service_point_id"], name: "index_operator_schedules_on_service_point_id"
+    t.index ["shift_type"], name: "index_operator_schedules_on_shift_type"
+  end
+
   create_table "operator_service_points", force: :cascade do |t|
     t.bigint "operator_id", null: false, comment: "Ссылка на оператора"
     t.bigint "service_point_id", null: false, comment: "Ссылка на сервисную точку"
@@ -583,11 +678,15 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "supplier_id"
+    t.string "qr_code_token"
+    t.datetime "qr_scanned_at"
+    t.bigint "qr_scanned_by_id"
     t.index "to_tsvector('russian'::regconfig, (customer_name)::text)", name: "idx_orders_customer_search", using: :gin
     t.index ["bas_id"], name: "index_orders_on_bas_id"
     t.index ["customer_phone"], name: "index_orders_on_customer_phone"
     t.index ["order_date"], name: "index_orders_on_order_date"
     t.index ["point_id"], name: "index_orders_on_point_id"
+    t.index ["qr_code_token"], name: "index_orders_on_qr_code_token", unique: true
     t.index ["service_point_id", "status"], name: "index_orders_on_service_point_id_and_status"
     t.index ["service_point_id"], name: "index_orders_on_service_point_id"
     t.index ["supplier_id", "status"], name: "index_orders_on_supplier_id_and_status"
@@ -855,6 +954,36 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.index ["name_uk"], name: "index_regions_on_name_uk"
   end
 
+  create_table "review_reply_templates", force: :cascade do |t|
+    t.string "name", null: false
+    t.text "content", null: false
+    t.string "category", default: "general"
+    t.boolean "is_active", default: true
+    t.bigint "partner_id"
+    t.integer "sort_order", default: 0
+    t.integer "usage_count", default: 0
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_review_reply_templates_on_category"
+    t.index ["is_active"], name: "index_review_reply_templates_on_is_active"
+    t.index ["partner_id", "is_active"], name: "index_review_reply_templates_on_partner_id_and_is_active"
+    t.index ["partner_id"], name: "index_review_reply_templates_on_partner_id"
+  end
+
+  create_table "review_request_tokens", force: :cascade do |t|
+    t.string "token", null: false
+    t.bigint "booking_id", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "used_at"
+    t.string "ip_address"
+    t.string "user_agent"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["booking_id"], name: "index_review_request_tokens_on_booking_id"
+    t.index ["expires_at"], name: "index_review_request_tokens_on_expires_at"
+    t.index ["token"], name: "index_review_request_tokens_on_token", unique: true
+  end
+
   create_table "reviews", force: :cascade do |t|
     t.bigint "booking_id"
     t.bigint "client_id", null: false
@@ -1071,7 +1200,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.text "description_uk", null: false
     t.string "address_ru", null: false
     t.string "address_uk", null: false
+    t.jsonb "automation_settings", default: {}, null: false, comment: "Automation settings: auto_confirm_enabled, auto_confirm_delay_minutes, auto_assign_operator, send_confirmation_sms, auto_confirm_conditions"
     t.index "to_tsvector('russian'::regconfig, (((name)::text || ' '::text) || COALESCE(description, ''::text)))", name: "idx_service_points_search_text", using: :gin
+    t.index ["automation_settings"], name: "index_service_points_on_automation_settings", using: :gin
     t.index ["category_contacts"], name: "index_service_points_on_category_contacts", using: :gin
     t.index ["city_id"], name: "index_service_points_on_city_id"
     t.index ["is_active", "work_status"], name: "index_service_points_on_is_active_and_work_status"
@@ -1189,9 +1320,18 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.datetime "last_sync_at", precision: nil
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "user_id"
+    t.string "email"
+    t.string "phone"
+    t.text "description"
+    t.string "website"
+    t.string "contact_person"
+    t.string "address"
+    t.string "telegram_chat_id"
     t.index ["api_key"], name: "index_suppliers_on_api_key", unique: true
     t.index ["firm_id"], name: "index_suppliers_on_firm_id", unique: true
     t.index ["is_active"], name: "index_suppliers_on_is_active"
+    t.index ["user_id"], name: "index_suppliers_on_user_id"
   end
 
   create_table "system_logs", force: :cascade do |t|
@@ -1395,7 +1535,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
     t.decimal "total_amount", precision: 10, scale: 2, default: "0.0"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "qr_code_token"
+    t.datetime "qr_scanned_at"
+    t.bigint "qr_scanned_by_id"
+    t.bigint "partner_id"
+    t.string "tracking_number"
+    t.datetime "shipped_at"
+    t.datetime "delivered_at"
+    t.text "notes"
+    t.index ["partner_id", "status"], name: "idx_tire_orders_partner_status"
+    t.index ["partner_id"], name: "index_tire_orders_on_partner_id"
+    t.index ["qr_code_token"], name: "index_tire_orders_on_qr_code_token", unique: true
     t.index ["status"], name: "index_tire_orders_on_status"
+    t.index ["supplier_id", "created_at"], name: "idx_tire_orders_supplier_created"
     t.index ["supplier_id", "status"], name: "index_tire_orders_on_supplier_id_and_status"
     t.index ["supplier_id"], name: "index_tire_orders_on_supplier_id"
     t.index ["user_id", "status"], name: "index_tire_orders_on_user_id_and_status"
@@ -1493,6 +1645,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
   add_foreign_key "car_tire_configurations", "car_models", column: "model_id"
   add_foreign_key "cars", "car_types"
   add_foreign_key "cars", "clients"
+  add_foreign_key "chat_analytics", "conversation_messages"
+  add_foreign_key "chat_analytics", "conversations"
   add_foreign_key "cities", "regions"
   add_foreign_key "client_cars", "car_brands", column: "brand_id"
   add_foreign_key "client_cars", "car_models", column: "model_id"
@@ -1502,20 +1656,28 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
   add_foreign_key "client_favorite_points", "clients"
   add_foreign_key "client_favorite_points", "service_points"
   add_foreign_key "clients", "users"
+  add_foreign_key "conversation_messages", "conversations"
+  add_foreign_key "conversations", "users"
   add_foreign_key "custom_variables", "users", column: "created_by_id"
   add_foreign_key "email_template_custom_variables", "custom_variables"
   add_foreign_key "email_template_custom_variables", "email_templates"
+  add_foreign_key "google_calendar_settings", "partners"
+  add_foreign_key "google_calendar_settings", "service_points"
   add_foreign_key "manager_service_points", "managers"
   add_foreign_key "manager_service_points", "service_points"
   add_foreign_key "managers", "partners"
   add_foreign_key "managers", "users"
   add_foreign_key "notifications", "notification_types"
+  add_foreign_key "operator_schedules", "operators"
+  add_foreign_key "operator_schedules", "service_points"
+  add_foreign_key "operator_schedules", "users", column: "confirmed_by_id"
   add_foreign_key "operator_service_points", "operators"
   add_foreign_key "operator_service_points", "service_points"
   add_foreign_key "operators", "users"
   add_foreign_key "order_items", "orders"
   add_foreign_key "orders", "service_points"
   add_foreign_key "orders", "suppliers"
+  add_foreign_key "orders", "users", column: "qr_scanned_by_id"
   add_foreign_key "partner_applications", "cities", column: "city_record_id"
   add_foreign_key "partner_applications", "regions"
   add_foreign_key "partner_applications", "users", column: "processed_by_id"
@@ -1539,6 +1701,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
   add_foreign_key "promotions", "partners"
   add_foreign_key "promotions", "service_points"
   add_foreign_key "push_subscriptions", "users"
+  add_foreign_key "review_reply_templates", "partners"
+  add_foreign_key "review_request_tokens", "bookings"
   add_foreign_key "reviews", "bookings"
   add_foreign_key "reviews", "clients"
   add_foreign_key "reviews", "service_points"
@@ -1566,6 +1730,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
   add_foreign_key "supplier_tire_products", "suppliers"
   add_foreign_key "supplier_tire_products", "tire_brands"
   add_foreign_key "supplier_tire_products", "tire_models"
+  add_foreign_key "suppliers", "users"
   add_foreign_key "system_logs", "users"
   add_foreign_key "telegram_notifications", "bookings"
   add_foreign_key "telegram_notifications", "users"
@@ -1577,8 +1742,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_10_183041) do
   add_foreign_key "tire_models", "tire_brands"
   add_foreign_key "tire_order_items", "supplier_tire_products"
   add_foreign_key "tire_order_items", "tire_orders"
+  add_foreign_key "tire_orders", "partners"
   add_foreign_key "tire_orders", "suppliers"
   add_foreign_key "tire_orders", "users"
+  add_foreign_key "tire_orders", "users", column: "qr_scanned_by_id"
   add_foreign_key "user_social_accounts", "users"
   add_foreign_key "users", "user_roles", column: "role_id"
   add_foreign_key "users", "users", column: "suspended_by_id"
