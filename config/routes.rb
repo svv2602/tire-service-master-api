@@ -48,7 +48,53 @@ Rails.application.routes.draw do
       get 'tire_chat/stream', to: 'tire_chat#stream'
       post 'tire_chat/reset', to: 'tire_chat#reset'
       get 'tire_chat/status', to: 'tire_chat#status'
+      get 'tire_chat/history', to: 'tire_chat#history'
+      get 'tire_chat/conversations', to: 'tire_chat#conversations'
+      post 'tire_chat/conversations/:id/resume', to: 'tire_chat#resume'
+
+      # Публичные маршруты для отзывов по токену
+      get 'review_requests/:token', to: 'review_requests#show_by_token'
+      post 'review_requests/:token/submit', to: 'review_requests#submit_review'
+
+      # Платежи (LiqPay)
+      namespace :payments do
+        post 'booking/:booking_id', action: :create_booking_payment
+        post 'order/:order_id', action: :create_order_payment
+        post 'liqpay/callback', action: :liqpay_callback
+        get 'status/:order_id', action: :status
+        post 'refund', action: :refund
+      end
+
+      # QR-коды для выдачи заказов
+      namespace :qr_codes do
+        get ':order_type/:order_id', action: :show
+        post ':order_type/:order_id/generate', action: :generate
+        post 'scan', action: :scan
+        get 'lookup', action: :lookup
+      end
+
+      # Доставка (Новая Почта)
+      namespace :delivery do
+        get 'track/:ttn', action: :track
+        get 'cities', action: :cities
+        get 'warehouses', action: :warehouses
+        post 'calculate', action: :calculate
+        get 'order/:order_id/tracking', action: :order_tracking
+      end
+
+      # AI рекомендации
+      namespace :ai_recommendations do
+        get 'seasonal', action: :seasonal
+        get 'vehicle_tires', action: :vehicle_tires
+        get 'review_summary/:service_point_id', action: :review_summary
+        post 'review_response', action: :review_response
+        get 'review_sentiment/:review_id', action: :review_sentiment
+        post 'moderate_review', action: :moderate_review
+      end
       
+      # Supplier report download (token-based, no auth required)
+      get 'supplier_reports/download/:token', to: 'supplier_reports#download', as: :download_supplier_report
+
       # Управление поставщиками
       resources :suppliers do
         member do
@@ -61,6 +107,48 @@ Rails.application.routes.draw do
         collection do
           post :upload_price
           get 'products/all', action: :all_products
+        end
+
+        # Supplier orders management
+        resources :orders, controller: 'supplier_orders', only: [:index, :show, :update] do
+          member do
+            post :confirm
+            post :start_processing
+            post :ship
+            post :deliver
+            post :complete
+            post :cancel
+          end
+        end
+
+        # Supplier dashboard
+        get :dashboard, to: 'supplier_dashboard#show'
+
+        # Supplier analytics
+        resource :analytics, controller: 'supplier_analytics', only: [:show] do
+          get :sales
+          get :products
+          get :partners
+          get :categories
+          get :export
+        end
+
+        # Supplier clients (partners who order from this supplier)
+        resources :clients, controller: 'supplier_clients', only: [:index, :show]
+
+        # Supplier profile management
+        resource :profile, controller: 'supplier_profile', only: [:show, :update] do
+          post :regenerate_api_key
+        end
+
+        # Supplier products management (for supplier's own management)
+        resources :products, path: 'manage/products', controller: 'supplier_products', only: [:index, :show, :update, :destroy] do
+          member do
+            post :toggle_active
+          end
+          collection do
+            post :bulk_update
+          end
         end
       end
       
@@ -362,6 +450,64 @@ Rails.application.routes.draw do
             get 'export'
           end
         end
+
+        # Google Calendar интеграция
+        namespace :google_calendar do
+          get 'status'
+          get 'auth_url'
+          post 'connect'
+          delete 'disconnect'
+          get 'calendars'
+          post 'set_calendar'
+          post 'sync_booking'
+          delete 'delete_booking'
+          post 'sync_all'
+          patch 'settings'
+        end
+
+        # Дашборд партнера
+        get :dashboard, to: 'partner_dashboard#show'
+
+        # Аналитика партнера
+        namespace :analytics, controller: 'partner_analytics' do
+          get 'overview'
+          get 'revenue'
+          get 'bookings'
+          get 'top_services'
+          get 'service_points'
+          get 'export'
+        end
+
+        # Прогнозирование загрузки
+        resources :forecasts, only: [:index] do
+          collection do
+            get 'weekly'
+            get 'recommendations'
+            get 'service_point/:service_point_id', action: :service_point_forecast
+            get 'compare'
+            post 'notify_peak'
+          end
+        end
+
+        # Массовые операции с записями
+        member do
+          post 'bulk_bookings/confirm', to: 'bulk_bookings#confirm'
+          post 'bulk_bookings/cancel', to: 'bulk_bookings#cancel'
+          post 'bulk_bookings/reschedule', to: 'bulk_bookings#reschedule'
+          post 'bulk_bookings/complete', to: 'bulk_bookings#complete'
+          post 'bulk_bookings/no_show', to: 'bulk_bookings#no_show'
+          get 'bulk_bookings/preview', to: 'bulk_bookings#preview'
+        end
+
+        # Запросы отзывов
+        resources :review_requests, only: [:index] do
+          collection do
+            get 'stats'
+            get 'settings'
+            patch 'settings'
+            post 'send_manual'
+          end
+        end
         
         # Создание тестовых данных для партнера
         collection do
@@ -447,6 +593,7 @@ Rails.application.routes.draw do
         # Новое API для динамической доступности
         member do
           get 'availability/week', to: 'availability#week_overview', as: 'week_overview'
+          get 'availability/month_load', to: 'availability#month_load', as: 'month_load'
           get 'availability/:date', to: 'availability#available_times', as: 'availability_times'
           post 'availability/check', to: 'availability#check_time'
           get 'availability/:date/next', to: 'availability#next_available', as: 'next_available'
@@ -475,10 +622,25 @@ Rails.application.routes.draw do
             post 'activate'
             post 'deactivate'
           end
-          
+
           collection do
             post 'create_defaults'
             get 'statistics'
+          end
+        end
+
+        # Расписание операторов
+        resources :operator_schedules do
+          member do
+            post 'confirm'
+            post 'unconfirm'
+          end
+
+          collection do
+            post 'bulk_create'
+            get 'weekly'
+            get 'available_operators'
+            get 'load'
           end
         end
         
@@ -667,7 +829,14 @@ Rails.application.routes.draw do
 
       # Отзывы
       resources :reviews
-      
+
+      # Шаблоны ответов на отзывы
+      resources :review_reply_templates do
+        member do
+          post 'use'
+        end
+      end
+
       # Клиентские ресурсы
       resources :clients do
         resources :reviews

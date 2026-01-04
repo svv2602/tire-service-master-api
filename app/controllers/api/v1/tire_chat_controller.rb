@@ -3,72 +3,69 @@
 module Api
   module V1
     class TireChatController < BaseController
-      # Отключаем авторизацию для чата (публичный доступ)
-      skip_before_action :authenticate_request, only: [:message, :stream, :reset, :status]
-      
-      # Обработка сообщения пользователя
+      # Public endpoints - no auth required (but try optional auth)
+      skip_before_action :authenticate_request, only: [:message, :stream, :reset, :status, :history, :conversations, :resume]
+      before_action :authenticate_optional, only: [:message, :conversations, :resume]
+
+      # Pagination defaults
+      DEFAULT_PAGE_SIZE = 20
+      MAX_PAGE_SIZE = 100
+
+      # Process user message
       def message
-        # Устанавливаем локаль из параметров запроса
         locale = params[:locale] || 'ru'
         I18n.with_locale(locale.to_sym) do
           chat_service = initialize_chat_service(locale)
-          
+
           response_data = chat_service.process_message(
             params[:message],
             current_available_products,
             is_quick_question: params[:is_quick_question]
           )
-          
-          # Сохраняем обновленное состояние в сессии
-          save_chat_state(chat_service)
-          
+
           render json: {
             success: true,
             response: response_data,
-            conversation_id: session[:conversation_id],
+            conversation_id: chat_service.conversation_id,
+            session_id: session_id,
             timestamp: Time.current.iso8601
           }
         end
-      rescue => e
+      rescue StandardError => e
         Rails.logger.error "❌ Ошибка в tire chat: #{e.message}"
+        Rails.logger.error e.backtrace.first(5).join("\n")
         render json: {
           success: false,
           error: "Онлайн-консультант временно недоступен",
           fallback_message: "Попробуйте использовать стандартные фильтры поиска"
-        }, status: 500
+        }, status: :internal_server_error
       end
 
-      # Стриминг ответа (Server-Sent Events)
+      # Server-Sent Events streaming
       def stream
         response.headers['Content-Type'] = 'text/event-stream'
         response.headers['Cache-Control'] = 'no-cache'
         response.headers['Connection'] = 'keep-alive'
-        
+
         begin
-          chat_service = initialize_chat_service
-          
-          # Отправляем событие начала обработки
+          locale = params[:locale] || 'ru'
+          chat_service = initialize_chat_service(locale)
+
           send_sse_event('processing', { message: 'Анализирую ваш запрос...' })
-          
-          # Обрабатываем сообщение
+
           response_data = chat_service.process_message(
             params[:message],
             current_available_products
           )
-          
-          # Стримим ответ по частям
+
           stream_response_chunks(response_data[:message])
-          
-          # Отправляем финальные данные
+
           send_sse_event('complete', {
             response: response_data,
-            conversation_id: session[:conversation_id]
+            conversation_id: chat_service.conversation_id,
+            session_id: session_id
           })
-          
-          # Сохраняем состояние
-          save_chat_state(chat_service)
-          
-        rescue => e
+        rescue StandardError => e
           Rails.logger.error "❌ Ошибка в tire chat stream: #{e.message}"
           send_sse_event('error', {
             message: 'Онлайн-консультант временно недоступен'
@@ -78,93 +75,232 @@ module Api
         end
       end
 
-      # Сброс разговора
+      # Reset conversation
       def reset
-        session[:conversation_history] = []
-        session[:current_filters] = {}
-        session[:user_preferences] = {}
-        session[:conversation_id] = SecureRandom.uuid
-        
+        conversation = current_conversation
+        if conversation
+          conversation.close!
+        end
+
+        # Generate new session
+        new_session_id = SecureRandom.uuid
+        session[:tire_chat_session_id] = new_session_id
+
         render json: {
           success: true,
           message: 'Разговор сброшен',
-          conversation_id: session[:conversation_id]
+          session_id: new_session_id
         }
       end
 
-      # Получение текущего состояния чата
+      # Get current chat status
       def status
+        conversation = current_conversation
+
         render json: {
-          conversation_id: session[:conversation_id],
-          history_count: (session[:conversation_history] || []).length,
-          current_filters: session[:current_filters] || {},
-          user_preferences: session[:user_preferences] || {},
+          session_id: session_id,
+          conversation_id: conversation&.id,
+          history_count: conversation&.messages&.count || 0,
+          current_filters: conversation&.metadata&.dig('filters') || {},
+          user_preferences: conversation&.metadata&.dig('preferences') || {},
+          status: conversation&.status || 'new',
           timestamp: Time.current.iso8601
+        }
+      end
+
+      # Get conversation history with pagination
+      def history
+        conversation = current_conversation
+
+        unless conversation
+          return render json: {
+            success: true,
+            messages: [],
+            pagination: { total: 0, page: 1, per_page: page_size, total_pages: 0 }
+          }
+        end
+
+        messages = conversation.messages.chronological
+        total = messages.count
+
+        # Pagination (use helper methods)
+        page = current_page
+        per_page = page_size
+        offset = pagination_offset
+
+        paginated_messages = messages.offset(offset).limit(per_page)
+
+        render json: {
+          success: true,
+          conversation_id: conversation.id,
+          session_id: session_id,
+          messages: paginated_messages.map(&:as_api_json),
+          filters: conversation.metadata&.dig('filters') || {},
+          preferences: conversation.metadata&.dig('preferences') || {},
+          pagination: {
+            total: total,
+            page: page,
+            per_page: per_page,
+            total_pages: (total.to_f / per_page).ceil
+          }
+        }
+      end
+
+      # List user's conversations (authenticated only)
+      def conversations
+        conversations = current_user_conversations
+          .order(updated_at: :desc)
+          .limit(page_size)
+          .offset(pagination_offset)
+
+        total = current_user_conversations.count
+
+        render json: {
+          success: true,
+          conversations: conversations.map { |c| conversation_summary(c) },
+          pagination: {
+            total: total,
+            page: current_page,
+            per_page: page_size,
+            total_pages: (total.to_f / page_size).ceil
+          }
+        }
+      end
+
+      # Resume specific conversation
+      def resume
+        conversation = find_conversation_to_resume
+
+        unless conversation
+          return render json: {
+            success: false,
+            error: 'Разговор не найден'
+          }, status: :not_found
+        end
+
+        # Update session to use this conversation
+        session[:tire_chat_session_id] = conversation.session_id
+
+        render json: {
+          success: true,
+          conversation_id: conversation.id,
+          session_id: conversation.session_id,
+          messages: conversation.messages.chronological.last(20).map(&:as_api_json),
+          filters: conversation.metadata&.dig('filters') || {},
+          preferences: conversation.metadata&.dig('preferences') || {}
         }
       end
 
       private
 
-      # Инициализация сервиса чата с данными из сессии
+      # Try to authenticate without failing if no token
+      def authenticate_optional
+        header = request.headers['Authorization']
+        token = header&.split(' ')&.last
+
+        return if token.blank?
+
+        begin
+          decoded = Auth::JsonWebToken.decode(token)
+          @current_user = User.find(decoded['user_id'])
+        rescue StandardError
+          # Ignore auth errors - user can proceed unauthenticated
+        end
+      end
+
       def initialize_chat_service(locale = 'ru')
-        # Создаем ID разговора если его нет
-        session[:conversation_id] ||= SecureRandom.uuid
-        
-        TireChatService.new(
-          conversation_history: session[:conversation_history] || [],
-          current_filters: session[:current_filters] || {},
-          user_preferences: session[:user_preferences] || {},
+        TireChat::Service.new(
+          session_id: session_id,
+          user: current_user,
           locale: locale
         )
       end
 
-      # Получение доступных товаров (можно кэшировать)
+      def session_id
+        # Allow passing session_id as parameter (for API clients without cookie support)
+        # or via header X-Session-ID
+        params[:session_id] ||
+          request.headers['X-Session-ID'] ||
+          (session[:tire_chat_session_id] ||= SecureRandom.uuid)
+      end
+
+      def current_conversation
+        return nil if session_id.blank?
+
+        Conversation.active.find_by(session_id: session_id)
+      end
+
+      def current_user_conversations
+        if current_user
+          Conversation.where(user: current_user)
+        else
+          Conversation.where(session_id: session_id)
+        end
+      end
+
+      def find_conversation_to_resume
+        conversation_id = params[:conversation_id] || params[:id]
+
+        if current_user
+          Conversation.where(user: current_user).find_by(id: conversation_id)
+        else
+          Conversation.where(session_id: session_id).find_by(id: conversation_id)
+        end
+      end
+
+      def conversation_summary(conversation)
+        last_message = conversation.messages.chronological.last
+        {
+          id: conversation.id,
+          session_id: conversation.session_id,
+          status: conversation.status,
+          messages_count: conversation.messages.count,
+          last_message: last_message&.content&.truncate(100),
+          last_message_at: last_message&.created_at,
+          filters: conversation.metadata&.dig('filters'),
+          created_at: conversation.created_at,
+          updated_at: conversation.updated_at
+        }
+      end
+
       def current_available_products
-        # Возвращаем nil, чтобы сервис сам делал запрос к БД
-        # В будущем здесь можно добавить кэширование или фильтрацию
         nil
       end
 
-      # Сохранение состояния чата в сессии (оптимизированное)
-      def save_chat_state(chat_service)
-        # Ограничиваем историю до 5 последних сообщений для экономии места
-        history = chat_service.conversation_history.last(5).map do |entry|
-          {
-            role: entry[:role],
-            message: entry[:message].to_s[0..200], # Обрезаем длинные сообщения
-            timestamp: entry[:timestamp]
-          }
-        end
-        
-        session[:conversation_history] = history
-        session[:current_filters] = chat_service.current_filters
-        session[:user_preferences] = chat_service.user_preferences
+      def current_page
+        [params[:page].to_i, 1].max
       end
 
-      # Отправка Server-Sent Event
+      def page_size
+        per_page = params[:per_page].to_i
+        per_page = DEFAULT_PAGE_SIZE if per_page <= 0
+        [per_page, MAX_PAGE_SIZE].min
+      end
+
+      def pagination_offset
+        (current_page - 1) * page_size
+      end
+
+      # SSE helpers
       def send_sse_event(event_type, data)
         response.stream.write("event: #{event_type}\n")
         response.stream.write("data: #{data.to_json}\n\n")
       rescue IOError
-        # Клиент отключился
         Rails.logger.info "🔌 Клиент отключился от SSE"
       end
 
-      # Стриминг ответа по частям для эффекта печати
       def stream_response_chunks(message)
         return if message.blank?
-        
-        # Разбиваем сообщение на предложения
+
         sentences = message.split(/(?<=[.!?])\s+/)
-        
+
         sentences.each_with_index do |sentence, index|
           send_sse_event('chunk', {
             text: sentence + (index < sentences.length - 1 ? ' ' : ''),
             chunk_index: index,
             is_final: index == sentences.length - 1
           })
-          
-          # Небольшая задержка для эффекта печати
+
           sleep(0.1) unless Rails.env.test?
         end
       end

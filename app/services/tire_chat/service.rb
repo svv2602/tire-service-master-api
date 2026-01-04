@@ -8,15 +8,37 @@ module TireChat
 
     attr_reader :conversation_manager, :message_processor, :search_adapter, :response_formatter, :ai_client
 
-    def initialize(conversation_history: [], current_filters: {}, user_preferences: {}, locale: 'ru')
+    # Initialize with session_id for database persistence
+    # @param session_id [String] Session identifier for conversation persistence
+    # @param user [User, nil] Optional user for authenticated sessions
+    # @param conversation_history [Array] Legacy: array of message hashes (for backward compatibility)
+    # @param current_filters [Hash] Initial filters
+    # @param user_preferences [Hash] Initial user preferences
+    # @param locale [String] Locale for messages ('ru' or 'uk')
+    def initialize(session_id: nil, user: nil, conversation_history: [], current_filters: {}, user_preferences: {}, locale: 'ru')
       @ai_client = AIClient.new
       @message_processor = MessageProcessor.new(ai_client: @ai_client)
-      @conversation_manager = ConversationManager.new(
-        conversation_history: conversation_history,
-        current_filters: current_filters,
-        user_preferences: user_preferences,
-        locale: locale
-      )
+
+      # If session_id provided, use new database-backed manager
+      # Otherwise, use legacy from_history for backward compatibility
+      if session_id.present?
+        @conversation_manager = ConversationManager.new(
+          session_id: session_id,
+          user: user,
+          locale: locale,
+          current_filters: current_filters,
+          user_preferences: user_preferences
+        )
+      else
+        # Legacy mode for backward compatibility
+        @conversation_manager = ConversationManager.from_history(
+          conversation_history: conversation_history,
+          current_filters: current_filters,
+          user_preferences: user_preferences,
+          locale: locale
+        )
+      end
+
       @response_formatter = ResponseFormatter.new(locale: locale)
       @search_adapter = SearchAdapter.new(
         filters: @conversation_manager.filters,
@@ -76,6 +98,24 @@ module TireChat
     # @return [String] Current locale
     def locale
       @conversation_manager.locale
+    end
+
+    # Get conversation ID
+    # @return [Integer, nil] Database conversation ID
+    def conversation_id
+      @conversation_manager.conversation_id
+    end
+
+    # Get session ID
+    # @return [String] Session identifier
+    def session_id
+      @conversation_manager.session_id
+    end
+
+    # Get conversation object
+    # @return [Conversation] Conversation record
+    def conversation
+      @conversation_manager.conversation
     end
 
     # Clear conversation

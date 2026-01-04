@@ -3,176 +3,157 @@
 module TireChat
   # Conversation manager for session and context management
   # Handles conversation history, filters, and user preferences
+  # Now uses database persistence via Conversation model
   class ConversationManager
     MAX_HISTORY_LENGTH = 20
     SESSION_TTL = 30.minutes
 
-    # Conversation data structure
-    class Conversation
-      attr_accessor :history, :filters, :preferences, :locale, :created_at, :updated_at
+    attr_reader :conversation, :filters, :preferences, :locale
 
-      def initialize(locale: 'ru', filters: {}, preferences: {})
-        @history = []
-        @filters = initialize_filters(filters)
-        @preferences = preferences || {}
-        @locale = locale || 'ru'
-        @created_at = Time.current
-        @updated_at = Time.current
-      end
+    def initialize(session_id:, user: nil, locale: 'ru', current_filters: {}, user_preferences: {})
+      @locale = locale || 'ru'
+      @filters = initialize_filters(current_filters)
+      @preferences = user_preferences || {}
 
-      def to_h
-        {
-          history: @history,
-          filters: @filters,
-          preferences: @preferences,
-          locale: @locale,
-          created_at: @created_at,
-          updated_at: @updated_at
-        }
-      end
-
-      private
-
-      def initialize_filters(filters)
-        {
-          size: nil,
-          season: nil,
-          budget_min: nil,
-          budget_max: nil,
-          brand_preferences: nil,
-          priority_type: nil
-        }.merge(filters || {})
-      end
+      # Find or create database conversation
+      @conversation = find_or_create_conversation(session_id, user)
     end
 
-    attr_reader :conversation
+    # Legacy constructor for backward compatibility
+    def self.from_history(conversation_history: [], current_filters: {}, user_preferences: {}, locale: 'ru')
+      # Create a temporary session for legacy API
+      session_id = SecureRandom.uuid
+      manager = new(session_id: session_id, locale: locale, current_filters: current_filters, user_preferences: user_preferences)
 
-    def initialize(conversation_history: [], current_filters: {}, user_preferences: {}, locale: 'ru')
-      @conversation = Conversation.new(
-        locale: locale,
-        filters: current_filters,
-        preferences: user_preferences
-      )
-      @conversation.history = conversation_history || []
+      # Import legacy history if provided
+      conversation_history&.each do |entry|
+        role = entry[:role].to_s == 'user' ? 'user' : 'assistant'
+        manager.conversation.messages.create!(role: role, content: entry[:message] || entry[:content])
+      end
+
+      manager
     end
 
-    # Get or create conversation (for Redis-based storage in future)
-    # @param session_id [String] Session identifier
-    # @return [Conversation] Conversation object
-    def self.get_or_create(session_id, locale: 'ru')
-      # Future: Load from Redis/cache
-      # For now, create new conversation
-      new(locale: locale)
+    # Get or create conversation (class method for convenience)
+    def self.get_or_create(session_id, user: nil, locale: 'ru')
+      new(session_id: session_id, user: user, locale: locale)
+    end
+
+    # Find or create conversation in database
+    def find_or_create_conversation(session_id, user = nil)
+      ::Conversation.find_or_create_for(session_id: session_id, user: user)
     end
 
     # Add message to conversation history
-    # @param role [Symbol] Message role (:user or :assistant)
-    # @param message [String] Message content
-    def add_message(role, message)
-      @conversation.history << {
-        role: role,
-        message: message,
-        timestamp: Time.current
-      }
+    def add_message(role, message, metadata: {})
+      role_str = role.to_s == 'user' ? 'user' : 'assistant'
 
-      trim_history
-      touch
+      @conversation.messages.create!(
+        role: role_str,
+        content: message,
+        metadata: metadata
+      )
+      @conversation.touch
+    end
+
+    # Add user message (convenience method)
+    def add_user_message(content)
+      @conversation.add_user_message(content)
+    end
+
+    # Add assistant message with optional metadata
+    def add_assistant_message(content, metadata: {})
+      @conversation.add_assistant_message(content, metadata: metadata)
     end
 
     # Get conversation history
-    # @return [Array<Hash>] Message history
     def history
-      @conversation.history
+      @conversation.messages.chronological.map do |msg|
+        {
+          role: msg.role.to_sym,
+          message: msg.content,
+          timestamp: msg.created_at
+        }
+      end
     end
 
-    # Get current filters
-    # @return [Hash] Current search filters
-    def filters
-      @conversation.filters
-    end
-
-    # Get user preferences
-    # @return [Hash] User preferences
-    def preferences
-      @conversation.preferences
-    end
-
-    # Get locale
-    # @return [String] Current locale
-    def locale
-      @conversation.locale
+    # Get context for AI (formatted for OpenAI)
+    def context_for_ai(limit: MAX_HISTORY_LENGTH)
+      @conversation.context_for_ai(limit: limit)
     end
 
     # Update filters from parameters
-    # @param parameters [Hash] Parameters to update
     def update_filters(parameters)
       if parameters[:size].present?
-        @conversation.filters[:size] = parse_size(parameters[:size])
+        @filters[:size] = parse_size(parameters[:size])
       end
 
       if parameters[:season].present?
-        @conversation.filters[:season] = normalize_season(parameters[:season])
-        Rails.logger.info "🔄 Нормализация сезона: '#{parameters[:season]}' → '#{@conversation.filters[:season]}'"
+        @filters[:season] = normalize_season(parameters[:season])
+        Rails.logger.info "🔄 Нормализация сезона: '#{parameters[:season]}' → '#{@filters[:season]}'"
       end
 
-      @conversation.filters[:brands] = parameters[:brands].map(&:downcase) if parameters[:brands].present?
+      @filters[:brands] = parameters[:brands].map(&:downcase) if parameters[:brands].present?
 
-      touch
+      # Save filters to conversation metadata
+      save_filters_to_metadata
+
       log_filters
     end
 
     # Update user preferences
-    # @param preferences [Hash] Preferences to update
     def update_preferences(preferences)
       if preferences[:priority_type].present?
-        @conversation.preferences[:priority_type] = normalize_priority(preferences[:priority_type])
+        @preferences[:priority_type] = normalize_priority(preferences[:priority_type])
       end
 
       if preferences[:price_segment].present?
-        @conversation.preferences[:price_segment] = preferences[:price_segment]
-        Rails.logger.info "💰 Установлен ценовой сегмент: #{@conversation.preferences[:price_segment]}"
+        @preferences[:price_segment] = preferences[:price_segment]
+        Rails.logger.info "💰 Установлен ценовой сегмент: #{@preferences[:price_segment]}"
       end
 
       if preferences[:car_model].present?
-        @conversation.preferences[:car_model] = preferences[:car_model]
+        @preferences[:car_model] = preferences[:car_model]
       end
 
-      touch
+      # Save preferences to conversation metadata
+      save_preferences_to_metadata
+
       log_preferences
     end
 
     # Check if ready for recommendations
-    # @return [Boolean] True if all required filters are set
     def ready_for_recommendations?
-      @conversation.filters[:size].present? && @conversation.filters[:season].present?
+      @filters[:size].present? && @filters[:season].present?
     end
 
     # Clear conversation and reset filters
     def clear
-      @conversation = Conversation.new(locale: @conversation.locale)
+      @conversation.close!
+      @conversation = ::Conversation.create!(
+        session_id: SecureRandom.uuid,
+        user: @conversation.user,
+        status: 'active'
+      )
+      @filters = initialize_filters({})
+      @preferences = {}
       Rails.logger.info "🔄 Conversation cleared"
     end
 
     # Reset filters only (keep history)
     def reset_filters
-      @conversation.filters = {
-        size: nil,
-        season: nil,
-        budget_min: nil,
-        budget_max: nil,
-        brand_preferences: nil,
-        priority_type: nil
-      }
-      @conversation.preferences = {}
+      @filters = initialize_filters({})
+      @preferences = {}
+      save_filters_to_metadata
+      save_preferences_to_metadata
       Rails.logger.info "🔄 Filters and preferences reset"
     end
 
     # Get next step based on current state
-    # @return [String] Next step identifier
     def determine_next_step
-      if @conversation.filters[:size].blank?
+      if @filters[:size].blank?
         'size_request'
-      elsif @conversation.filters[:season].blank?
+      elsif @filters[:season].blank?
         'season_request'
       else
         'recommendation_request'
@@ -180,16 +161,15 @@ module TireChat
     end
 
     # Get next question text based on missing parameters
-    # @return [String] Question about missing parameters
     def get_next_question
       missing_params = []
 
-      if @conversation.filters[:size].blank?
+      if @filters[:size].blank?
         missing_params << missing_size_message
         Rails.logger.info "📏 Отсутствует размер шин"
       end
 
-      if @conversation.filters[:season].blank?
+      if @filters[:season].blank?
         missing_params << missing_season_message
         Rails.logger.info "🌤️ Отсутствует сезон шин"
       end
@@ -205,29 +185,45 @@ module TireChat
     end
 
     # Format conversation history for AI prompt
-    # @param limit [Integer] Maximum messages to include
-    # @return [String] Formatted history
     def format_for_prompt(limit: 10)
-      @conversation.history.last(limit).map do |entry|
-        "#{entry[:role] == :user ? 'Пользователь' : 'Ассистент'}: #{entry[:message]}"
+      @conversation.messages.chronological.last(limit).map do |msg|
+        "#{msg.role == 'user' ? 'Пользователь' : 'Ассистент'}: #{msg.content}"
       end.join("\n")
     end
 
-    # Save conversation (for Redis-based storage in future)
-    # @param session_id [String] Session identifier
-    def save(session_id)
-      # Future: Save to Redis with TTL
-      # Rails.cache.write(cache_key(session_id), @conversation.to_h, expires_in: SESSION_TTL)
+    # Get conversation ID
+    def conversation_id
+      @conversation.id
+    end
+
+    # Get session ID
+    def session_id
+      @conversation.session_id
     end
 
     private
 
-    def trim_history
-      @conversation.history = @conversation.history.last(MAX_HISTORY_LENGTH)
+    def initialize_filters(filters)
+      {
+        size: nil,
+        season: nil,
+        budget_min: nil,
+        budget_max: nil,
+        brand_preferences: nil,
+        priority_type: nil
+      }.merge(filters || {})
     end
 
-    def touch
-      @conversation.updated_at = Time.current
+    def save_filters_to_metadata
+      @conversation.update!(
+        metadata: (@conversation.metadata || {}).merge('filters' => @filters)
+      )
+    end
+
+    def save_preferences_to_metadata
+      @conversation.update!(
+        metadata: (@conversation.metadata || {}).merge('preferences' => @preferences)
+      )
     end
 
     def parse_size(size_text)
@@ -274,32 +270,28 @@ module TireChat
     end
 
     def log_filters
-      Rails.logger.info "🔧 Обновленные фильтры: #{@conversation.filters}"
+      Rails.logger.info "🔧 Обновленные фильтры: #{@filters}"
     end
 
     def log_preferences
-      Rails.logger.info "🎯 Обновленные предпочтения: #{@conversation.preferences}"
-    end
-
-    def cache_key(session_id)
-      "tire_chat:conversation:#{session_id}"
+      Rails.logger.info "🎯 Обновленные предпочтения: #{@preferences}"
     end
 
     # Localized messages
     def need_more_info_message
-      @conversation.locale == 'uk' ? 'Для підбору оптимальних шин мені потрібно знати:' : 'Для подбора оптимальных шин мне нужно знать:'
+      @locale == 'uk' ? 'Для підбору оптимальних шин мені потрібно знати:' : 'Для подбора оптимальных шин мне нужно знать:'
     end
 
     def missing_size_message
-      @conversation.locale == 'uk' ? '📏 **Розмір шин** - наприклад: 205/55R16, 225/60R17' : '📏 **Размер шин** - например: 205/55R16, 225/60R17'
+      @locale == 'uk' ? '📏 **Розмір шин** - наприклад: 205/55R16, 225/60R17' : '📏 **Размер шин** - например: 205/55R16, 225/60R17'
     end
 
     def missing_season_message
-      @conversation.locale == 'uk' ? '🌤️ **Сезон** - зимові, літні чи всесезонні шини' : '🌤️ **Сезон** - зимние, летние или всесезонные шины'
+      @locale == 'uk' ? '🌤️ **Сезон** - зимові, літні чи всесезонні шини' : '🌤️ **Сезон** - зимние, летние или всесезонные шины'
     end
 
     def ready_to_recommend_message
-      @conversation.locale == 'uk' ? 'Відмінно! У мене є всі необхідні дані. Шукаю найкращі варіанти для вас...' : 'Отлично! У меня есть все необходимые данные. Ищу лучшие варианты для вас...'
+      @locale == 'uk' ? 'Відмінно! У мене є всі необхідні дані. Шукаю найкращі варіанти для вас...' : 'Отлично! У меня есть все необходимые данные. Ищу лучшие варианты для вас...'
     end
   end
 end
