@@ -1,7 +1,10 @@
 module Api
   module V1
     class ServicePointsController < ApiController
+      include HttpCacheable
+
       skip_before_action :authenticate_request, only: [:index, :show, :nearby, :statuses, :basic, :posts_schedule, :work_statuses, :schedule_preview, :calculate_schedule_preview, :client_search, :client_details, :by_category, :posts_by_category, :regions_with_service_points, :cities_with_service_points]
+      skip_before_action :set_cache_headers, only: [:create, :update, :destroy, :update_category_contacts, :calculate_schedule_preview]
       before_action :set_service_point, except: [:index, :create, :nearby, :statuses, :work_statuses, :client_search, :by_category, :regions_with_service_points, :cities_with_service_points]
       
       # GET /api/v1/service_points
@@ -376,6 +379,7 @@ module Api
       # GET /api/v1/service_point_statuses
       def statuses
         @statuses = ServicePointStatus.all.order(:sort_order)
+        public_cache_for(300) # Cache for 5 minutes - rarely changes
         render json: @statuses
       end
       
@@ -387,6 +391,7 @@ module Api
           { value: 'maintenance', label: 'Техобслуживание', description: 'Проводится техническое обслуживание' },
           { value: 'suspended', label: 'Приостановлена', description: 'Работа точки приостановлена' }
         ]
+        public_cache_for(3600) # Cache for 1 hour - static data
         render json: statuses
       end
       
@@ -595,8 +600,9 @@ module Api
         
         @regions = Region.where(id: region_ids).order(:name)
         
+        cache_for(120) # Cache for 2 minutes - depends on filters
         render json: {
-          data: @regions.map { |region| 
+          data: @regions.map { |region|
             {
               id: region.id,
               name: region.name,
@@ -607,7 +613,7 @@ module Api
           total: @regions.count
         }
       end
-      
+
       # GET /api/v1/service_points/cities?category_id=:id&service_id=:id&region_id=:id
       # Получение городов, где есть сервисные точки с указанными фильтрами
       def cities_with_service_points
@@ -641,9 +647,10 @@ module Api
         end
         
         @cities = cities_query.includes(:region).order(:name)
-        
+
+        cache_for(120) # Cache for 2 minutes - depends on filters
         render json: {
-          data: @cities.map { |city| 
+          data: @cities.map { |city|
             {
               id: city.id,
               name: city.name,

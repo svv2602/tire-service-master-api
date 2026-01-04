@@ -4,12 +4,17 @@ module Api
   module V1
     # PartnerDashboardController - provides dashboard data for partners
     class PartnerDashboardController < ApiController
+      include HttpCacheable
+
       before_action :authenticate_request
       before_action :ensure_partner_access!
       before_action :set_partner
+      skip_before_action :set_cache_headers # Use custom caching
 
       # GET /api/v1/partners/:partner_id/dashboard
       def show
+        cache_for(60) # Private cache for 1 minute
+        vary_on('Authorization')
         render json: {
           today_bookings: today_bookings,
           pending_count: pending_count,

@@ -24,8 +24,10 @@ Rails.application.routes.draw do
           patch 'toggle_active'
         end
       end
-      # Health check endpoint для Docker
+      # Health check endpoints for infrastructure monitoring
       get '/health', to: 'health#index'
+      get '/health/deep', to: 'health#deep'
+      get '/health/cache_stats', to: 'health#cache_stats'
 
       # CSRF token endpoint for cookie-based auth
       get 'csrf', to: 'csrf#show'

@@ -103,21 +103,36 @@ class Rack::Attack
   end
 end
 
-# Log throttled and blocked requests
+# Log and monitor throttled requests
 ActiveSupport::Notifications.subscribe("throttle.rack_attack") do |_name, _start, _finish, _id, payload|
   req = payload[:request]
-  Rails.logger.warn(
-    "[Rack::Attack] Throttled request: " \
-    "IP=#{req.ip} Path=#{req.path} " \
-    "Match=#{req.env['rack.attack.matched']}"
-  )
+  matched = req.env['rack.attack.matched']
+
+  # Log using SecurityAlertService
+  if defined?(SecurityAlertService)
+    SecurityAlertService.record_throttle(req, matched)
+  else
+    Rails.logger.warn(
+      "[Rack::Attack] Throttled request: " \
+      "IP=#{req.ip} Path=#{req.path} " \
+      "Match=#{matched}"
+    )
+  end
 end
 
+# Log and monitor blocked requests
 ActiveSupport::Notifications.subscribe("blocklist.rack_attack") do |_name, _start, _finish, _id, payload|
   req = payload[:request]
-  Rails.logger.error(
-    "[Rack::Attack] Blocked request: " \
-    "IP=#{req.ip} Path=#{req.path} " \
-    "Match=#{req.env['rack.attack.matched']}"
-  )
+  matched = req.env['rack.attack.matched']
+
+  # Log using SecurityAlertService
+  if defined?(SecurityAlertService)
+    SecurityAlertService.record_block(req, matched)
+  else
+    Rails.logger.error(
+      "[Rack::Attack] Blocked request: " \
+      "IP=#{req.ip} Path=#{req.path} " \
+      "Match=#{matched}"
+    )
+  end
 end

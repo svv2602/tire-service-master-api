@@ -1,12 +1,17 @@
 module Api
   module V1
     class SupplierDashboardController < ApiController
+      include HttpCacheable
+
       before_action :authenticate_request
       before_action :ensure_supplier_access!
       before_action :set_supplier
+      skip_before_action :set_cache_headers # Use custom caching
 
       # GET /api/v1/suppliers/:supplier_id/dashboard
       def show
+        cache_for(60) # Private cache for 1 minute
+        vary_on('Authorization')
         render json: {
           stats: cached_stats,
           recent_orders: recent_orders_data,
