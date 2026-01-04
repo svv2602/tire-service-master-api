@@ -1,0 +1,27 @@
+<h1>Прайс-лист успешно загружен</h1>
+
+<p>Уважаемый <%= @supplier.name %>,</p>
+
+<p>Ваш прайс-лист был успешно обработан.</p>
+
+<table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Версия:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:version] %></td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Обработано товаров:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:statistics][:processed_count] %></td>
+  </tr>
+  <% if @data[:statistics][:errors_count].to_i > 0 %>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Ошибок:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:statistics][:errors_count] %></td>
+  </tr>
+  <% end %>
+</table>
+
+<p>
+  С уважением,<br>
+  Команда Tire Service
+</p>

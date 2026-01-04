@@ -13,11 +13,15 @@ class Partner < ApplicationRecord
   has_many :promotions, dependent: :destroy
   has_many :operators, dependent: :destroy
   has_many :notifications, as: :recipient, dependent: :destroy
+  has_many :tire_orders, dependent: :nullify
   
   # Система вознаграждений
   has_many :partner_supplier_agreements, dependent: :destroy
   has_many :suppliers, through: :partner_supplier_agreements
   has_many :partner_rewards, dependent: :destroy
+
+  # Google Calendar интеграция
+  has_one :google_calendar_setting, dependent: :destroy
   
   # Вложенные атрибуты
   accepts_nested_attributes_for :user

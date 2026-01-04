@@ -1,0 +1,37 @@
+<h1>Новый заказ!</h1>
+
+<p>Уважаемый <%= @supplier.name %>,</p>
+
+<p>Поступил новый заказ:</p>
+
+<table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Номер заказа:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;">#<%= @data[:order_number] %></td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Партнёр:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:partner_name] %></td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Количество товаров:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:items_count] %></td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Сумма:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= number_to_currency(@data[:total_amount], unit: '₴', format: '%n %u') %></td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Дата создания:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:created_at]&.strftime('%d.%m.%Y %H:%M') %></td>
+  </tr>
+</table>
+
+<p style="margin-top: 20px;">
+  Пожалуйста, войдите в панель поставщика для обработки заказа.
+</p>
+
+<p>
+  С уважением,<br>
+  Команда Tire Service
+</p>

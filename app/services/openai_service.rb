@@ -72,6 +72,10 @@ class OpenaiService
     - Особенности эксплуатации
   PROMPT
 
+  # Cache configuration for tire search queries
+  TIRE_SEARCH_CACHE_TTL = 24.hours
+  TIRE_SEARCH_CACHE_PREFIX = 'tire_search_llm'
+
   TIRE_CHAT_SYSTEM_PROMPT_UK = <<~PROMPT
     Ти - експерт-консультант з автомобільних шин в інтернет-магазині шин.
     
@@ -131,6 +135,19 @@ class OpenaiService
   def parse_tire_search_query(query)
     return {} unless @client && query.present?
 
+    # Check cache first
+    cache_key = tire_search_cache_key(query)
+    cached_result = read_from_cache(cache_key)
+
+    if cached_result.present?
+      record_cache_hit
+      Rails.logger.info "🎯 Cache HIT for tire search query: #{query[0..50]}..."
+      return cached_result
+    end
+
+    record_cache_miss
+    Rails.logger.info "❌ Cache MISS for tire search query: #{query[0..50]}..."
+
     begin
       response = @client.chat(
         parameters: {
@@ -157,16 +174,20 @@ class OpenaiService
       elsif json_content.start_with?('```') && json_content.end_with?('```')
         json_content = json_content.gsub(/\A```\n?/, '').gsub(/\n?```\z/, '')
       end
-      
+
       # Парсим JSON ответ
       result = JSON.parse(json_content)
       Rails.logger.info "🔍 OpenAI parsed JSON: #{result.inspect}"
-      
+
       # Валидируем и очищаем результат
       cleaned_result = validate_and_clean_result(result)
       Rails.logger.info "🔍 OpenAI cleaned result: #{cleaned_result.inspect}"
+
+      # Cache the result
+      write_to_cache(cache_key, cleaned_result)
+
       cleaned_result
-      
+
     rescue JSON::ParserError => e
       Rails.logger.error "OpenAI JSON parse error: #{e.message}"
       Rails.logger.error "Raw content: #{content}"
@@ -402,6 +423,66 @@ class OpenaiService
     cleaned
   end
 
+  # Cache key generation for tire search queries
+  def tire_search_cache_key(query)
+    # Normalize query for better cache hits
+    normalized_query = query.to_s.strip.downcase.gsub(/\s+/, ' ')
+    "#{TIRE_SEARCH_CACHE_PREFIX}:#{Digest::MD5.hexdigest(normalized_query)}"
+  end
+
+  # Read from cache (supports both Redis and Rails.cache)
+  def read_from_cache(cache_key)
+    begin
+      if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+        cached_json = Rails.cache.redis.get(cache_key)
+        return JSON.parse(cached_json, symbolize_names: true) if cached_json
+      else
+        return Rails.cache.read(cache_key)
+      end
+    rescue => e
+      Rails.logger.error "Cache read error: #{e.message}"
+    end
+    nil
+  end
+
+  # Write to cache with TTL
+  def write_to_cache(cache_key, result)
+    return if result.blank?
+
+    begin
+      if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+        Rails.cache.redis.setex(cache_key, TIRE_SEARCH_CACHE_TTL.to_i, result.to_json)
+      else
+        Rails.cache.write(cache_key, result, expires_in: TIRE_SEARCH_CACHE_TTL)
+      end
+      Rails.logger.info "💾 Cached tire search result for #{TIRE_SEARCH_CACHE_TTL.inspect}"
+    rescue => e
+      Rails.logger.error "Cache write error: #{e.message}"
+    end
+  end
+
+  # Record cache hit for metrics
+  def record_cache_hit
+    begin
+      if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+        Rails.cache.redis.incr("#{TIRE_SEARCH_CACHE_PREFIX}:hits")
+      end
+    rescue => e
+      Rails.logger.debug "Failed to record cache hit: #{e.message}"
+    end
+  end
+
+  # Record cache miss for metrics
+  def record_cache_miss
+    begin
+      if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+        Rails.cache.redis.incr("#{TIRE_SEARCH_CACHE_PREFIX}:misses")
+      end
+    rescue => e
+      Rails.logger.debug "Failed to record cache miss: #{e.message}"
+    end
+  end
+
   # Проверка доступности LLM
   def self.available?
     service = new
@@ -413,5 +494,42 @@ class OpenaiService
     service = new
     api_key = service.send(:openai_api_key)
     api_key.present?
+  end
+
+  # Get cache hit rate statistics
+  def self.cache_stats
+    begin
+      if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+        hits = Rails.cache.redis.get("#{TIRE_SEARCH_CACHE_PREFIX}:hits").to_i
+        misses = Rails.cache.redis.get("#{TIRE_SEARCH_CACHE_PREFIX}:misses").to_i
+        total = hits + misses
+
+        return {
+          hits: hits,
+          misses: misses,
+          total: total,
+          hit_rate: total > 0 ? (hits.to_f / total * 100).round(2) : 0.0,
+          hit_rate_formatted: total > 0 ? "#{(hits.to_f / total * 100).round(2)}%" : "N/A"
+        }
+      end
+    rescue => e
+      Rails.logger.error "Failed to get cache stats: #{e.message}"
+    end
+
+    { hits: 0, misses: 0, total: 0, hit_rate: 0.0, hit_rate_formatted: "N/A" }
+  end
+
+  # Clear cache statistics (for testing)
+  def self.reset_cache_stats
+    begin
+      if Rails.cache.respond_to?(:redis) && Rails.cache.redis
+        Rails.cache.redis.del("#{TIRE_SEARCH_CACHE_PREFIX}:hits")
+        Rails.cache.redis.del("#{TIRE_SEARCH_CACHE_PREFIX}:misses")
+        return true
+      end
+    rescue => e
+      Rails.logger.error "Failed to reset cache stats: #{e.message}"
+    end
+    false
   end
 end

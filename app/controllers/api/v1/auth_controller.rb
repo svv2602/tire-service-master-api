@@ -242,6 +242,18 @@ module Api
             role_permissions: get_role_permissions(current_user.role.name),
             last_login: current_user.last_login
           }
+        when 'supplier'
+          response_data[:admin_info] = {
+            role_permissions: get_role_permissions(current_user.role.name),
+            last_login: current_user.last_login
+          }
+          if current_user.supplier
+            response_data[:supplier] = {
+              id: current_user.supplier.id,
+              name: current_user.supplier.name,
+              firm_id: current_user.supplier.firm_id
+            }
+          end
         end
 
         render json: response_data, status: :ok
@@ -578,6 +590,8 @@ module Api
           ['manage_own_service_points', 'view_own_analytics', 'manage_bookings']
         when 'operator'
           ['manage_bookings', 'view_schedule']
+        when 'supplier'
+          ['manage_products', 'manage_orders', 'view_analytics', 'manage_clients']
         else
           []
         end

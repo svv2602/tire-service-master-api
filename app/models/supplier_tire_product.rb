@@ -276,8 +276,14 @@ class SupplierTireProduct < ApplicationRecord
   end
   
   def set_in_stock_status
-    self.in_stock = stock_status.present? && 
-                   !stock_status.match?(/не\s*в\s*наявності|немає|відсутній/i)
+    return if stock_status.blank?
+
+    # If in_stock was explicitly changed but stock_status wasn't, respect the explicit change
+    return if in_stock_changed? && !stock_status_changed?
+
+    # Match both Ukrainian and English out-of-stock patterns
+    out_of_stock_patterns = /не\s*в\s*наявності|немає|відсутній|out_of_stock|archived/i
+    self.in_stock = !stock_status.match?(out_of_stock_patterns)
   end
   
   def update_search_tokens

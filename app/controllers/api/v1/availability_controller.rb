@@ -421,6 +421,68 @@ class Api::V1::AvailabilityController < ApplicationController
     end
   end
   
+  # GET /api/v1/service_points/:service_point_id/availability/month_load
+  # Получение загрузки на месяц для цветовой индикации в календаре
+  def month_load
+    start_date = params[:start_date]&.to_date || Date.current.beginning_of_month
+    end_date = params[:end_date]&.to_date || start_date.end_of_month
+    category_id = params[:category_id]&.to_i
+
+    days_data = []
+
+    (start_date..end_date).each do |date|
+      begin
+        day_info = if category_id.present?
+                     DynamicAvailabilityService.day_occupancy_details_for_category(@service_point.id, date, category_id)
+                   else
+                     DynamicAvailabilityService.day_occupancy_details(@service_point.id, date)
+                   end
+
+        # Calculate load percentage and color indicator
+        occupancy_percent = day_info[:summary][:occupancy_percent] || 0
+        load_indicator = calculate_load_indicator(occupancy_percent, day_info[:is_working])
+
+        days_data << {
+          date: date.strftime('%Y-%m-%d'),
+          weekday: date.wday,
+          is_working: day_info[:is_working],
+          occupancy_percent: occupancy_percent,
+          available_slots: day_info[:summary][:available_slots] || 0,
+          total_slots: day_info[:summary][:total_slots] || 0,
+          booked_slots: day_info[:summary][:booked_slots] || 0,
+          load_indicator: load_indicator
+        }
+      rescue StandardError => e
+        Rails.logger.error "Error getting day occupancy for #{date}: #{e.message}"
+        days_data << {
+          date: date.strftime('%Y-%m-%d'),
+          weekday: date.wday,
+          is_working: false,
+          occupancy_percent: 0,
+          available_slots: 0,
+          total_slots: 0,
+          booked_slots: 0,
+          load_indicator: 'unavailable'
+        }
+      end
+    end
+
+    render json: {
+      service_point_id: @service_point.id,
+      service_point_name: @service_point.name,
+      start_date: start_date.strftime('%Y-%m-%d'),
+      end_date: end_date.strftime('%Y-%m-%d'),
+      category_id: category_id,
+      days: days_data,
+      load_legend: {
+        free: { min: 0, max: 30, color: '#4CAF50', label: 'Свободно' },
+        medium: { min: 30, max: 70, color: '#FFC107', label: 'Средняя загрузка' },
+        busy: { min: 70, max: 100, color: '#F44336', label: 'Почти занято' },
+        unavailable: { color: '#9E9E9E', label: 'Недоступно' }
+      }
+    }
+  end
+
   # GET /api/v1/service_points/:service_point_id/availability/:date/check
   # Быстрая проверка доступности дня (для календаря)
   def check_day_availability
@@ -462,6 +524,18 @@ class Api::V1::AvailabilityController < ApplicationController
   rescue ArgumentError, TypeError
     render json: { error: 'Некорректный формат даты' }, status: :bad_request
     nil
+  end
+
+  # Calculate load indicator based on occupancy percentage
+  # Returns: 'free', 'medium', 'busy', or 'unavailable'
+  def calculate_load_indicator(occupancy_percent, is_working)
+    return 'unavailable' unless is_working
+
+    case occupancy_percent
+    when 0..30 then 'free'
+    when 31..70 then 'medium'
+    else 'busy'
+    end
   end
   
   # Метод для опционального получения текущего пользователя

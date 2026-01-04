@@ -1,0 +1,25 @@
+<h1>Статус заказа изменён</h1>
+
+<p>Уважаемый <%= @supplier.name %>,</p>
+
+<p>Статус заказа #<%= @data[:order_number] %> изменился.</p>
+
+<table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Номер заказа:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;">#<%= @data[:order_number] %></td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Предыдущий статус:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:old_status] %></td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Новый статус:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:new_status] %></td>
+  </tr>
+</table>
+
+<p>
+  С уважением,<br>
+  Команда Tire Service
+</p>

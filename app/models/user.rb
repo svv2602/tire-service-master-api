@@ -17,6 +17,7 @@ class User < ApplicationRecord
   has_one :client, dependent: :destroy
   has_one :manager, dependent: :destroy
   has_one :operator, dependent: :destroy
+  has_one :supplier, dependent: :nullify
   has_many :authored_articles, class_name: 'Article', foreign_key: 'author_id', dependent: :destroy
   has_many :social_accounts, class_name: 'UserSocialAccount', dependent: :destroy
   has_many :system_logs, dependent: :nullify
@@ -144,6 +145,10 @@ class User < ApplicationRecord
   
   def operator?
     role&.name == 'operator'
+  end
+
+  def supplier?
+    role&.name == 'supplier'
   end
   
   # Методы пользователя

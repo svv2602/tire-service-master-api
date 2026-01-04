@@ -1,5 +1,6 @@
 class Supplier < ApplicationRecord
   # Связи
+  belongs_to :user, optional: true
   has_many :supplier_tire_products, dependent: :destroy
   has_many :supplier_price_versions, dependent: :destroy
   has_many :tire_orders, dependent: :destroy

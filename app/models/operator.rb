@@ -6,6 +6,9 @@ class Operator < ApplicationRecord
   # Связи many-to-many с сервисными точками
   has_many :operator_service_points, dependent: :destroy
   has_many :service_points, through: :operator_service_points
+
+  # Расписание оператора
+  has_many :operator_schedules, dependent: :destroy
   has_many :active_service_points, -> { where(operator_service_points: { is_active: true }) }, 
            through: :operator_service_points, source: :service_point
 

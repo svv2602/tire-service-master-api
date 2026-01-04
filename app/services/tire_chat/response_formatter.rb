@@ -438,5 +438,85 @@ module TireChat
       }
     end
     # rubocop:enable Metrics/MethodLength
+
+    # Generate follow-up suggestions based on context
+    # @param action [String] Response action type
+    # @param has_recommendations [Boolean] Whether response contains recommendations
+    # @param current_filters [Hash] Current search filters
+    # @return [Array<Hash>] Suggestions array
+    def generate_suggestions(action, has_recommendations: false, current_filters: {})
+      suggestions = []
+
+      texts = suggestion_texts
+
+      # Based on action, generate relevant suggestions
+      if has_recommendations
+        suggestions << { id: 'compare', text: texts[:compare_brands], type: 'comparison' }
+        suggestions << { id: 'details', text: texts[:more_details], type: 'detail' }
+        suggestions << { id: 'catalog', text: texts[:view_catalog], type: 'action' }
+      end
+
+      case action
+      when 'show_recommendations', 'show_recommendations_with_options'
+        suggestions << { id: 'budget', text: texts[:show_budget], type: 'filter' }
+        suggestions << { id: 'premium', text: texts[:show_premium], type: 'filter' }
+      when 'size_guide_shown', 'no_results'
+        suggestions << { id: 'winter', text: texts[:show_winter], type: 'filter' }
+        suggestions << { id: 'summer', text: texts[:show_summer], type: 'filter' }
+        suggestions << { id: 'other_size', text: texts[:other_size], type: 'filter' }
+      when 'fallback', 'error'
+        suggestions << { id: 'change_filters', text: texts[:change_filters], type: 'filter' }
+        suggestions << { id: 'ask_expert', text: texts[:ask_expert], type: 'action' }
+      when 'show_car_search_button'
+        suggestions << { id: 'enter_size', text: texts[:enter_size], type: 'filter' }
+        suggestions << { id: 'winter', text: texts[:show_winter], type: 'filter' }
+        suggestions << { id: 'summer', text: texts[:show_summer], type: 'filter' }
+      when 'brand_comparison_shown'
+        suggestions << { id: 'premium', text: texts[:show_premium], type: 'filter' }
+        suggestions << { id: 'budget', text: texts[:show_budget], type: 'filter' }
+      end
+
+      # Add seasonal suggestions if season not set
+      if current_filters[:season].blank? && suggestions.size < 4
+        suggestions << { id: 'winter', text: texts[:show_winter], type: 'filter' } unless suggestions.any? { |s| s[:id] == 'winter' }
+        suggestions << { id: 'summer', text: texts[:show_summer], type: 'filter' } unless suggestions.any? { |s| s[:id] == 'summer' }
+      end
+
+      suggestions.first(4)
+    end
+
+    private
+
+    def suggestion_texts
+      if @locale == 'uk'
+        {
+          show_winter: 'Зимові варіанти',
+          show_summer: 'Літні варіанти',
+          show_budget: 'Бюджетні варіанти',
+          show_premium: 'Преміум варіанти',
+          compare_brands: 'Порівняти бренди',
+          more_details: 'Детальніше про ці шини',
+          other_size: 'Інший розмір',
+          view_catalog: 'Переглянути в каталозі',
+          change_filters: 'Змінити параметри',
+          ask_expert: 'Запитати експерта',
+          enter_size: 'Ввести розмір вручну'
+        }
+      else
+        {
+          show_winter: 'Зимние варианты',
+          show_summer: 'Летние варианты',
+          show_budget: 'Бюджетные варианты',
+          show_premium: 'Премиум варианты',
+          compare_brands: 'Сравнить бренды',
+          more_details: 'Подробнее об этих шинах',
+          other_size: 'Другой размер',
+          view_catalog: 'Смотреть в каталоге',
+          change_filters: 'Изменить параметры',
+          ask_expert: 'Спросить эксперта',
+          enter_size: 'Ввести размер вручную'
+        }
+      end
+    end
   end
 end

@@ -561,17 +561,20 @@ module Api
             if @booking.service_point.respond_to?(:recalculate_metrics!)
               @booking.service_point.recalculate_metrics!
             end
-            
+
+            # Отправляем SMS клиенту о подтверждении
+            send_booking_confirmation_sms(@booking)
+
             log_action('confirm', 'booking', @booking.id, { status: @booking.status_id_was }, { status: @booking.status_id })
             render json: @booking
           else
             render json: { errors: @booking.errors }, status: :unprocessable_entity
           end
         rescue ArgumentError => e
-          render json: { errors: I18n.t('bookings.errors.invalid_status_transition', 
-                         from: @booking.status, 
+          render json: { errors: I18n.t('bookings.errors.invalid_status_transition',
+                         from: @booking.status,
                          to: 'confirmed') }, status: :unprocessable_entity
-        rescue => e
+        rescue StandardError => e
           render json: { errors: e.message }, status: :unprocessable_entity
         end
       end
@@ -1082,32 +1085,87 @@ module Api
         # Поиск по данным клиента (имя, фамилия, email, номер телефона) и номеру автомобиля БЕЗ УЧЕТА РЕГИСТРА
         if params[:query].present?
           search_query = "%#{params[:query]}%"
-          
+
           # Разбиваем поисковый запрос на отдельные слова для поиска по имени и фамилии
           words = params[:query].strip.split(/\s+/)
-          
+
           if words.length >= 2
             # Если введено несколько слов, ищем их как имя и фамилию (в любом порядке)
             first_word = "%#{words[0]}%"
             second_word = "%#{words[1]}%"
-            
-            bookings = bookings.joins(client: :user).where(
+
+            bookings = bookings.left_joins(client: :user).where(
               "users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ? OR users.phone ILIKE ? OR bookings.license_plate ILIKE ? OR " +
+              "bookings.service_recipient_first_name ILIKE ? OR bookings.service_recipient_last_name ILIKE ? OR bookings.service_recipient_phone ILIKE ? OR " +
               "CONCAT(users.first_name, ' ', users.last_name) ILIKE ? OR " +
               "CONCAT(users.last_name, ' ', users.first_name) ILIKE ? OR " +
+              "CONCAT(bookings.service_recipient_first_name, ' ', bookings.service_recipient_last_name) ILIKE ? OR " +
               "(users.first_name ILIKE ? AND users.last_name ILIKE ?) OR " +
-              "(users.first_name ILIKE ? AND users.last_name ILIKE ?)",
+              "(users.first_name ILIKE ? AND users.last_name ILIKE ?) OR " +
+              "(bookings.service_recipient_first_name ILIKE ? AND bookings.service_recipient_last_name ILIKE ?)",
               search_query, search_query, search_query, search_query, search_query,
-              search_query, search_query,
+              search_query, search_query, search_query,
+              search_query, search_query, search_query,
               first_word, second_word,
-              second_word, first_word
+              second_word, first_word,
+              first_word, second_word
             )
           else
             # Если введено одно слово, ищем как обычно
-            bookings = bookings.joins(client: :user).where(
-              "users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ? OR users.phone ILIKE ? OR bookings.license_plate ILIKE ?",
-              search_query, search_query, search_query, search_query, search_query
+            bookings = bookings.left_joins(client: :user).where(
+              "users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ? OR users.phone ILIKE ? OR bookings.license_plate ILIKE ? OR " +
+              "bookings.service_recipient_first_name ILIKE ? OR bookings.service_recipient_last_name ILIKE ? OR bookings.service_recipient_phone ILIKE ?",
+              search_query, search_query, search_query, search_query, search_query,
+              search_query, search_query, search_query
             )
+          end
+        end
+
+        # Extended filters for specific field searches
+        # Filter by client phone (exact or partial match)
+        if params[:client_phone].present?
+          phone_query = "%#{params[:client_phone].gsub(/\D/, '')}%"
+          bookings = bookings.left_joins(client: :user).where(
+            "REPLACE(REPLACE(REPLACE(users.phone, '+', ''), ' ', ''), '-', '') ILIKE ? OR " +
+            "REPLACE(REPLACE(REPLACE(bookings.service_recipient_phone, '+', ''), ' ', ''), '-', '') ILIKE ?",
+            phone_query, phone_query
+          )
+        end
+
+        # Filter by client name
+        if params[:client_name].present?
+          name_query = "%#{params[:client_name]}%"
+          bookings = bookings.left_joins(client: :user).where(
+            "CONCAT(users.first_name, ' ', users.last_name) ILIKE ? OR " +
+            "CONCAT(users.last_name, ' ', users.first_name) ILIKE ? OR " +
+            "CONCAT(bookings.service_recipient_first_name, ' ', bookings.service_recipient_last_name) ILIKE ?",
+            name_query, name_query, name_query
+          )
+        end
+
+        # Filter by car license plate
+        if params[:car_number].present? || params[:license_plate].present?
+          plate_query = "%#{(params[:car_number] || params[:license_plate]).upcase}%"
+          bookings = bookings.where("UPPER(bookings.license_plate) ILIKE ?", plate_query)
+        end
+
+        # Filter by service (via booking_services)
+        if params[:service_id].present?
+          bookings = bookings.joins(:booking_services).where(booking_services: { service_id: params[:service_id] }).distinct
+        end
+
+        # Filter by service type/category name (partial match)
+        if params[:service_type].present?
+          service_type_query = "%#{params[:service_type]}%"
+          bookings = bookings.joins(:service_category).where("service_categories.name ILIKE ?", service_type_query)
+        end
+
+        # Filter by operator (through operator_service_points)
+        if params[:operator_id].present?
+          operator = Operator.find_by(id: params[:operator_id])
+          if operator
+            service_point_ids = operator.service_points.pluck(:id)
+            bookings = bookings.where(service_point_id: service_point_ids) if service_point_ids.any?
           end
         end
         
@@ -1151,8 +1209,18 @@ module Api
         bookings = bookings.active if params[:active].present? && params[:active] == 'true'
         bookings = bookings.completed if params[:completed].present? && params[:completed] == 'true'
         bookings = bookings.canceled if params[:canceled].present? && params[:canceled] == 'true'
-        
+
         bookings
+      end
+
+      def send_booking_confirmation_sms(booking)
+        phone = booking.service_recipient_phone || booking.client&.phone
+        return unless phone.present?
+
+        SmsService.send_booking_confirmation(phone, booking)
+        Rails.logger.info "SMS підтвердження відправлено для бронювання ##{booking.id}"
+      rescue StandardError => e
+        Rails.logger.error "Помилка відправки SMS для бронювання ##{booking.id}: #{e.message}"
       end
     end
   end

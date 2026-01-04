@@ -1,0 +1,27 @@
+<h1>Заказ отменён</h1>
+
+<p>Уважаемый <%= @supplier.name %>,</p>
+
+<p>Заказ #<%= @data[:order_number] %> был отменён.</p>
+
+<table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Номер заказа:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;">#<%= @data[:order_number] %></td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Партнёр:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:partner_name] %></td>
+  </tr>
+  <% if @data[:cancellation_reason].present? %>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Причина отмены:</strong></td>
+    <td style="padding: 8px; border: 1px solid #ddd;"><%= @data[:cancellation_reason] %></td>
+  </tr>
+  <% end %>
+</table>
+
+<p>
+  С уважением,<br>
+  Команда Tire Service
+</p>

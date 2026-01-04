@@ -71,6 +71,9 @@ module TireChat
       response = handle_intent(intent, available_products)
       @conversation_manager.add_message(:assistant, response[:message])
 
+      # Add follow-up suggestions
+      response[:suggestions] = generate_follow_up_suggestions(response)
+
       # Track analytics
       end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       response_time_ms = ((end_time - start_time) * 1000).to_i
@@ -815,7 +818,21 @@ module TireChat
     end
 
     def fallback_response
-      generate_rule_based_fallback('', nil)
+      response = generate_rule_based_fallback('', nil)
+      response[:suggestions] = generate_follow_up_suggestions(response)
+      response
+    end
+
+    # Generate follow-up suggestions based on response context
+    def generate_follow_up_suggestions(response)
+      action = response[:action]
+      has_recommendations = response[:recommendations].present? && response[:recommendations].any?
+
+      @response_formatter.generate_suggestions(
+        action,
+        has_recommendations: has_recommendations,
+        current_filters: @conversation_manager.filters
+      )
     end
 
     # Generate intelligent rule-based fallback response

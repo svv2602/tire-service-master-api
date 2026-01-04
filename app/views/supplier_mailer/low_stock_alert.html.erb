@@ -1,0 +1,23 @@
+<h1>Низкий остаток товаров</h1>
+
+<p>Уважаемый <%= @supplier.name %>,</p>
+
+<p>У вас <%= @data[:products_count] %> товаров с низким остатком:</p>
+
+<ul>
+  <% @data[:products].first(10).each do |product| %>
+    <li><%= product[:name] %> - <%= product[:stock_status] %></li>
+  <% end %>
+  <% if @data[:products_count] > 10 %>
+    <li><em>...и ещё <%= @data[:products_count] - 10 %> товаров</em></li>
+  <% end %>
+</ul>
+
+<p>
+  Рекомендуем проверить наличие товаров и обновить прайс-лист.
+</p>
+
+<p>
+  С уважением,<br>
+  Команда Tire Service
+</p>

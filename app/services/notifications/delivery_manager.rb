@@ -64,12 +64,33 @@ module Notifications
     # @param data [Hash] данные
     # @return [Boolean] успех отправки
     def send_sms(notification, data)
-      Rails.logger.info "SMS notification sent for notification #{notification.id}"
-      # TODO: Интеграция с SMS провайдером
-      true
+      phone = extract_phone(notification)
+      return false unless phone.present?
+
+      message = data[:sms_message] || notification.message
+      result = SmsService.send_sms(phone, message)
+
+      if result[:success]
+        Rails.logger.info "SMS notification sent for notification #{notification.id}"
+        true
+      else
+        Rails.logger.error "Failed to send SMS: #{result[:error]}"
+        false
+      end
     rescue StandardError => e
       Rails.logger.error "Failed to send SMS notification: #{e.message}"
       false
+    end
+
+    # Отправляет SMS напрямую (без уведомления в БД)
+    # @param phone [String] номер телефона
+    # @param message [String] сообщение
+    # @return [Hash] результат отправки
+    def send_direct_sms(phone:, message:)
+      SmsService.send_sms(phone, message)
+    rescue StandardError => e
+      Rails.logger.error "Ошибка отправки SMS: #{e.message}"
+      { success: false, error: e.message }
     end
 
     # Отправляет Telegram уведомление
@@ -195,6 +216,17 @@ module Notifications
         notification.recipient.user
       else
         notification.recipient.try(:user)
+      end
+    end
+
+    def extract_phone(notification)
+      case notification.recipient_type
+      when 'User'
+        notification.recipient.phone
+      when 'Client'
+        notification.recipient.phone || notification.recipient.user&.phone
+      else
+        notification.recipient.try(:phone)
       end
     end
 

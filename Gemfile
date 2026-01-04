@@ -107,3 +107,6 @@ gem "httparty", "~> 0.21"
 
 # Web Push уведомления
 gem "webpush", "~> 1.1"
+
+# QR-code generation
+gem "rqrcode", "~> 2.0"

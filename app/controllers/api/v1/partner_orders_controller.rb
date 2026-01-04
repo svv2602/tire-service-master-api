@@ -29,18 +29,21 @@ module Api
       def mark_as_ready
         if @order.can_mark_as_ready?
           @order.update!(
-            status: 'ready', 
+            status: 'ready',
             ready_at: Time.current,
             processed_at: Time.current
           )
-          
+
           # Логирование действия партнера
           Rails.logger.info "Партнер #{@partner.company_name} отметил заказ #{@order.ttn} как готовый"
-          
+
+          # Отправка SMS клиенту о готовности заказа
+          send_order_ready_sms(@order)
+
           render json: OrderSerializer.new(@order).serializable_hash
         else
-          render json: { 
-            error: "Нельзя отметить заказ как готовый в текущем статусе: #{@order.status_label}" 
+          render json: {
+            error: "Нельзя отметить заказ как готовый в текущем статусе: #{@order.status_label}"
           }, status: :unprocessable_entity
         end
       end
@@ -216,13 +219,13 @@ module Api
       
       def generate_csv_export(orders)
         require 'csv'
-        
+
         CSV.generate(headers: true) do |csv|
           csv << [
             'ТТН', 'Номер заказа', 'Статус', 'Клиент', 'Телефон',
             'Сервисная точка', 'Количество товаров', 'Сумма', 'Дата создания', 'Дата выдачи'
           ]
-          
+
           orders.includes(:service_point).each do |order|
             csv << [
               order.ttn,
@@ -239,8 +242,15 @@ module Api
           end
         end
       end
-      
 
+      def send_order_ready_sms(order)
+        return unless order.customer_phone.present?
+
+        SmsService.send_order_ready(order.customer_phone, order)
+        Rails.logger.info "SMS отправлено клиенту #{order.customer_name} о готовности заказа #{order.ttn}"
+      rescue StandardError => e
+        Rails.logger.error "Ошибка отправки SMS о готовности заказа #{order.ttn}: #{e.message}"
+      end
     end
   end
 end 
