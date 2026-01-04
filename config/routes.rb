@@ -921,6 +921,17 @@ Rails.application.routes.draw do
       
           # Админские маршруты
     namespace :admin do
+      # Chat Analytics
+      scope :chat_analytics do
+        get :summary, to: 'chat_analytics#summary'
+        get :popular_queries, to: 'chat_analytics#popular_queries'
+        get :no_results_queries, to: 'chat_analytics#no_results_queries'
+        get :intent_distribution, to: 'chat_analytics#intent_distribution'
+        get :daily_stats, to: 'chat_analytics#daily_stats'
+        get :hourly_distribution, to: 'chat_analytics#hourly_distribution'
+        get :response_type_distribution, to: 'chat_analytics#response_type_distribution'
+      end
+
       # Управление данными поиска шин
       get 'tire_data/versions', to: 'tire_data#versions'
       get 'tire_data/current_version', to: 'tire_data#current_version'
