@@ -1,6 +1,8 @@
 class Booking < ApplicationRecord
   # Подключаем модуль со статусами
   include BookingStatuses
+  # Подключаем интеграцию со слотами расписания
+  include BookingSlotIntegration
   
   # Связи
   belongs_to :client, optional: true  # ✅ Делаем связь опциональной для гостевых бронирований

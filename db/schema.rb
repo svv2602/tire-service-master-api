@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_04_100002) do
+ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -168,7 +168,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100002) do
     t.boolean "is_service_booking", default: false, null: false
     t.string "google_calendar_event_id"
     t.datetime "review_request_sent_at"
+    t.string "booking_session_id"
+    t.bigint "service_post_id"
+    t.jsonb "reserved_slot_ids", default: []
+    t.integer "calculated_duration_minutes"
     t.index ["booking_date", "start_time", "end_time"], name: "idx_bookings_time_range"
+    t.index ["booking_session_id"], name: "index_bookings_on_booking_session_id"
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_brand", "car_model"], name: "index_bookings_on_car_brand_model"
     t.index ["car_id"], name: "index_bookings_on_car_id"
@@ -187,6 +192,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100002) do
     t.index ["service_point_id", "status", "booking_date", "start_time"], name: "idx_bookings_complex_filter"
     t.index ["service_point_id", "status"], name: "idx_bookings_point_status"
     t.index ["service_point_id"], name: "index_bookings_on_service_point_id"
+    t.index ["service_post_id"], name: "index_bookings_on_service_post_id"
     t.index ["service_recipient_phone"], name: "index_bookings_on_guest_phone"
     t.index ["service_recipient_phone"], name: "index_bookings_on_service_recipient_phone"
     t.index ["status"], name: "index_bookings_on_status"
@@ -1048,7 +1054,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100002) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "service_post_id", null: false
+    t.datetime "reserved_at"
+    t.datetime "reserved_until"
+    t.string "reserved_by_session"
+    t.string "reservation_status", default: "available"
     t.index ["is_available"], name: "idx_schedule_slots_availability"
+    t.index ["reservation_status"], name: "index_schedule_slots_on_reservation_status"
+    t.index ["reserved_by_session"], name: "index_schedule_slots_on_reserved_by_session"
+    t.index ["reserved_until"], name: "index_schedule_slots_on_reserved_until"
     t.index ["service_point_id", "slot_date", "start_time", "post_number"], name: "idx_unique_slot", unique: true
     t.index ["service_point_id"], name: "index_schedule_slots_on_service_point_id"
     t.index ["service_post_id"], name: "index_schedule_slots_on_service_post_id"
@@ -1247,6 +1260,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100002) do
     t.datetime "updated_at", null: false
     t.string "name_uk"
     t.text "description_uk"
+    t.integer "base_duration_minutes", default: 30
+    t.jsonb "duration_by_car_type", default: {}
     t.index ["category_id"], name: "index_services_on_category_id"
     t.index ["name_uk"], name: "index_services_on_name_uk"
   end
@@ -1640,6 +1655,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100002) do
   add_foreign_key "bookings", "payment_statuses", on_delete: :restrict, validate: false
   add_foreign_key "bookings", "service_categories"
   add_foreign_key "bookings", "service_points"
+  add_foreign_key "bookings", "service_posts"
   add_foreign_key "car_models", "car_brands", column: "brand_id"
   add_foreign_key "car_tire_configurations", "car_brands", column: "brand_id"
   add_foreign_key "car_tire_configurations", "car_models", column: "model_id"

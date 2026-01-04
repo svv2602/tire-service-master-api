@@ -3,7 +3,10 @@
 
 class Api::V1::AvailabilityController < ApplicationController
   skip_before_action :authenticate_request, except: [:client_check_availability]
-  before_action :set_service_point, except: [:client_check_availability, :check_with_category, :slots_for_category]
+  before_action :set_service_point, except: [
+    :client_check_availability, :check_with_category, :slots_for_category,
+    :check_for_services, :optimal_slots, :calculate_duration
+  ]
   
   # GET /api/v1/availability/:service_point_id/:date  
   # Получение доступных временных слотов для клиентов (упрощенная версия)
@@ -480,6 +483,99 @@ class Api::V1::AvailabilityController < ApplicationController
         busy: { min: 70, max: 100, color: '#F44336', label: 'Почти занято' },
         unavailable: { color: '#9E9E9E', label: 'Недоступно' }
       }
+    }
+  end
+
+  # ==================== NEW SLOT-BASED AVAILABILITY ====================
+
+  # POST /api/v1/availability/check_for_services
+  # Check availability for a specific set of services
+  def check_for_services
+    service_point_id = params[:service_point_id]
+    date = parse_date(params[:date])
+    return if date.nil?
+
+    services = params[:services] || []
+    car_type = params[:car_type]
+    start_time = params[:start_time]
+    session_id = request.headers['X-Session-ID']
+
+    if service_point_id.blank?
+      return render json: { success: false, error: 'service_point_id is required' }, status: :bad_request
+    end
+
+    result = BookingManager.check_availability(
+      service_point_id: service_point_id,
+      date: date,
+      start_time: start_time,
+      services: services,
+      car_type: car_type,
+      session_id: session_id
+    )
+
+    if result.success?
+      render json: {
+        success: true,
+        service_point_id: service_point_id,
+        date: date.strftime('%Y-%m-%d'),
+        **result.data
+      }
+    else
+      render json: { success: false, error: result.error }, status: :unprocessable_entity
+    end
+  end
+
+  # GET /api/v1/availability/optimal_slots
+  # Find optimal time slots for a booking
+  def optimal_slots
+    service_point_id = params[:service_point_id]
+    date = parse_date(params[:date])
+    return if date.nil?
+
+    services = params[:services] || []
+    car_type = params[:car_type]
+    preferred_time = params[:preferred_time]
+
+    if service_point_id.blank?
+      return render json: { success: false, error: 'service_point_id is required' }, status: :bad_request
+    end
+
+    result = BookingManager.find_optimal_slots(
+      service_point_id: service_point_id,
+      date: date,
+      services: services,
+      car_type: car_type,
+      preferred_time: preferred_time
+    )
+
+    if result.success?
+      render json: {
+        success: true,
+        service_point_id: service_point_id,
+        **result.data
+      }
+    else
+      render json: { success: false, error: result.error }, status: :unprocessable_entity
+    end
+  end
+
+  # GET /api/v1/availability/calculate_duration
+  # Calculate duration for a set of services
+  def calculate_duration
+    services = params[:services] || []
+    car_type = params[:car_type]
+
+    if services.blank?
+      return render json: { success: false, error: 'services array is required' }, status: :bad_request
+    end
+
+    duration = BookingManager.calculate_duration_for_services(services, car_type)
+
+    render json: {
+      success: true,
+      services_count: services.length,
+      car_type: car_type || 'default',
+      duration_minutes: duration
     }
   end
 

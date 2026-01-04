@@ -74,6 +74,40 @@ class Service < ApplicationRecord
     # Возвращаем дефолтную цену 1000 для тестов
     1000
   end
+
+  # ==================== DURATION METHODS ====================
+
+  # Get duration for specific car type
+  # @param car_type [String] car type (sedan, suv, crossover, minivan, truck)
+  # @return [Integer] duration in minutes
+  def duration_for_car_type(car_type)
+    return base_duration_minutes || 30 if car_type.blank?
+    return base_duration_minutes || 30 if duration_by_car_type.blank?
+
+    duration_by_car_type[car_type.to_s]&.to_i || base_duration_minutes || 30
+  end
+
+  # Set duration for specific car type
+  # @param car_type [String] car type
+  # @param minutes [Integer] duration in minutes
+  def set_duration_for_car_type(car_type, minutes)
+    self.duration_by_car_type = (duration_by_car_type || {}).merge(car_type.to_s => minutes.to_i)
+  end
+
+  # Get all configured car type durations
+  # @return [Hash]
+  def all_durations
+    {
+      base: base_duration_minutes || 30,
+      by_car_type: duration_by_car_type || {}
+    }
+  end
+
+  # Check if service has custom durations by car type
+  # @return [Boolean]
+  def has_custom_durations?
+    duration_by_car_type.present? && duration_by_car_type.any?
+  end
   
   # Переопределяем as_json для добавления локализованных полей
   def as_json(options = {})

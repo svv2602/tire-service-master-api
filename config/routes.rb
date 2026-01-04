@@ -317,7 +317,12 @@ Rails.application.routes.draw do
       # API доступности с поддержкой категорий
       post 'availability/check_with_category', to: 'availability#check_with_category'
       get 'availability/slots_for_category', to: 'availability#slots_for_category'
-      
+
+      # API доступности с учётом услуг и длительности
+      post 'availability/check_for_services', to: 'availability#check_for_services'
+      get 'availability/optimal_slots', to: 'availability#optimal_slots'
+      get 'availability/calculate_duration', to: 'availability#calculate_duration'
+
       # Клиентский API поиска сервисных точек  
       get 'service_points/search', to: 'service_points#client_search'
       
@@ -603,7 +608,19 @@ Rails.application.routes.draw do
         
         resources :schedule_templates, only: [:index, :show, :create, :update, :destroy]
         resources :schedule_exceptions, only: [:index, :show, :create, :update, :destroy]
-        resources :schedule_slots, only: [:index, :show, :create, :update, :destroy]
+        resources :schedule_slots, only: [:index, :show, :create, :update, :destroy] do
+          member do
+            post 'reserve'
+            delete 'reserve', action: :release
+          end
+          collection do
+            get 'available'
+            get 'reserved'
+            post 'reserve_multiple'
+            post 'release_all'
+            post 'extend_reservation'
+          end
+        end
         resources :seasonal_schedules, only: [:index, :show, :create, :update, :destroy] do
           collection do
             get 'active_for_date', to: 'seasonal_schedules#active_for_date'
