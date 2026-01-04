@@ -144,5 +144,30 @@ module TireChat
     def self.hourly_distribution(days: 30)
       ChatAnalytic.hourly_distribution(days: days)
     end
+
+    # Track AI failure for monitoring
+    # @param params [Hash] failure parameters
+    # @option params [String] :failure_type (required) - 'rate_limit', 'timeout', 'unknown'
+    # @option params [String] :session_id (required)
+    # @option params [String] :error_message
+    # @option params [String] :user_query
+    # @return [ChatAnalytic, nil] the created record or nil
+    def self.track_ai_failure(params)
+      ChatAnalytic.create!(
+        session_id: params[:session_id],
+        user_query: params[:user_query] || 'AI failure',
+        normalized_query: normalize_query(params[:user_query]),
+        response_type: 'error',
+        had_results: false,
+        metadata: {
+          ai_failure: true,
+          failure_type: params[:failure_type],
+          error_message: params[:error_message]
+        }
+      )
+    rescue StandardError => e
+      Rails.logger.error "[TireChat::AnalyticsService] Failed to track AI failure: #{e.message}"
+      nil
+    end
   end
 end

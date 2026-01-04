@@ -724,26 +724,47 @@ module TireChat
       }
     end
 
-    # Handle OpenAI chat request
-    def handle_openai_chat_request(message, _parameters, _available_products)
+    # Handle OpenAI chat request with fallback
+    def handle_openai_chat_request(message, _parameters, available_products)
       Rails.logger.info "🤖 Используем OpenAI для чата: #{message}"
 
-      response = @ai_client.generate_tire_response(
-        message,
-        @conversation_manager.filters,
-        @conversation_manager.locale
-      )
+      with_ai_fallback(message, available_products) do
+        response = @ai_client.generate_tire_response(
+          message,
+          @conversation_manager.filters,
+          @conversation_manager.locale
+        )
 
-      if response.present?
-        Rails.logger.info "✅ OpenAI сгенерировал ответ для чата"
-        {
-          message: response,
-          action: 'openai_response',
-          next_step: 'continue_discussion'
-        }
-      else
-        fallback_response
+        if response.present?
+          Rails.logger.info "✅ OpenAI сгенерировал ответ для чата"
+          {
+            message: response,
+            action: 'openai_response',
+            next_step: 'continue_discussion'
+          }
+        else
+          nil # Will trigger fallback
+        end
       end
+    end
+
+    # Wrapper for AI operations with intelligent fallback
+    def with_ai_fallback(message, available_products = nil)
+      result = yield
+      return result if result.present?
+
+      # AI returned nil, use rule-based fallback
+      Rails.logger.warn "[AI Fallback] AI returned nil for message: #{message.truncate(100)}"
+      generate_rule_based_fallback(message, available_products)
+    rescue TireChat::AIClient::RateLimitError => e
+      log_ai_failure('rate_limit', message, e)
+      generate_rule_based_fallback(message, available_products)
+    rescue TireChat::AIClient::TimeoutError => e
+      log_ai_failure('timeout', message, e)
+      generate_rule_based_fallback(message, available_products)
+    rescue StandardError => e
+      log_ai_failure('unknown', message, e)
+      generate_rule_based_fallback(message, available_products)
     end
 
     # Helper methods
@@ -794,10 +815,155 @@ module TireChat
     end
 
     def fallback_response
+      generate_rule_based_fallback('', nil)
+    end
+
+    # Generate intelligent rule-based fallback response
+    def generate_rule_based_fallback(message, available_products)
+      msg_lower = message.to_s.downcase
+
+      # Detect winter tires request
+      if msg_lower.match?(/зимн|winter|снег|лед|ice|холод|мороз/)
+        return generate_seasonal_fallback('winter', available_products)
+      end
+
+      # Detect summer tires request
+      if msg_lower.match?(/летн|summer|жар|теплый/)
+        return generate_seasonal_fallback('summer', available_products)
+      end
+
+      # Detect all-season request
+      if msg_lower.match?(/всесезон|all.season/)
+        return generate_seasonal_fallback('all_season', available_products)
+      end
+
+      # Detect brand comparison request
+      if msg_lower.match?(/сравни|порівня|лучш|краще|vs|против/)
+        return {
+          message: fallback_brand_comparison_text,
+          action: 'fallback_brand_comparison',
+          is_fallback: true
+        }
+      end
+
+      # Default fallback
       {
-        message: "😔 Извините, возникла техническая проблема. Онлайн-консультант временно недоступен. Попробуйте использовать стандартные фильтры поиска.",
-        action: 'fallback'
+        message: fallback_default_text,
+        action: 'fallback',
+        is_fallback: true
       }
+    end
+
+    # Generate fallback for seasonal tire requests
+    def generate_seasonal_fallback(season, available_products)
+      locale = @conversation_manager.locale
+
+      # Try to get popular tires for this season
+      popular_tires = get_popular_seasonal_tires(season, available_products)
+
+      if popular_tires.any?
+        season_name = @response_formatter.season_display_name(season)
+        recommendations_text = @response_formatter.format_recommendations(popular_tires.first(3))
+
+        {
+          message: "#{fallback_seasonal_intro_text(season_name)}\n\n#{recommendations_text}\n\n#{fallback_more_options_text}",
+          recommendations: popular_tires.first(3),
+          action: 'fallback_seasonal_recommendations',
+          is_fallback: true
+        }
+      else
+        {
+          message: fallback_seasonal_no_results_text(season),
+          action: 'fallback_seasonal_no_results',
+          is_fallback: true
+        }
+      end
+    end
+
+    # Get popular tires for a season
+    def get_popular_seasonal_tires(season, available_products)
+      scope = available_products || SupplierTireProduct.where(in_stock: true)
+
+      scope.where(season: season)
+           .where(in_stock: true)
+           .order(optimality_score: :desc)
+           .limit(5)
+    rescue StandardError => e
+      Rails.logger.warn "[Fallback] Failed to get popular tires: #{e.message}"
+      []
+    end
+
+    # Log AI failures for monitoring
+    def log_ai_failure(failure_type, message, error)
+      Rails.logger.error "[AI Failure] Type: #{failure_type}, Message: #{message.truncate(100)}, Error: #{error.message}"
+
+      # Track in analytics if available
+      AnalyticsService.track_ai_failure(
+        failure_type: failure_type,
+        session_id: session_id,
+        error_message: error.message,
+        user_query: message.truncate(500)
+      )
+    rescue StandardError => e
+      Rails.logger.warn "[AI Failure Logging] Failed to track: #{e.message}"
+    end
+
+    # Fallback text helpers
+    def fallback_default_text
+      if @conversation_manager.locale == 'uk'
+        "😔 Вибачте, AI-консультант тимчасово недоступний. Ви можете:\n\n" \
+        "🔍 **Скористатися пошуком** — введіть розмір шин (напр. 205/55R16)\n" \
+        "📞 **Зателефонувати** — наші спеціалісти допоможуть з вибором\n" \
+        "💬 **Написати пізніше** — ми працюємо над відновленням сервісу"
+      else
+        "😔 Извините, AI-консультант временно недоступен. Вы можете:\n\n" \
+        "🔍 **Воспользоваться поиском** — введите размер шин (напр. 205/55R16)\n" \
+        "📞 **Позвонить** — наши специалисты помогут с выбором\n" \
+        "💬 **Написать позже** — мы работаем над восстановлением сервиса"
+      end
+    end
+
+    def fallback_brand_comparison_text
+      if @conversation_manager.locale == 'uk'
+        "🔍 Для порівняння брендів шин рекомендую переглянути наш каталог та використати фільтри.\n\n" \
+        "**Популярні преміум-бренди:** Michelin, Continental, Bridgestone\n" \
+        "**Хороше співвідношення ціна/якість:** Nokian, Hankook, Kumho\n" \
+        "**Бюджетні варіанти:** Nexen, Laufenn, Sailun\n\n" \
+        "Вкажіть розмір шин для детальних рекомендацій."
+      else
+        "🔍 Для сравнения брендов шин рекомендую просмотреть наш каталог и использовать фильтры.\n\n" \
+        "**Популярные премиум-бренды:** Michelin, Continental, Bridgestone\n" \
+        "**Хорошее соотношение цена/качество:** Nokian, Hankook, Kumho\n" \
+        "**Бюджетные варианты:** Nexen, Laufenn, Sailun\n\n" \
+        "Укажите размер шин для детальных рекомендаций."
+      end
+    end
+
+    def fallback_seasonal_intro_text(season_name)
+      if @conversation_manager.locale == 'uk'
+        "❄️ Ось популярні #{season_name.downcase} шини з нашого каталогу:"
+      else
+        "❄️ Вот популярные #{season_name.downcase} шины из нашего каталога:"
+      end
+    end
+
+    def fallback_more_options_text
+      if @conversation_manager.locale == 'uk'
+        "📏 Вкажіть розмір шин для точнішого підбору (напр. 205/55R16)"
+      else
+        "📏 Укажите размер шин для более точного подбора (напр. 205/55R16)"
+      end
+    end
+
+    def fallback_seasonal_no_results_text(season)
+      season_name = @response_formatter.season_display_name(season)
+      if @conversation_manager.locale == 'uk'
+        "😔 На жаль, зараз не вдалося завантажити #{season_name.downcase} шини. " \
+        "Спробуйте використати фільтри каталогу або вказати розмір шин."
+      else
+        "😔 К сожалению, сейчас не удалось загрузить #{season_name.downcase} шины. " \
+        "Попробуйте использовать фильтры каталога или указать размер шин."
+      end
     end
 
     # Localization helper
