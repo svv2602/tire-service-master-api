@@ -66,6 +66,7 @@ class Booking < ApplicationRecord
   after_create :send_creation_notification, unless: -> { skip_notifications }
   after_create :send_admin_new_booking_notification, unless: -> { skip_notifications }
   after_create :send_telegram_creation_notification, unless: -> { skip_notifications }
+  after_create :send_partner_new_booking_notification, unless: -> { skip_notifications }
   
   after_update :send_status_change_notification, if: -> { saved_change_to_status? && !skip_notifications }
   after_update :send_status_change_admin_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
@@ -484,6 +485,43 @@ class Booking < ApplicationRecord
     BookingNotificationJob.perform_later(id, 'telegram_booking_location_changed')
   end
 
+  # === ПАРТНЁРСКИЕ УВЕДОМЛЕНИЯ ===
+
+  # Отправка уведомления партнёру о новой записи
+  def send_partner_new_booking_notification
+    Rails.logger.info "🔔 Отправка уведомления партнёру о новом бронировании ##{id}"
+
+    # Получаем партнёра через сервисную точку
+    partner = service_point&.partner
+    return unless partner&.user
+
+    # Email уведомление партнёру
+    BookingNotificationJob.perform_later(id, 'partner_new_booking', partner.user.email)
+
+    # Push уведомление партнёру
+    BookingNotificationJob.perform_later(id, 'push_partner_new_booking')
+
+    # Telegram уведомление партнёру
+    BookingNotificationJob.perform_later(id, 'telegram_partner_new_booking')
+
+    # Также уведомляем операторов сервисной точки
+    send_operators_new_booking_notification
+  end
+
+  # Отправка уведомления операторам о новой записи
+  def send_operators_new_booking_notification
+    return unless service_point
+
+    service_point.active_operators.each do |operator|
+      next unless operator.user
+
+      Rails.logger.info "🔔 Отправка уведомления оператору #{operator.id} о новом бронировании ##{id}"
+
+      # Push уведомление оператору
+      BookingNotificationJob.perform_later(id, 'push_operator_new_booking', operator.user.id.to_s)
+    end
+  end
+
   private
 
   # Получение списка email администраторов
@@ -515,42 +553,72 @@ class Booking < ApplicationRecord
   # Автоподтверждение бронирований на основе настроек сервисной точки и роли пользователя
   def auto_confirm_if_needed
     Rails.logger.info "=== АВТОПОДТВЕРЖДЕНИЕ БРОНИРОВАНИЯ ID=#{id} ==="
-    
+
     # Если бронирование уже подтверждено, ничего не делаем
     if status == 'confirmed'
       Rails.logger.info "Бронирование уже подтверждено, пропускаем"
       return
     end
-    
+
     # Определяем, является ли это служебным бронированием (от админа/партнера)
     is_admin_booking = client&.user&.admin? || client&.user&.partner?
-    
+
     Rails.logger.info "Тип бронирования: #{is_admin_booking ? 'админское/партнерское' : 'клиентское'}"
     Rails.logger.info "Категория услуг ID: #{service_category_id}"
-    
+
     should_confirm = false
-    
+    use_delayed_confirm = false
+
     if is_admin_booking
       # Админские/партнерские бронирования всегда подтверждаются автоматически
       should_confirm = true
       Rails.logger.info "Подтверждаем: админское/партнерское бронирование"
+    elsif service_point.auto_confirm_enabled?
+      # Проверяем глобальные настройки автоматизации сервисной точки
+      delay_minutes = service_point.auto_confirm_delay_minutes
+      if delay_minutes.positive?
+        use_delayed_confirm = true
+        Rails.logger.info "Отложенное подтверждение: через #{delay_minutes} минут"
+      else
+        should_confirm = true
+        Rails.logger.info "Подтверждаем: автоподтверждение включено для точки"
+      end
     elsif service_category_id && service_point.auto_confirmation_enabled_for_category?(service_category_id)
-      # Клиентские бронирования подтверждаются только если для категории включено автоподтверждение
+      # Клиентские бронирования подтверждаются если для категории включено автоподтверждение
       should_confirm = true
       Rails.logger.info "Подтверждаем: для категории #{service_category_id} включено автоподтверждение"
     else
-      Rails.logger.info "Не подтверждаем: клиентское бронирование, автоподтверждение для категории #{service_category_id} выключено"
+      Rails.logger.info "Не подтверждаем: клиентское бронирование, автоподтверждение выключено"
     end
-    
-    if should_confirm
+
+    if use_delayed_confirm
+      # Планируем отложенное подтверждение через фоновую задачу
+      service_point.schedule_auto_confirm(self)
+      Rails.logger.info "📅 Запланировано отложенное подтверждение"
+    elsif should_confirm
       # Обновляем статус без вызова callbacks (чтобы избежать зацикливания)
       update_column(:status, 'confirmed')
       Rails.logger.info "✅ Статус изменен на 'confirmed'"
+
+      # Отправляем SMS если включено в настройках
+      send_auto_confirm_sms if service_point.send_confirmation_sms_enabled?
     else
       Rails.logger.info "⏳ Статус остается 'pending'"
     end
-  rescue => e
+  rescue StandardError => e
     Rails.logger.error "❌ Ошибка при автоподтверждении бронирования ID=#{id}: #{e.message}"
     Rails.logger.error e.backtrace.join("\n")
+  end
+
+  # Send SMS on auto-confirm
+  def send_auto_confirm_sms
+    return unless service_recipient_phone.present?
+
+    begin
+      SmsService.send_booking_confirmation(service_recipient_phone, self)
+      Rails.logger.info "📱 SMS подтверждения отправлено на #{service_recipient_phone}"
+    rescue StandardError => e
+      Rails.logger.error "❌ Ошибка отправки SMS: #{e.message}"
+    end
   end
 end

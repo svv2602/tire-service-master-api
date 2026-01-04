@@ -34,8 +34,11 @@ class ServicePoint < ApplicationRecord
   # Связи many-to-many с операторами
   has_many :operator_service_points, dependent: :destroy
   has_many :operators, through: :operator_service_points
-  has_many :active_operators, -> { where(operator_service_points: { is_active: true }) }, 
+  has_many :active_operators, -> { where(operator_service_points: { is_active: true }) },
            through: :operator_service_points, source: :operator
+
+  # Расписание операторов
+  has_many :operator_schedules, dependent: :destroy
   
   # Принимаем вложенные атрибуты
   accepts_nested_attributes_for :photos, allow_destroy: true
@@ -439,6 +442,91 @@ class ServicePoint < ApplicationRecord
   
   public
   
+  # ==================== МЕТОДЫ ДЛЯ НАСТРОЕК АВТОМАТИЗАЦИИ ====================
+
+  # Gets automation settings with defaults
+  # @return [Hash] automation settings hash
+  def automation_settings_with_defaults
+    defaults = {
+      'auto_confirm_enabled' => false,
+      'auto_confirm_delay_minutes' => 0,
+      'auto_assign_operator' => false,
+      'send_confirmation_sms' => false,
+      'auto_confirm_conditions' => {}
+    }
+    defaults.merge(automation_settings || {})
+  end
+
+  # Check if auto-confirm is enabled
+  # @return [Boolean]
+  def auto_confirm_enabled?
+    automation_settings_with_defaults['auto_confirm_enabled'] == true
+  end
+
+  # Get auto-confirm delay in minutes
+  # @return [Integer]
+  def auto_confirm_delay_minutes
+    automation_settings_with_defaults['auto_confirm_delay_minutes'].to_i
+  end
+
+  # Check if auto-assign operator is enabled
+  # @return [Boolean]
+  def auto_assign_operator_enabled?
+    automation_settings_with_defaults['auto_assign_operator'] == true
+  end
+
+  # Check if SMS confirmation is enabled
+  # @return [Boolean]
+  def send_confirmation_sms_enabled?
+    automation_settings_with_defaults['send_confirmation_sms'] == true
+  end
+
+  # Get auto-confirm conditions
+  # @return [Hash]
+  def auto_confirm_conditions
+    automation_settings_with_defaults['auto_confirm_conditions'] || {}
+  end
+
+  # Update automation settings
+  # @param new_settings [Hash] new settings to merge
+  def update_automation_settings!(new_settings)
+    current = automation_settings || {}
+    update!(automation_settings: current.merge(new_settings.stringify_keys))
+  end
+
+  # Enable auto-confirmation with optional delay
+  # @param delay_minutes [Integer] delay in minutes before auto-confirm
+  # @param conditions [Hash] optional conditions for auto-confirm
+  def enable_auto_confirm!(delay_minutes: 0, conditions: nil)
+    settings = {
+      'auto_confirm_enabled' => true,
+      'auto_confirm_delay_minutes' => delay_minutes
+    }
+    settings['auto_confirm_conditions'] = conditions if conditions
+    update_automation_settings!(settings)
+  end
+
+  # Disable auto-confirmation
+  def disable_auto_confirm!
+    update_automation_settings!('auto_confirm_enabled' => false)
+  end
+
+  # Schedule auto-confirm job for a booking
+  # @param booking [Booking] the booking to schedule auto-confirm for
+  def schedule_auto_confirm(booking)
+    return unless auto_confirm_enabled?
+
+    delay = auto_confirm_delay_minutes.minutes
+
+    if delay.positive?
+      AutoConfirmBookingJob.set(wait: delay).perform_later(booking.id)
+      Rails.logger.info "[ServicePoint] Scheduled auto-confirm for booking #{booking.id} in #{auto_confirm_delay_minutes} minutes"
+    else
+      AutoConfirmBookingJob.perform_later(booking.id)
+      Rails.logger.info "[ServicePoint] Queued immediate auto-confirm for booking #{booking.id}"
+    end
+  end
+
   # ==================== МЕТОДЫ ДЛЯ АВТОПОДТВЕРЖДЕНИЯ БРОНИРОВАНИЙ ПО КАТЕГОРИЯМ ====================
   
   # Проверяет, включено ли автоподтверждение для конкретной категории услуг

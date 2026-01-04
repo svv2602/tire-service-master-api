@@ -185,4 +185,33 @@ module BookingStatuses
   def possible_transitions
     self.class.possible_transitions_from(status)
   end
+
+  # Individual status predicate methods
+  def pending?
+    status == 'pending'
+  end
+
+  def confirmed?
+    status == 'confirmed'
+  end
+
+  def in_progress?
+    status == 'in_progress'
+  end
+
+  def completed?
+    status == 'completed'
+  end
+
+  def cancelled_by_client?
+    status == 'cancelled_by_client'
+  end
+
+  def cancelled_by_partner?
+    status == 'cancelled_by_partner'
+  end
+
+  def no_show?
+    status == 'no_show'
+  end
 end 
