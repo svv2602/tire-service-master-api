@@ -63,6 +63,11 @@ class Booking < ApplicationRecord
   
   # Коллбэк для автоподтверждения бронирований (выполняется первым после создания)
   after_create :auto_confirm_if_needed, unless: -> { skip_notifications }
+
+  # ActionCable broadcasts for real-time updates
+  after_commit :broadcast_new_booking, on: :create, unless: -> { skip_notifications }
+  after_commit :broadcast_status_change, on: :update, if: -> { saved_change_to_status? && !skip_notifications }
+  after_commit :broadcast_booking_update, on: :update, if: -> { !saved_change_to_status? && !skip_notifications }
   
   # Коллбэки для отправки уведомлений
   after_create :send_creation_notification, unless: -> { skip_notifications }
@@ -433,7 +438,7 @@ class Booking < ApplicationRecord
 
   # Проверка статуса отмены
   def booking_cancelled?
-    status == 'cancelled' || status == 'canceled'
+    CANCELLED_STATUSES.map(&:to_s).include?(status)
   end
 
   # === АДМИНСКИЕ УВЕДОМЛЕНИЯ ===
@@ -658,5 +663,32 @@ class Booking < ApplicationRecord
     rescue StandardError => e
       Rails.logger.error "❌ Ошибка отправки SMS: #{e.message}"
     end
+  end
+
+  # === ACTIONCABLE BROADCASTS ===
+
+  # Broadcast new booking to partner via WebSocket
+  def broadcast_new_booking
+    BookingsChannel.broadcast_new_booking(self)
+  rescue StandardError => e
+    Rails.logger.error "[ActionCable] Failed to broadcast new booking: #{e.message}"
+  end
+
+  # Broadcast status change to partner via WebSocket
+  def broadcast_status_change
+    if booking_cancelled?
+      BookingsChannel.broadcast_cancellation(self)
+    else
+      BookingsChannel.broadcast_status_change(self)
+    end
+  rescue StandardError => e
+    Rails.logger.error "[ActionCable] Failed to broadcast status change: #{e.message}"
+  end
+
+  # Broadcast booking update (time, services, etc.) to partner
+  def broadcast_booking_update
+    BookingsChannel.broadcast_update(self)
+  rescue StandardError => e
+    Rails.logger.error "[ActionCable] Failed to broadcast booking update: #{e.message}"
   end
 end

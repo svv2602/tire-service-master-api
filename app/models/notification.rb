@@ -1,6 +1,13 @@
 class Notification < ApplicationRecord
   # Связи
   belongs_to :notification_type
+
+  # Skip broadcasts flag for tests
+  attr_accessor :skip_broadcasts
+
+  # WebSocket broadcasting
+  after_commit :broadcast_new_notification, on: :create, unless: -> { skip_broadcasts }
+  after_commit :broadcast_read_status, on: :update, if: -> { saved_change_to_is_read? && !skip_broadcasts }
   
   # Енумы для новых полей (синтаксис для Rails 8)
   enum :priority, {
@@ -106,5 +113,25 @@ class Notification < ApplicationRecord
       by_category: notifications.group(:category).count,
       by_priority: notifications.group(:priority).count
     }
+  end
+
+  private
+
+  def broadcast_new_notification
+    return unless recipient_type == 'User' && recipient_id.present?
+
+    user = User.find_by(id: recipient_id)
+    return unless user
+
+    NotificationsChannel.broadcast_notification(user, self)
+  end
+
+  def broadcast_read_status
+    return unless recipient_type == 'User' && recipient_id.present? && is_read
+
+    user = User.find_by(id: recipient_id)
+    return unless user
+
+    NotificationsChannel.broadcast_notification_read(user, id)
   end
 end

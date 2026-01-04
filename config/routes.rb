@@ -1,4 +1,7 @@
 Rails.application.routes.draw do
+  # Mount ActionCable for WebSocket connections
+  mount ActionCable.server => '/cable'
+
   # Mount Rswag engines
   mount Rswag::Ui::Engine => '/api-docs'
   mount Rswag::Api::Engine => '/api-docs'

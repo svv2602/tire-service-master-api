@@ -30,9 +30,17 @@ class TireOrder < ApplicationRecord
   scope :recent, -> { order(updated_at: :desc) }
   scope :created_between, ->(from, to) { where(created_at: from..to) }
 
+  # Skip broadcasts attribute (for tests)
+  attr_accessor :skip_broadcasts
+
   # Callbacks
   before_save :calculate_total_amount
   after_update :clear_empty_draft_orders
+
+  # ActionCable broadcasts for real-time updates (only for submitted orders, not drafts)
+  after_commit :broadcast_new_order, on: :create, if: -> { status != 'draft' && !skip_broadcasts }
+  after_commit :broadcast_status_change, on: :update, if: -> { saved_change_to_status? && !skip_broadcasts }
+  after_commit :broadcast_order_update, on: :update, if: -> { !saved_change_to_status? && !skip_broadcasts }
 
   # Instance methods
   def items_count
@@ -99,5 +107,32 @@ class TireOrder < ApplicationRecord
     end
   rescue StandardError => e
     Rails.logger.error "Ошибка расчета вознаграждения для TireOrder ##{id}: #{e.message}"
+  end
+
+  # === ACTIONCABLE BROADCASTS ===
+
+  # Broadcast new order to supplier via WebSocket
+  def broadcast_new_order
+    SupplierOrdersChannel.broadcast_new_order(self)
+  rescue StandardError => e
+    Rails.logger.error "[ActionCable] Failed to broadcast new order: #{e.message}"
+  end
+
+  # Broadcast status change to supplier via WebSocket
+  def broadcast_status_change
+    if cancelled?
+      SupplierOrdersChannel.broadcast_cancellation(self)
+    else
+      SupplierOrdersChannel.broadcast_status_change(self)
+    end
+  rescue StandardError => e
+    Rails.logger.error "[ActionCable] Failed to broadcast status change: #{e.message}"
+  end
+
+  # Broadcast order update (tracking, notes, etc.) to supplier
+  def broadcast_order_update
+    SupplierOrdersChannel.broadcast_update(self)
+  rescue StandardError => e
+    Rails.logger.error "[ActionCable] Failed to broadcast order update: #{e.message}"
   end
 end
