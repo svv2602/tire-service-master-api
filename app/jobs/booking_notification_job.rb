@@ -114,6 +114,35 @@ class BookingNotificationJob < ApplicationJob
       send_telegram_service_point_notification(booking_id, 'admin_service_point_changed') # booking_id здесь service_point_id
     when 'telegram_admin_service_point_status_changed'
       send_telegram_service_point_notification(booking_id, 'admin_service_point_status_changed') # booking_id здесь service_point_id
+
+    # === ПАРТНЁРСКИЕ УВЕДОМЛЕНИЯ ===
+    when 'partner_new_booking'
+      # Email уведомление партнёру о новой записи
+      send_partner_booking_email(booking_id, recipient_email)
+    when 'push_partner_new_booking'
+      # Push уведомление партнёру о новой записи
+      send_partner_push_notification(booking_id)
+    when 'telegram_partner_new_booking'
+      # Telegram уведомление партнёру о новой записи
+      send_partner_telegram_notification(booking_id)
+    when 'push_operator_new_booking'
+      # Push уведомление оператору о новой записи
+      # recipient_email здесь содержит user_id оператора
+      send_operator_push_notification(booking_id, recipient_email.to_i)
+
+    # === ПАРТНЁРСКИЕ УВЕДОМЛЕНИЯ ОБ ОТМЕНЕ ===
+    when 'partner_booking_cancelled'
+      # Email уведомление партнёру об отмене записи
+      send_partner_booking_cancelled_email(booking_id, recipient_email)
+    when 'push_partner_booking_cancelled'
+      # Push уведомление партнёру об отмене записи
+      send_partner_cancelled_push_notification(booking_id)
+    when 'telegram_partner_booking_cancelled'
+      # Telegram уведомление партнёру об отмене записи
+      send_partner_cancelled_telegram_notification(booking_id)
+    when 'push_operator_booking_cancelled'
+      # Push уведомление оператору об отмене записи
+      send_operator_cancelled_push_notification(booking_id, recipient_email.to_i)
     else
       Rails.logger.warn "⚠️ Неизвестный тип уведомления: #{notification_type}"
     end
@@ -424,4 +453,341 @@ class BookingNotificationJob < ApplicationJob
       }
     end
   end
-end 
+
+  # === ПАРТНЁРСКИЕ УВЕДОМЛЕНИЯ ===
+
+  # Отправка Email уведомления партнёру о новой записи
+  def send_partner_booking_email(booking_id, partner_email)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking && partner_email.present?
+
+    Rails.logger.info "📧 Отправка Email партнёру #{partner_email} о новой записи ##{booking_id}"
+
+    EmailTemplateMailer.partner_new_booking(booking_id, partner_email).deliver_later
+
+    Rails.logger.info "✅ Email партнёру запланирован"
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Email партнёру: #{e.message}"
+  end
+
+  # Отправка Push уведомления партнёру о новой записи
+  def send_partner_push_notification(booking_id)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking
+
+    partner = booking.service_point&.partner
+    return unless partner&.user
+
+    user = partner.user
+    return unless user.push_subscriptions.any? { |sub| sub.can_receive_notifications? }
+
+    Rails.logger.info "🔔 Отправка Push партнёру (user_id=#{user.id}) о новой записи ##{booking_id}"
+
+    # Формируем данные для уведомления
+    service_name = booking.services.first&.name || booking.service_category&.name || 'Послуга шиномонтажу'
+    client_name = booking.service_recipient_full_name
+    date = booking.booking_date&.strftime('%d.%m.%Y') || 'Не вказано'
+    time = booking.start_time&.strftime('%H:%M') || 'Не вказано'
+
+    push_service = PushService.new
+    success = push_service.send_notification(
+      user,
+      '🆕 Нова запис!',
+      "#{client_name} • #{date} о #{time}\n#{service_name}",
+      {
+        type: 'partner_new_booking',
+        booking_id: booking.id,
+        service_point_id: booking.service_point_id,
+        url: "/admin/bookings",
+        icon: '/icons/new-booking.png',
+        require_interaction: true,
+        tag: "booking-#{booking.id}",
+        sound: true, # Флаг для звукового уведомления на фронтенде
+        actions: [
+          { action: 'confirm', title: 'Підтвердити', icon: '/icons/confirm.png' },
+          { action: 'view', title: 'Переглянути', icon: '/icons/view.png' }
+        ]
+      }
+    )
+
+    if success
+      Rails.logger.info "✅ Push партнёру отправлен"
+    else
+      Rails.logger.error "❌ Не удалось отправить Push партнёру"
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Push партнёру: #{e.message}"
+  end
+
+  # Отправка Telegram уведомления партнёру о новой записи
+  def send_partner_telegram_notification(booking_id)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking
+
+    partner = booking.service_point&.partner
+    return unless partner&.user
+
+    user = partner.user
+    return unless user.telegram_subscription&.can_receive_notifications?
+
+    Rails.logger.info "📱 Отправка Telegram партнёру (user_id=#{user.id}) о новой записи ##{booking_id}"
+
+    # Формируем сообщение
+    message = build_partner_new_booking_telegram_message(booking)
+
+    telegram_service = TelegramService.new
+    success = telegram_service.send_notification(
+      user,
+      message,
+      {
+        type: 'partner_new_booking',
+        booking: booking
+      }
+    )
+
+    if success
+      Rails.logger.info "✅ Telegram партнёру отправлен"
+    else
+      Rails.logger.error "❌ Не удалось отправить Telegram партнёру"
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Telegram партнёру: #{e.message}"
+  end
+
+  # Отправка Push уведомления оператору о новой записи
+  def send_operator_push_notification(booking_id, user_id)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking
+
+    user = User.find_by(id: user_id)
+    return unless user&.push_subscriptions&.any? { |sub| sub.can_receive_notifications? }
+
+    Rails.logger.info "🔔 Отправка Push оператору (user_id=#{user_id}) о новой записи ##{booking_id}"
+
+    # Формируем данные для уведомления
+    service_name = booking.services.first&.name || booking.service_category&.name || 'Послуга шиномонтажу'
+    client_name = booking.service_recipient_full_name
+    date = booking.booking_date&.strftime('%d.%m.%Y') || 'Не вказано'
+    time = booking.start_time&.strftime('%H:%M') || 'Не вказано'
+
+    push_service = PushService.new
+    success = push_service.send_notification(
+      user,
+      '🆕 Нова запис!',
+      "#{client_name} • #{date} о #{time}\n#{service_name}",
+      {
+        type: 'operator_new_booking',
+        booking_id: booking.id,
+        service_point_id: booking.service_point_id,
+        url: "/admin/operator-dashboard",
+        icon: '/icons/new-booking.png',
+        require_interaction: true,
+        tag: "booking-#{booking.id}",
+        sound: true,
+        actions: [
+          { action: 'view', title: 'Переглянути', icon: '/icons/view.png' }
+        ]
+      }
+    )
+
+    if success
+      Rails.logger.info "✅ Push оператору отправлен"
+    else
+      Rails.logger.error "❌ Не удалось отправить Push оператору"
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Push оператору: #{e.message}"
+  end
+
+  # Построение Telegram сообщения для партнёра о новой записи
+  def build_partner_new_booking_telegram_message(booking)
+    service_name = booking.services.first&.name || booking.service_category&.name || 'Послуга шиномонтажу'
+    client_name = booking.service_recipient_full_name
+    client_phone = booking.service_recipient_phone
+    date = booking.booking_date&.strftime('%d.%m.%Y') || 'Не вказано'
+    time = booking.start_time&.strftime('%H:%M') || 'Не вказано'
+    point_name = booking.service_point&.name || 'Сервісна точка'
+
+    <<~MESSAGE
+      🆕 <b>Нова запис!</b>
+
+      📅 <b>Дата:</b> #{date}
+      ⏰ <b>Час:</b> #{time}
+      📍 <b>Точка:</b> #{point_name}
+
+      👤 <b>Клієнт:</b> #{client_name}
+      📱 <b>Телефон:</b> #{client_phone}
+
+      🔧 <b>Послуга:</b> #{service_name}
+
+      #{booking.status == 'pending' ? '⏳ Статус: Очікує підтвердження' : '✅ Статус: Підтверджено'}
+    MESSAGE
+  end
+
+  # === УВЕДОМЛЕНИЯ ОБ ОТМЕНЕ ДЛЯ ПАРТНЁРОВ ===
+
+  # Отправка Email уведомления партнёру об отмене записи
+  def send_partner_booking_cancelled_email(booking_id, partner_email)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking && partner_email.present?
+
+    Rails.logger.info "📧 Отправка Email партнёру #{partner_email} об отмене записи ##{booking_id}"
+
+    EmailTemplateMailer.partner_booking_cancelled(booking_id, partner_email).deliver_later
+
+    Rails.logger.info "✅ Email партнёру об отмене запланирован"
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Email партнёру об отмене: #{e.message}"
+  end
+
+  # Отправка Push уведомления партнёру об отмене записи
+  def send_partner_cancelled_push_notification(booking_id)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking
+
+    partner = booking.service_point&.partner
+    return unless partner&.user
+
+    user = partner.user
+    return unless user.push_subscriptions.any? { |sub| sub.can_receive_notifications? }
+
+    Rails.logger.info "🔔 Отправка Push партнёру (user_id=#{user.id}) об отмене записи ##{booking_id}"
+
+    # Формируем данные для уведомления
+    service_name = booking.services.first&.name || booking.service_category&.name || 'Послуга шиномонтажу'
+    client_name = booking.service_recipient_full_name
+    date = booking.booking_date&.strftime('%d.%m.%Y') || 'Не вказано'
+    time = booking.start_time&.strftime('%H:%M') || 'Не вказано'
+
+    push_service = PushService.new
+    success = push_service.send_notification(
+      user,
+      '❌ Запис скасовано',
+      "#{client_name} • #{date} о #{time}\n#{service_name}",
+      {
+        type: 'partner_booking_cancelled',
+        booking_id: booking.id,
+        service_point_id: booking.service_point_id,
+        url: "/admin/bookings",
+        icon: '/icons/booking-cancelled.png',
+        require_interaction: true,
+        tag: "booking-cancelled-#{booking.id}",
+        actions: [
+          { action: 'view', title: 'Переглянути', icon: '/icons/view.png' }
+        ]
+      }
+    )
+
+    if success
+      Rails.logger.info "✅ Push партнёру об отмене отправлен"
+    else
+      Rails.logger.error "❌ Не удалось отправить Push партнёру об отмене"
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Push партнёру об отмене: #{e.message}"
+  end
+
+  # Отправка Telegram уведомления партнёру об отмене записи
+  def send_partner_cancelled_telegram_notification(booking_id)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking
+
+    partner = booking.service_point&.partner
+    return unless partner&.user
+
+    user = partner.user
+    return unless user.telegram_subscription&.can_receive_notifications?
+
+    Rails.logger.info "📱 Отправка Telegram партнёру (user_id=#{user.id}) об отмене записи ##{booking_id}"
+
+    # Формируем сообщение
+    message = build_partner_booking_cancelled_telegram_message(booking)
+
+    telegram_service = TelegramService.new
+    success = telegram_service.send_notification(
+      user,
+      message,
+      {
+        type: 'partner_booking_cancelled',
+        booking: booking
+      }
+    )
+
+    if success
+      Rails.logger.info "✅ Telegram партнёру об отмене отправлен"
+    else
+      Rails.logger.error "❌ Не удалось отправить Telegram партнёру об отмене"
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Telegram партнёру об отмене: #{e.message}"
+  end
+
+  # Отправка Push уведомления оператору об отмене записи
+  def send_operator_cancelled_push_notification(booking_id, user_id)
+    booking = Booking.find_by(id: booking_id)
+    return unless booking
+
+    user = User.find_by(id: user_id)
+    return unless user&.push_subscriptions&.any? { |sub| sub.can_receive_notifications? }
+
+    Rails.logger.info "🔔 Отправка Push оператору (user_id=#{user_id}) об отмене записи ##{booking_id}"
+
+    # Формируем данные для уведомления
+    service_name = booking.services.first&.name || booking.service_category&.name || 'Послуга шиномонтажу'
+    client_name = booking.service_recipient_full_name
+    date = booking.booking_date&.strftime('%d.%m.%Y') || 'Не вказано'
+    time = booking.start_time&.strftime('%H:%M') || 'Не вказано'
+
+    push_service = PushService.new
+    success = push_service.send_notification(
+      user,
+      '❌ Запис скасовано',
+      "#{client_name} • #{date} о #{time}\n#{service_name}",
+      {
+        type: 'operator_booking_cancelled',
+        booking_id: booking.id,
+        service_point_id: booking.service_point_id,
+        url: "/admin/operator-dashboard",
+        icon: '/icons/booking-cancelled.png',
+        require_interaction: true,
+        tag: "booking-cancelled-#{booking.id}",
+        actions: [
+          { action: 'view', title: 'Переглянути', icon: '/icons/view.png' }
+        ]
+      }
+    )
+
+    if success
+      Rails.logger.info "✅ Push оператору об отмене отправлен"
+    else
+      Rails.logger.error "❌ Не удалось отправить Push оператору об отмене"
+    end
+  rescue => e
+    Rails.logger.error "❌ Ошибка отправки Push оператору об отмене: #{e.message}"
+  end
+
+  # Построение Telegram сообщения для партнёра об отмене записи
+  def build_partner_booking_cancelled_telegram_message(booking)
+    service_name = booking.services.first&.name || booking.service_category&.name || 'Послуга шиномонтажу'
+    client_name = booking.service_recipient_full_name
+    client_phone = booking.service_recipient_phone
+    date = booking.booking_date&.strftime('%d.%m.%Y') || 'Не вказано'
+    time = booking.start_time&.strftime('%H:%M') || 'Не вказано'
+    point_name = booking.service_point&.name || 'Сервісна точка'
+
+    <<~MESSAGE
+      ❌ <b>Запис скасовано!</b>
+
+      📅 <b>Дата:</b> #{date}
+      ⏰ <b>Час:</b> #{time}
+      📍 <b>Точка:</b> #{point_name}
+
+      👤 <b>Клієнт:</b> #{client_name}
+      📱 <b>Телефон:</b> #{client_phone}
+
+      🔧 <b>Послуга:</b> #{service_name}
+
+      ℹ️ Слот тепер доступний для нових записів
+    MESSAGE
+  end
+end

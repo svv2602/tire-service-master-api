@@ -376,6 +376,42 @@ class EmailTemplateMailer < ApplicationMailer
     send_by_template('admin_service_point_status_changed', admin_email, variables)
   end
 
+  # === ПАРТНЁРСКИЕ УВЕДОМЛЕНИЯ ===
+
+  # Уведомление партнёра о новой записи
+  def partner_new_booking(booking_id, partner_email)
+    booking = Booking.find_by(id: booking_id)
+    return nil unless booking
+    return nil unless partner_email.present?
+
+    variables = build_partner_booking_variables(booking)
+    send_by_template('partner_new_booking', partner_email, variables)
+  end
+
+  # Уведомление партнёра об отмене записи
+  def partner_booking_cancelled(booking_id, partner_email)
+    booking = Booking.find_by(id: booking_id)
+    return nil unless booking
+    return nil unless partner_email.present?
+
+    variables = build_partner_booking_variables(booking)
+    send_by_template('partner_booking_cancelled', partner_email, variables)
+  end
+
+  # Построение переменных для партнёрского уведомления о бронировании
+  def build_partner_booking_variables(booking)
+    build_booking_variables(booking).merge({
+      partner_name: booking.service_point&.partner&.user&.full_name || 'Партнер',
+      partner_email: booking.service_point&.partner&.user&.email,
+      partner_phone: booking.service_point&.partner&.user&.phone,
+      service_category_name: booking.service_category&.name || 'Не указана',
+      action_url: "#{ENV.fetch('FRONTEND_URL', 'http://localhost:3008')}/admin/bookings/#{booking.id}/edit",
+      confirm_url: "#{ENV.fetch('FRONTEND_URL', 'http://localhost:3008')}/admin/bookings?action=confirm&id=#{booking.id}",
+      total_price: booking.total_price&.to_s || '0',
+      notes: booking.notes || 'Без дополнительных комментариев'
+    })
+  end
+
   private
 
   # Строит системные переменные

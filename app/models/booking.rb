@@ -71,6 +71,7 @@ class Booking < ApplicationRecord
   after_update :send_status_change_notification, if: -> { saved_change_to_status? && !skip_notifications }
   after_update :send_status_change_admin_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
   after_update :send_telegram_cancellation_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
+  after_update :send_partner_booking_cancelled_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
   
   after_update :send_time_change_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
   after_update :send_time_change_admin_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
@@ -519,6 +520,41 @@ class Booking < ApplicationRecord
 
       # Push уведомление оператору
       BookingNotificationJob.perform_later(id, 'push_operator_new_booking', operator.user.id.to_s)
+    end
+  end
+
+  # Отправка уведомления партнёру об отмене бронирования
+  def send_partner_booking_cancelled_notification
+    Rails.logger.info "🔔 Отправка уведомления партнёру об отмене бронирования ##{id}"
+
+    # Получаем партнёра через сервисную точку
+    partner = service_point&.partner
+    return unless partner&.user
+
+    # Email уведомление партнёру
+    BookingNotificationJob.perform_later(id, 'partner_booking_cancelled', partner.user.email)
+
+    # Push уведомление партнёру
+    BookingNotificationJob.perform_later(id, 'push_partner_booking_cancelled')
+
+    # Telegram уведомление партнёру
+    BookingNotificationJob.perform_later(id, 'telegram_partner_booking_cancelled')
+
+    # Также уведомляем операторов
+    send_operators_booking_cancelled_notification
+  end
+
+  # Отправка уведомления операторам об отмене бронирования
+  def send_operators_booking_cancelled_notification
+    return unless service_point
+
+    service_point.active_operators.each do |operator|
+      next unless operator.user
+
+      Rails.logger.info "🔔 Отправка уведомления оператору #{operator.id} об отмене бронирования ##{id}"
+
+      # Push уведомление оператору
+      BookingNotificationJob.perform_later(id, 'push_operator_booking_cancelled', operator.user.id.to_s)
     end
   end
 
