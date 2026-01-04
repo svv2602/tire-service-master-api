@@ -278,6 +278,73 @@ RSpec.describe 'Tire Chat API', type: :request do
     end
   end
 
+  describe 'response suggestions' do
+    it 'includes suggestions in response' do
+      post '/api/v1/tire_chat/message',
+           params: { message: 'Зимние шины 205/55R16', locale: 'ru' }.to_json,
+           headers: headers
+
+      expect(response).to have_http_status(:ok)
+      json = JSON.parse(response.body)
+      expect(json['response']).to have_key('suggestions')
+      expect(json['response']['suggestions']).to be_an(Array)
+    end
+
+    it 'suggestions have required structure' do
+      post '/api/v1/tire_chat/message',
+           params: { message: 'Расскажи о брендах шин', locale: 'ru' }.to_json,
+           headers: headers
+
+      json = JSON.parse(response.body)
+      suggestions = json['response']['suggestions']
+
+      if suggestions.present?
+        suggestion = suggestions.first
+        expect(suggestion).to have_key('id')
+        expect(suggestion).to have_key('text')
+        expect(suggestion).to have_key('type')
+        expect(%w[filter comparison detail action]).to include(suggestion['type'])
+      end
+    end
+
+    it 'limits suggestions to 4' do
+      post '/api/v1/tire_chat/message',
+           params: { message: 'Зимние шины 205/55R16', locale: 'ru' }.to_json,
+           headers: headers
+
+      json = JSON.parse(response.body)
+      suggestions = json['response']['suggestions']
+      expect(suggestions.length).to be <= 4
+    end
+  end
+
+  describe 'GET /api/v1/tire_chat/stream' do
+    it 'returns event stream content type' do
+      get '/api/v1/tire_chat/stream', params: { message: 'Зимние шины', locale: 'ru' }, headers: headers
+
+      expect(response.content_type).to include('text/event-stream')
+    end
+  end
+
+  describe 'analytics tracking' do
+    it 'creates chat analytics record' do
+      expect {
+        post '/api/v1/tire_chat/message',
+             params: { message: 'Зимние шины', locale: 'ru' }.to_json,
+             headers: headers
+      }.to change(ChatAnalytic, :count).by(1)
+    end
+
+    it 'tracks quick questions' do
+      post '/api/v1/tire_chat/message',
+           params: { message: 'Зимние шины', locale: 'ru', is_quick_question: true }.to_json,
+           headers: headers
+
+      analytic = ChatAnalytic.last
+      expect(analytic.metadata['is_quick_question']).to be true
+    end
+  end
+
   # Helper method for authenticated requests
   def auth_headers_for(user)
     token = JsonWebToken.encode(user_id: user.id)
