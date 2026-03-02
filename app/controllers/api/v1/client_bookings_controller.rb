@@ -3,10 +3,10 @@ module Api
     class ClientBookingsController < ApiController
       # Пропускаем аутентификацию для клиентских записей (гостевые записи)
       # Но для create делаем опциональную аутентификацию - пытаемся аутентифицировать, но не требуем этого
-      skip_before_action :authenticate_request, only: [:create, :show, :update, :cancel, :reschedule, :check_availability_for_booking]
+      skip_before_action :authenticate_request, only: [:create, :show, :update, :cancel, :reschedule, :reschedule_suggestions, :check_availability_for_booking]
       before_action :optional_authenticate_request, only: [:create]
-      
-      before_action :set_booking, only: [:show, :update, :cancel, :reschedule, :assign_to_client]
+
+      before_action :set_booking, only: [:show, :update, :cancel, :reschedule, :reschedule_suggestions, :assign_to_client]
       before_action :validate_client_data, only: [:create], unless: -> { ENV['SWAGGER_DRY_RUN'] }
       
       # POST /api/v1/client_bookings
@@ -218,6 +218,27 @@ module Api
         end
       end
       
+      # GET /api/v1/client_bookings/:id/reschedule_suggestions
+      # Smart suggestions for rescheduling a booking
+      def reschedule_suggestions
+        result = SmartRescheduleService.call(
+          @booking,
+          max_suggestions: (params[:limit] || 6).to_i,
+          include_other_points: params[:include_other_points] == 'true',
+          days_to_search: (params[:days] || 14).to_i
+        )
+
+        if result[:success]
+          render json: {
+            suggestions: result[:suggestions],
+            preferences: result[:preferences],
+            search_params: result[:search_params]
+          }
+        else
+          render json: { error: result[:error], suggestions: [] }, status: :unprocessable_entity
+        end
+      end
+
       # POST /api/v1/client_bookings/:id/assign_to_client
       # Привязка гостевого бронирования к клиенту
       def assign_to_client

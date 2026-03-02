@@ -340,6 +340,7 @@ Rails.application.routes.draw do
         member do
           post :cancel, to: 'client_bookings#cancel'
           post :reschedule, to: 'client_bookings#reschedule'
+          get :reschedule_suggestions, to: 'client_bookings#reschedule_suggestions'
           post :assign_to_client, to: 'client_bookings#assign_to_client'
         end
         collection do
