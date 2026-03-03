@@ -1,6 +1,7 @@
 module Api
   module V1
     class SupplierProductsSearchController < ApiController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request
       
       # POST /api/v1/supplier_products_search

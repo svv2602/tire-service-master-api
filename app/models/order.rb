@@ -1,5 +1,8 @@
 # Модель заказов от интернет-магазинов для сервисных точек
 class Order < ApplicationRecord
+  # Audit logging for tracking changes
+  include Auditable
+
   # Связи
   belongs_to :service_point
   belongs_to :supplier, optional: true

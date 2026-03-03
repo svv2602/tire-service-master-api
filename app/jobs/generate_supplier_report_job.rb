@@ -4,6 +4,22 @@
 class GenerateSupplierReportJob < ApplicationJob
   queue_as :reports
 
+  # Handle permanently failed jobs
+  sidekiq_retries_exhausted do |msg, _ex|
+    Rails.logger.error "[GenerateSupplierReportJob] Permanently failed: #{msg['error_message']}"
+    SystemLog.create(
+      action: 'job_permanently_failed',
+      resource_type: 'GenerateSupplierReportJob',
+      resource_id: msg['args']&.first,
+      additional_data: { error: msg['error_message'], job_id: msg['jid'], args: msg['args'] }
+    ) rescue nil
+    AdminNotificationService.notify_job_permanently_failed(
+      job_class: 'GenerateSupplierReportJob',
+      error_message: msg['error_message'],
+      job_id: msg['jid']
+    ) if defined?(AdminNotificationService)
+  end
+
   # Download links expire after 24 hours
   LINK_EXPIRATION = 24.hours
 

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class Api::V1::TireModelsController < Api::V1::ApiController
+  skip_after_action :verify_authorized
   before_action :authenticate_request!
   before_action :set_tire_model, only: [:show, :update, :destroy]
   before_action :authorize_admin_or_manager!

@@ -1,5 +1,6 @@
 # Контроллер для тестирования отправки email
 class Api::V1::EmailTestController < ApiController
+  skip_after_action :verify_authorized
   before_action :authorize_admin!
 
   # POST /api/v1/email_test/send_template

@@ -23,8 +23,21 @@ Rails.application.configure do
     config.action_controller.perform_caching = false
   end
 
-  # Change to :null_store to avoid any caching.
-  config.cache_store = :memory_store
+  # Use redis_cache_store in development (same as production) to ensure
+  # consistent caching behavior. Falls back to memory_store when Redis
+  # is not available.
+  if ENV['REDIS_URL'].present?
+    config.cache_store = :redis_cache_store, {
+      url: ENV.fetch('REDIS_URL', 'redis://localhost:6379/1'),
+      expires_in: 1.hour,
+      namespace: 'tire_service_cache_dev',
+      error_handler: -> (method:, returning:, exception:) {
+        Rails.logger.warn("Redis cache error: #{exception.message}. Falling back gracefully.")
+      }
+    }
+  else
+    config.cache_store = :memory_store
+  end
 
   # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = :local

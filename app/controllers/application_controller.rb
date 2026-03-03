@@ -8,7 +8,10 @@ class ApplicationController < ActionController::API
 
   # CSRF protection for cookie-based auth
   before_action :set_csrf_cookie
-  
+
+  # Global Pundit authorization check: every action must call authorize
+  after_action :verify_authorized, unless: :skip_authorization?
+
   # Обработка ошибок
   rescue_from StandardError, with: :internal_server_error if Rails.env.production?
   rescue_from ActiveRecord::RecordNotFound, with: :not_found
@@ -66,6 +69,10 @@ class ApplicationController < ActionController::API
       else
         render json: { error: 'Токен истек', code: 'token_expired' }, status: :unauthorized
       end
+    rescue Auth::TokenRevokedError => e
+      cookies.delete(:access_token)
+      cookies.delete(:refresh_token)
+      render json: { error: 'Токен отозван', code: 'token_revoked' }, status: :unauthorized
     rescue Auth::TokenInvalidError => e
       render json: { error: 'Неверный токен', code: 'invalid_token' }, status: :unauthorized
     rescue ActiveRecord::RecordNotFound => e
@@ -186,6 +193,11 @@ class ApplicationController < ActionController::API
     render json: { error: 'Internal server error' }, status: :internal_server_error
   end
   
+  # Override in subclasses or specific controllers to skip Pundit verify_authorized
+  def skip_authorization?
+    false
+  end
+
   def json_request?
     request.format.json?
   end

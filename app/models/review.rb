@@ -1,4 +1,7 @@
 class Review < ApplicationRecord
+  # Audit logging for tracking changes
+  include Auditable
+
   # Связи
   belongs_to :booking, optional: true
   belongs_to :client

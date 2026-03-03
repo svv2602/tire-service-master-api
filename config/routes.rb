@@ -13,9 +13,12 @@ Rails.application.routes.draw do
   # Mount ActionCable for WebSocket connections
   mount ActionCable.server => '/cable'
 
-  # Mount Rswag engines
-  mount Rswag::Ui::Engine => '/api-docs'
-  mount Rswag::Api::Engine => '/api-docs'
+  # Mount Rswag engines — use trailing slash to avoid 301 redirect
+  mount Rswag::Ui::Engine => '/api-docs/'
+  mount Rswag::Api::Engine => '/api-docs/'
+
+  # Direct route for /api-docs without trailing slash to prevent 301 redirect
+  get '/api-docs', to: redirect('/api-docs/', status: 302)
 
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 

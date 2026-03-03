@@ -1,6 +1,7 @@
 module Api
   module V1
     class CustomVariablesController < ApiController
+      skip_after_action :verify_authorized
       before_action :authenticate_request
       before_action :authorize_admin!
       before_action :set_custom_variable, only: [:show, :update, :destroy]

@@ -2,6 +2,7 @@
 module Api
   module V1
     class ServicePostsController < ApiController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request, only: [:index, :show]
       before_action :set_service_point
       before_action :set_service_post, only: [:show, :update, :destroy, :activate, :deactivate]

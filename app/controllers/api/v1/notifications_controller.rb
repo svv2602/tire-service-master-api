@@ -1,6 +1,7 @@
 module Api
   module V1
     class NotificationsController < ApiController
+      skip_after_action :verify_authorized
       before_action :set_notification, only: [:show, :update, :destroy]
       before_action :set_recipient, only: [:index, :create, :mark_all_as_read, :destroy_all, :stats]
       

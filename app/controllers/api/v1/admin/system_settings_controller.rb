@@ -5,6 +5,7 @@ module Api
     module Admin
       # Контроллер для управления системными настройками через админку
       class SystemSettingsController < AdminController
+      skip_after_action :verify_authorized
         # Аутентификация и проверка прав админа уже выполняется в AdminController
 
         # GET /api/v1/admin/system_settings

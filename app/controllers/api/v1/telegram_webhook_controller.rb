@@ -1,4 +1,5 @@
 class Api::V1::TelegramWebhookController < ApplicationController
+  skip_after_action :verify_authorized
   skip_before_action :authenticate_request
   
   def webhook

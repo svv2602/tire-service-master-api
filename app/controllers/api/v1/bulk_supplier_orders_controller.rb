@@ -3,6 +3,7 @@
 module Api
   module V1
     class BulkSupplierOrdersController < ApiController
+      skip_after_action :verify_authorized
       before_action :authenticate_request
       before_action :ensure_supplier_access!
       before_action :set_supplier

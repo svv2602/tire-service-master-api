@@ -42,6 +42,9 @@ module TireServiceMasterApi
     # Middleware like session_store, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Enable gzip compression for API responses
+    config.middleware.use Rack::Deflater
     
     # Добавляем поддержку куки для API приложения
     config.middleware.use ActionDispatch::Cookies

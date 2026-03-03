@@ -5,6 +5,7 @@ module Api
     class CsrfController < ApplicationController
       # Skip authentication - CSRF token should be available without auth
       skip_before_action :authenticate_request, raise: false
+      skip_after_action :verify_authorized
 
       # GET /api/v1/csrf
       # Returns CSRF token for frontend to use in subsequent requests

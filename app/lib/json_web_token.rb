@@ -1,25 +1,26 @@
+# frozen_string_literal: true
+
+# DEPRECATED: Use Auth::JsonWebToken instead.
+# This class delegates to Auth::JsonWebToken for backward compatibility.
+# The old implementation lacked token_type checks and blacklist validation.
 class JsonWebToken
-  # Получение секретного ключа из переменной окружения или credentials
   def self.secret_key
-    ENV['SECRET_KEY_BASE'] || Rails.application.credentials.secret_key_base
+    Auth::JsonWebToken.secret_key
   end
 
   def self.encode(payload)
-    JWT.encode(
-      payload.merge(exp: 24.hours.from_now.to_i),
-      secret_key,
-      'HS256'
+    ActiveSupport::Deprecation.warn(
+      'JsonWebToken.encode is deprecated. Use Auth::JsonWebToken.encode_access_token instead.'
     )
+    Auth::JsonWebToken.encode_access_token(payload)
   end
 
   def self.decode(token)
-    JWT.decode(
-      token,
-      secret_key,
-      true,
-      algorithm: 'HS256'
-    ).first
-  rescue JWT::DecodeError
+    ActiveSupport::Deprecation.warn(
+      'JsonWebToken.decode is deprecated. Use Auth::JsonWebToken.decode_access_token instead.'
+    )
+    Auth::JsonWebToken.decode(token)
+  rescue Auth::TokenExpiredError, Auth::TokenInvalidError, Auth::TokenRevokedError
     nil
   end
-end 
+end

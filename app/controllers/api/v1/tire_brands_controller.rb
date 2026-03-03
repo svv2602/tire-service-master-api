@@ -5,6 +5,7 @@ class Api::V1::TireBrandsController < Api::V1::ApiController
   before_action :authenticate_request!, except: [:index, :show, :top_brands]
   before_action :set_tire_brand, only: [:show, :update, :destroy]
   before_action :authorize_admin_or_manager!, except: [:index, :show, :top_brands]
+  skip_after_action :verify_authorized
 
   # GET /api/v1/tire_brands
   def index

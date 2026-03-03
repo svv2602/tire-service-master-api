@@ -1,6 +1,7 @@
 module Api
   module V1
     class SeasonalSchedulesController < ApiController
+      skip_after_action :verify_authorized
       before_action :set_service_point
       before_action :set_seasonal_schedule, only: [:show, :update, :destroy]
       

@@ -5,19 +5,19 @@ class AuditContextMiddleware
 
   def call(env)
     request = ActionDispatch::Request.new(env)
-    
-    # Устанавливаем контекст аудита для текущего запроса
+
+    # Set up audit context for the current request
     setup_audit_context(request)
-    
-    # Выполняем запрос
+
+    # Execute the request
     response = @app.call(env)
-    
-    # Очищаем контекст после выполнения запроса
+
+    # Clean up context after request completes
     cleanup_audit_context
-    
+
     response
   rescue => e
-    # Очищаем контекст даже в случае ошибки
+    # Clean up context even on error
     cleanup_audit_context
     raise e
   end
@@ -25,59 +25,53 @@ class AuditContextMiddleware
   private
 
   def setup_audit_context(request)
-    # Получаем IP адрес клиента
+    # Extract client IP address
     ip_address = extract_client_ip(request)
-    
-    # Получаем User-Agent
+
+    # Extract User-Agent
     user_agent = request.user_agent
-    
-    # Генерируем уникальный ID запроса
+
+    # Generate unique request ID
     request_id = generate_request_id
-    
-    # Получаем session ID если доступен
+
+    # Extract session ID if available
     session_id = extract_session_id(request)
-    
-    # Получаем текущего пользователя из токена (если есть)
+
+    # Extract current user from token (if present)
     current_user = extract_current_user(request)
-    
-    # Устанавливаем контекст в Thread.current
-    Thread.current[:current_ip_address] = ip_address
-    Thread.current[:current_user_agent] = user_agent
-    Thread.current[:current_request_id] = request_id
-    Thread.current[:current_session_id] = session_id
-    Thread.current[:current_audit_user] = current_user
-    
-    # Логируем начало запроса для API endpoints
+
+    # Store context in CurrentContext (thread-safe, auto-reset per request)
+    CurrentContext.ip_address = ip_address
+    CurrentContext.user_agent = user_agent
+    CurrentContext.request_id = request_id
+    CurrentContext.session_id = session_id
+    CurrentContext.audit_user = current_user
+
+    # Log request start for API endpoints
     log_request_start(request, current_user, ip_address, user_agent, request_id) if api_request?(request)
   end
 
   def cleanup_audit_context
-    # Очищаем все audit-связанные переменные
-    Thread.current[:current_ip_address] = nil
-    Thread.current[:current_user_agent] = nil
-    Thread.current[:current_request_id] = nil
-    Thread.current[:current_session_id] = nil
-    Thread.current[:current_audit_user] = nil
-    Thread.current[:skip_audit] = nil
-    Thread.current[:force_async_audit] = nil
+    # Reset all audit-related attributes
+    CurrentContext.reset
   end
 
   def extract_client_ip(request)
-    # Получаем реальный IP клиента, учитывая прокси
+    # Get real client IP, accounting for proxies
     request.headers['HTTP_X_REAL_IP'] ||
       request.headers['HTTP_X_FORWARDED_FOR']&.split(',')&.first&.strip ||
       request.remote_ip
   end
 
   def extract_session_id(request)
-    # Пытаемся получить session ID из cookies или headers
+    # Try to get session ID from cookies or headers
     request.session.id if request.session.respond_to?(:id)
   rescue
     nil
   end
 
   def extract_current_user(request)
-    # Извлекаем пользователя из JWT токена
+    # Extract user from JWT token
     auth_header = request.headers['Authorization']
     return nil unless auth_header&.start_with?('Bearer ')
 
@@ -99,19 +93,19 @@ class AuditContextMiddleware
   end
 
   def generate_request_id
-    # Генерируем уникальный ID запроса
+    # Generate unique request ID
     SecureRandom.uuid
   end
 
   def api_request?(request)
-    # Проверяем, является ли запрос API запросом
+    # Check if this is an API request
     request.path.start_with?('/api/')
   end
 
   def log_request_start(request, user, ip_address, user_agent, request_id)
-    # Логируем начало API запроса для отслеживания активности
+    # Log API request start for activity tracking
     return unless should_log_request?(request)
-    
+
     AuditLogJob.perform_later(
       action: 'api_request',
       user_id: user&.id,
@@ -128,34 +122,34 @@ class AuditContextMiddleware
   end
 
   def should_log_request?(request)
-    # Определяем, нужно ли логировать данный запрос
-    # Не логируем некритичные запросы для экономии места
+    # Determine whether to log this request
+    # Skip non-critical requests to save storage
     excluded_paths = [
       '/api/v1/health',
       '/api/v1/ping',
       '/api/v1/status'
     ]
-    
-    # Не логируем GET запросы к некритичным endpoints
+
+    # Don't log GET requests to non-critical endpoints
     return false if request.get? && excluded_paths.any? { |path| request.path.start_with?(path) }
-    
-    # Логируем все POST, PUT, PATCH, DELETE запросы
+
+    # Log all POST, PUT, PATCH, DELETE requests
     return true if %w[POST PUT PATCH DELETE].include?(request.method)
-    
-    # Логируем GET запросы к критичным endpoints
+
+    # Log GET requests to critical endpoints
     critical_paths = [
       '/api/v1/users',
       '/api/v1/admin',
       '/api/v1/audit_logs'
     ]
-    
+
     critical_paths.any? { |path| request.path.start_with?(path) }
   end
 
   def sanitize_query_params(params)
-    # Убираем чувствительные данные из параметров запроса
+    # Remove sensitive data from request parameters
     sensitive_keys = %w[password password_confirmation token api_key secret]
-    
+
     params.deep_dup.tap do |sanitized|
       sensitive_keys.each do |key|
         sanitized.delete(key)
@@ -167,4 +161,4 @@ class AuditContextMiddleware
       end
     end
   end
-end 
+end

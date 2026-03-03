@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_03_03_100003) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -702,6 +702,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_100003) do
     t.index ["order_date"], name: "index_orders_on_order_date"
     t.index ["point_id"], name: "index_orders_on_point_id"
     t.index ["qr_code_token"], name: "index_orders_on_qr_code_token", unique: true
+    t.index ["qr_scanned_by_id"], name: "index_orders_on_qr_scanned_by_id"
     t.index ["service_point_id", "status"], name: "index_orders_on_service_point_id_and_status"
     t.index ["service_point_id"], name: "index_orders_on_service_point_id"
     t.index ["supplier_id", "status"], name: "index_orders_on_supplier_id_and_status"
@@ -1609,6 +1610,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_100003) do
     t.index ["partner_id", "status"], name: "idx_tire_orders_partner_status"
     t.index ["partner_id"], name: "index_tire_orders_on_partner_id"
     t.index ["qr_code_token"], name: "index_tire_orders_on_qr_code_token", unique: true
+    t.index ["qr_scanned_by_id"], name: "index_tire_orders_on_qr_scanned_by_id"
     t.index ["status"], name: "index_tire_orders_on_status"
     t.index ["supplier_id", "created_at"], name: "idx_tire_orders_supplier_created"
     t.index ["supplier_id", "status"], name: "index_tire_orders_on_supplier_id_and_status"

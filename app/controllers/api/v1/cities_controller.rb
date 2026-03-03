@@ -4,6 +4,7 @@ module Api
       before_action :set_city, only: [:show, :update, :destroy]
       before_action :authorize_admin, except: [:index, :show, :with_service_points]
       skip_before_action :authenticate_request, only: [:index, :show, :with_service_points]
+      skip_after_action :verify_authorized
       
       # GET /api/v1/cities
       def index

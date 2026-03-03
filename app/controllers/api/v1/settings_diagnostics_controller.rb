@@ -2,6 +2,7 @@
 
 # Контроллер для диагностики настроек системы
 class Api::V1::SettingsDiagnosticsController < ApplicationController
+  skip_after_action :verify_authorized
   before_action :authenticate_request
   before_action :ensure_admin
 

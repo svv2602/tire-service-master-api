@@ -7,7 +7,8 @@ module Api
       
       # GET /api/v1/partners
       def index
-        @partners = Partner.includes(:user, :region, :city).all
+        authorize Partner
+        @partners = policy_scope(Partner).includes(:user, :region, :city)
         
         # Фильтрация по статусу активности
         if params[:is_active].present?

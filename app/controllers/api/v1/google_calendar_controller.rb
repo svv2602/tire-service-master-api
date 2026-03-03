@@ -4,6 +4,7 @@ module Api
   module V1
     # Controller for Google Calendar integration
     class GoogleCalendarController < ApplicationController
+      skip_after_action :verify_authorized
       before_action :authenticate_user!
       before_action :ensure_partner!
       before_action :set_calendar_service

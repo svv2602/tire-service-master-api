@@ -1,6 +1,7 @@
 module Api
   module V1
     class ServiceCategoriesController < ApiController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request, only: [:index, :show, :by_city, :by_city_id]
       before_action :set_service_category, only: [:show, :update, :destroy]
       before_action :authorize_admin!, only: [:create, :update, :destroy]

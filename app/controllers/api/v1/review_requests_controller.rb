@@ -3,6 +3,7 @@
 module Api
   module V1
     class ReviewRequestsController < ApiController
+      skip_after_action :verify_authorized
       before_action :authenticate_user!, except: [:show_by_token, :submit_review]
       before_action :ensure_partner_access, only: [:index, :stats, :settings, :update_settings, :send_manual]
       before_action :set_partner, only: [:index, :stats, :settings, :update_settings, :send_manual]

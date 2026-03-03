@@ -1,6 +1,7 @@
 module Api
   module V1
     class CarTypesController < ApiController
+      skip_after_action :verify_authorized
       # Разрешаем публичный доступ к чтению типов автомобилей для клиентских бронирований
       skip_before_action :authenticate_request, only: [:index, :show]
       

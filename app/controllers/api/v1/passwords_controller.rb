@@ -3,6 +3,7 @@ module Api
   module V1
     class PasswordsController < BaseController
       skip_before_action :authenticate_request
+      skip_after_action :verify_authorized
       
       # POST /api/v1/password/forgot
       # Запрос на восстановление пароля
@@ -115,6 +116,8 @@ module Api
           password_reset_token: nil,
           password_reset_sent_at: nil
         )
+          # Revoke all existing tokens for this user after password change
+          TokenBlacklistService.revoke_all_for_user(user.id)
           Rails.logger.info("Password successfully reset for user: #{user.id}")
           render json: { message: I18n.t('auth.messages.password_reset_success') }
         else

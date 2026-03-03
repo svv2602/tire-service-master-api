@@ -4,6 +4,7 @@ module Api
   module V1
     # SupplierReportsController - handles report downloads via token
     class SupplierReportsController < ApplicationController
+      skip_after_action :verify_authorized
       # Skip authentication - tokens are self-validating
       skip_before_action :authenticate_request, only: [:download]
 

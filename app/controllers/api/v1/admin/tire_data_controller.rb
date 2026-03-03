@@ -5,6 +5,7 @@ module Api
     module Admin
       # Контроллер для управления данными шин
       class TireDataController < AdminController
+      skip_after_action :verify_authorized
         # Аутентификация и проверка прав админа уже выполняется в AdminController
 
         # GET /api/v1/admin/tire_data/status

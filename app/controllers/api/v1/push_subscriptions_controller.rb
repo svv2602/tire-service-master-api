@@ -1,4 +1,5 @@
 class Api::V1::PushSubscriptionsController < ApplicationController
+  skip_after_action :verify_authorized
   before_action :authenticate_request
   before_action :set_push_subscription, only: [:show, :destroy]
 

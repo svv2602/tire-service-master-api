@@ -2,6 +2,7 @@
 class Api::V1::ClientAuthController < ApplicationController
   # Не требуем авторизации для регистрации и входа
   skip_before_action :authenticate_request, only: [:register, :login]
+  skip_after_action :verify_authorized
 
   # POST /api/v1/clients/register
   # Регистрация нового клиента
@@ -85,8 +86,18 @@ class Api::V1::ClientAuthController < ApplicationController
         return
       end
 
+      # Check account lockout
+      if user.locked?
+        render json: {
+          error: I18n.t('auth.errors.account_locked', default: 'Аккаунт временно заблокирован. Попробуйте позже.'),
+          locked_until: user.locked_until
+        }, status: :forbidden
+        return
+      end
+
       # Проверяем пароль
       unless user.authenticate(login_params[:password])
+        user.record_failed_login!
         render json: { error: I18n.t('auth.errors.invalid_credentials') }, status: :unauthorized
         return
       end
@@ -96,6 +107,9 @@ class Api::V1::ClientAuthController < ApplicationController
         render json: { error: I18n.t('auth.errors.account_blocked') }, status: :forbidden
         return
       end
+
+      # Reset failed login counter on successful authentication
+      user.reset_failed_login_attempts!
 
       # Обновляем время последнего входа
       user.update_last_login!
@@ -149,10 +163,17 @@ class Api::V1::ClientAuthController < ApplicationController
   # POST /api/v1/clients/logout
   # Выход из системы
   def logout
+    # Revoke current tokens so they cannot be reused
+    TokenBlacklistService.revoke(cookies[:access_token]) if cookies[:access_token].present?
+    TokenBlacklistService.revoke(cookies[:refresh_token]) if cookies[:refresh_token].present?
+
+    header = request.headers['Authorization']
+    TokenBlacklistService.revoke(header.split(' ').last) if header.present?
+
     # ✅ Удаляем ВСЕ куки при выходе
     cookies.delete(:refresh_token)
     cookies.delete(:access_token)
-    
+
     Rails.logger.info("ClientAuth#logout: User logged out successfully, all cookies cleared")
     render json: { message: I18n.t('auth.messages.logout_success') }, status: :ok
   end

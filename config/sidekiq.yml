@@ -1,7 +1,17 @@
 # Sidekiq configuration
 # See: https://github.com/sidekiq/sidekiq/wiki/Advanced-Options
 
-:concurrency: 5
+# Default concurrency — overridden per environment below.
+# Ensure the PostgreSQL connection pool (config/database.yml) is at
+# least as large as the concurrency value.
+:concurrency: <%= ENV.fetch("SIDEKIQ_CONCURRENCY", 5) %>
+
+# Environment-specific overrides
+production:
+  :concurrency: <%= ENV.fetch("SIDEKIQ_CONCURRENCY", 10) %>
+
+staging:
+  :concurrency: <%= ENV.fetch("SIDEKIQ_CONCURRENCY", 10) %>
 
 :queues:
   - [default, 5]

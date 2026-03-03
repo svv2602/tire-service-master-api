@@ -4,8 +4,10 @@ module Api
   module V1
     class AmenitiesController < ApiController
       before_action :authenticate_request
+      skip_before_action :authenticate_request, only: [:index, :show]
       before_action :set_amenity, only: [:show, :destroy]
       before_action :set_service_point, only: [:create, :destroy], if: -> { params[:service_point_id].present? }
+      skip_after_action :verify_authorized
 
       # GET /api/v1/amenities
       # GET /api/v1/service_points/:service_point_id/amenities

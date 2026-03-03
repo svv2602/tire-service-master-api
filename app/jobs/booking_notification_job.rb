@@ -1,6 +1,22 @@
 class BookingNotificationJob < ApplicationJob
   queue_as :notifications
 
+  # Handle permanently failed jobs
+  sidekiq_retries_exhausted do |msg, _ex|
+    Rails.logger.error "[BookingNotificationJob] Permanently failed: #{msg['error_message']}"
+    SystemLog.create(
+      action: 'job_permanently_failed',
+      resource_type: 'BookingNotificationJob',
+      resource_id: msg['args']&.first,
+      additional_data: { error: msg['error_message'], job_id: msg['jid'], args: msg['args'] }
+    ) rescue nil
+    AdminNotificationService.notify_job_permanently_failed(
+      job_class: 'BookingNotificationJob',
+      error_message: msg['error_message'],
+      job_id: msg['jid']
+    ) if defined?(AdminNotificationService)
+  end
+
   # Отправка уведомления о бронировании
   def perform(booking_id, notification_type, recipient_email = nil)
     booking = Booking.find_by(id: booking_id)

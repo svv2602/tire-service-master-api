@@ -5,6 +5,21 @@
 class RollingScheduleGeneratorJob < ApplicationJob
   queue_as :schedules
 
+  # Handle permanently failed jobs
+  sidekiq_retries_exhausted do |msg, _ex|
+    Rails.logger.error "[RollingScheduleGeneratorJob] Permanently failed: #{msg['error_message']}"
+    SystemLog.create(
+      action: 'job_permanently_failed',
+      resource_type: 'RollingScheduleGeneratorJob',
+      additional_data: { error: msg['error_message'], job_id: msg['jid'], args: msg['args'] }
+    ) rescue nil
+    AdminNotificationService.notify_job_permanently_failed(
+      job_class: 'RollingScheduleGeneratorJob',
+      error_message: msg['error_message'],
+      job_id: msg['jid']
+    ) if defined?(AdminNotificationService)
+  end
+
   # Default number of days ahead to generate
   DAYS_AHEAD = 14
 

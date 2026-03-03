@@ -64,8 +64,8 @@ class OperatorAssignmentService
               user_id: assigned_by_user.id,
               operator_id: operator.id,
               service_point_ids: [service_point.id],
-              ip_address: Thread.current[:current_ip_address],
-              user_agent: Thread.current[:current_user_agent],
+              ip_address: CurrentContext.ip_address,
+              user_agent: CurrentContext.user_agent,
               additional_data: {
                 action_type: 'assign',
                 assignment_id: assignment.id
@@ -121,8 +121,8 @@ class OperatorAssignmentService
               user_id: unassigned_by_user.id,
               operator_id: operator.id,
               service_point_ids: [service_point.id],
-              ip_address: Thread.current[:current_ip_address],
-              user_agent: Thread.current[:current_user_agent],
+              ip_address: CurrentContext.ip_address,
+              user_agent: CurrentContext.user_agent,
               additional_data: {
                 action_type: 'unassign',
                 assignment_id: assignment.id
@@ -197,8 +197,8 @@ class OperatorAssignmentService
               user_id: assigned_by_user.id,
               operator_id: operator.id,
               service_point_ids: [service_point.id],
-              ip_address: Thread.current[:current_ip_address],
-              user_agent: Thread.current[:current_user_agent],
+              ip_address: CurrentContext.ip_address,
+              user_agent: CurrentContext.user_agent,
               additional_data: {
                 action_type: 'bulk_assign',
                 assignment_id: assignment.id
@@ -248,8 +248,8 @@ class OperatorAssignmentService
       user_id: assigned_by_user.id,
       operator_id: operator.id,
       service_point_ids: result[:success],
-      ip_address: Thread.current[:current_ip_address],
-      user_agent: Thread.current[:current_user_agent],
+      ip_address: CurrentContext.ip_address,
+      user_agent: CurrentContext.user_agent,
       additional_data: {
         action_type: 'auto_assign',
         total_points: point_ids.count,

@@ -1,4 +1,5 @@
 class Api::V1::UnifiedTireCartsController < ApplicationController
+  skip_after_action :verify_authorized
   skip_before_action :authenticate_request  # Отключаем обязательную аутентификацию
   before_action :optional_authenticate_request
   before_action :set_cart, only: [:show, :add_item, :update_item, :remove_item, :clear, :create_orders, :create_supplier_order]

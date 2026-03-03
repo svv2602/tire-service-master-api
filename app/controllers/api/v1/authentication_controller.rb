@@ -1,11 +1,15 @@
+# DEPRECATED: This controller is not mounted in routes.
+# Use AuthController (api/v1/auth_controller.rb) for all authentication.
+# Kept for backward compatibility only. Will be removed in a future release.
 module Api
   module V1
     class AuthenticationController < ApplicationController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request
 
       def authenticate
         user = User.find_by(email: params[:email])
-        
+
         if user&.authenticate(params[:password])
           unless user.is_active?
             render json: { error: I18n.t('auth.errors.account_blocked', default: 'Account is blocked') }, status: :forbidden
@@ -14,11 +18,31 @@ module Api
 
           access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
           refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
-          
+
+          # Set refresh token in HttpOnly cookie (never in JSON body)
+          cookies[:refresh_token] = {
+            value: refresh_token,
+            httponly: true,
+            secure: Rails.env.production?,
+            same_site: :lax,
+            expires: 30.days.from_now,
+            path: '/'
+          }
+
+          # Set access token in HttpOnly cookie
+          cookies[:access_token] = {
+            value: access_token,
+            httponly: true,
+            secure: Rails.env.production?,
+            same_site: :lax,
+            expires: 1.hour.from_now,
+            path: '/'
+          }
+
           render json: {
             tokens: {
-              access: access_token,
-              refresh: refresh_token
+              access: access_token
+              # Refresh token is in HttpOnly cookie only -- not in JSON body
             },
             user: {
               id: user.id,
@@ -36,10 +60,22 @@ module Api
 
       def refresh
         begin
-          refresh_token = request.headers['Refresh-Token']
+          # Read refresh token from HttpOnly cookie (fallback to header for backward compatibility)
+          refresh_token = cookies[:refresh_token] || request.headers['Refresh-Token']
           raise Auth::TokenInvalidError, I18n.t('auth.errors.token_required') if refresh_token.blank?
-          
+
           access_token = Auth::JsonWebToken.refresh_access_token(refresh_token)
+
+          # Update access token cookie
+          cookies[:access_token] = {
+            value: access_token,
+            httponly: true,
+            secure: Rails.env.production?,
+            same_site: :lax,
+            expires: 1.hour.from_now,
+            path: '/'
+          }
+
           render json: { access_token: access_token }
         rescue Auth::TokenExpiredError
           render json: { error: I18n.t('auth.errors.token_expired') }, status: :unauthorized
@@ -51,4 +87,4 @@ module Api
       end
     end
   end
-end 
+end

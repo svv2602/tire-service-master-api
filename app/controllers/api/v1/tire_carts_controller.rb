@@ -1,4 +1,5 @@
 class Api::V1::TireCartsController < ApplicationController
+  skip_after_action :verify_authorized
   before_action :authenticate_request!
   before_action :set_cart, only: [:show, :destroy, :add_item, :update_item, :remove_item, :clear]
   before_action :set_cart_item, only: [:update_item, :remove_item]

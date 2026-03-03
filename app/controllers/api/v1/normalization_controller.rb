@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class Api::V1::NormalizationController < ApplicationController
+  skip_after_action :verify_authorized
   before_action :ensure_admin!
 
   # GET /api/v1/normalization/stats

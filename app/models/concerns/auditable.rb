@@ -134,87 +134,87 @@ module Auditable
   end
 
   def current_ip_address
-    # IP адрес можно получить из Thread.current если установлен в контроллере
-    Thread.current[:current_ip_address]
+    # IP address from CurrentContext (set by AuditContextMiddleware)
+    CurrentContext.ip_address
   end
 
   def current_user_agent
-    # User-Agent можно получить из Thread.current если установлен в контроллере
-    Thread.current[:current_user_agent]
+    # User-Agent from CurrentContext (set by AuditContextMiddleware)
+    CurrentContext.user_agent
   end
-  
+
   def use_async_audit?
-    # Проверяем принудительное значение из Thread
-    return Thread.current[:force_async_audit] if Thread.current[:force_async_audit] != nil
-    
-    # Используем асинхронное логирование по умолчанию, если не указано иное
+    # Check forced value from CurrentContext
+    return CurrentContext.force_async_audit if CurrentContext.force_async_audit != nil
+
+    # Use async logging by default unless explicitly set
     return async_audit if async_audit != nil
-    
-    # В production используем асинхронное логирование для улучшения производительности
+
+    # In production use async logging for better performance
     Rails.env.production? || Rails.application.config.respond_to?(:audit_async_default) && Rails.application.config.audit_async_default
   end
-  
+
   def audit_context_data
-    # Дополнительные данные для аудита, можно переопределить в моделях
+    # Additional data for audit, can be overridden in models
     context = {}
-    
-    # Добавляем информацию о связанных объектах
+
+    # Add related object information
     context[:related_objects] = related_audit_objects if respond_to?(:related_audit_objects, true)
-    
-    # Добавляем пользовательские данные
+
+    # Add custom data
     context[:custom_data] = custom_audit_data if respond_to?(:custom_audit_data, true)
-    
-    # Добавляем информацию о сессии
-    context[:session_id] = Thread.current[:current_session_id] if Thread.current[:current_session_id]
-    
-    # Добавляем информацию о запросе
-    context[:request_id] = Thread.current[:current_request_id] if Thread.current[:current_request_id]
-    
+
+    # Add session information
+    context[:session_id] = CurrentContext.session_id if CurrentContext.session_id
+
+    # Add request information
+    context[:request_id] = CurrentContext.request_id if CurrentContext.request_id
+
     context.empty? ? nil : context
   end
 
   class_methods do
     def with_audit_context(user: nil, ip_address: nil, user_agent: nil, session_id: nil, request_id: nil)
-      old_user = Thread.current[:current_audit_user]
-      old_ip = Thread.current[:current_ip_address]
-      old_agent = Thread.current[:current_user_agent]
-      old_session = Thread.current[:current_session_id]
-      old_request = Thread.current[:current_request_id]
-      
-      Thread.current[:current_audit_user] = user
-      Thread.current[:current_ip_address] = ip_address
-      Thread.current[:current_user_agent] = user_agent
-      Thread.current[:current_session_id] = session_id
-      Thread.current[:current_request_id] = request_id
-      
+      old_user = CurrentContext.audit_user
+      old_ip = CurrentContext.ip_address
+      old_agent = CurrentContext.user_agent
+      old_session = CurrentContext.session_id
+      old_request = CurrentContext.request_id
+
+      CurrentContext.audit_user = user
+      CurrentContext.ip_address = ip_address
+      CurrentContext.user_agent = user_agent
+      CurrentContext.session_id = session_id
+      CurrentContext.request_id = request_id
+
       yield
     ensure
-      Thread.current[:current_audit_user] = old_user
-      Thread.current[:current_ip_address] = old_ip
-      Thread.current[:current_user_agent] = old_agent
-      Thread.current[:current_session_id] = old_session
-      Thread.current[:current_request_id] = old_request
+      CurrentContext.audit_user = old_user
+      CurrentContext.ip_address = old_ip
+      CurrentContext.user_agent = old_agent
+      CurrentContext.session_id = old_session
+      CurrentContext.request_id = old_request
     end
-    
+
     def without_audit(&block)
-      old_value = Thread.current[:skip_audit]
-      Thread.current[:skip_audit] = true
+      old_value = CurrentContext.skip_audit
+      CurrentContext.skip_audit = true
       yield
     ensure
-      Thread.current[:skip_audit] = old_value
+      CurrentContext.skip_audit = old_value
     end
-    
+
     def with_async_audit(async: true, &block)
-      # Устанавливаем режим асинхронного аудита для всех операций в блоке
-      old_async = Thread.current[:force_async_audit]
-      Thread.current[:force_async_audit] = async
+      # Set async audit mode for all operations within the block
+      old_async = CurrentContext.force_async_audit
+      CurrentContext.force_async_audit = async
       yield
     ensure
-      Thread.current[:force_async_audit] = old_async
+      CurrentContext.force_async_audit = old_async
     end
-    
+
     def audit_critical_operation(user:, operation_type:, resource_type: nil, resource_id: nil, **context)
-      # Специальный метод для логирования критичных операций
+      # Special method for logging critical operations
       AuditLogJob.perform_later(
         action: operation_type,
         user_id: user&.id,
@@ -225,8 +225,8 @@ module Auditable
           timestamp: Time.current,
           **context
         },
-        ip_address: Thread.current[:current_ip_address],
-        user_agent: Thread.current[:current_user_agent]
+        ip_address: CurrentContext.ip_address,
+        user_agent: CurrentContext.user_agent
       )
     end
 

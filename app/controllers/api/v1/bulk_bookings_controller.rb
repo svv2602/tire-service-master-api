@@ -3,6 +3,7 @@
 module Api
   module V1
     class BulkBookingsController < ApiController
+      skip_after_action :verify_authorized
       before_action :ensure_partner_access
       before_action :set_partner
       before_action :validate_booking_ids

@@ -1,6 +1,7 @@
 module Api
   module V1
     class TireSearchController < ApiController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request, only: [:search, :suggestions, :popular, :brands, :models, :diameters]
       
       # POST /api/v1/tire_search

@@ -2,6 +2,7 @@ module Api
   module V1
     module Tests
       class DataGeneratorController < ApiController
+      skip_after_action :verify_authorized
         skip_before_action :authenticate_request
         
         # GET /api/v1/tests/generate_data

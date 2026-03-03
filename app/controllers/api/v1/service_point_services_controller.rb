@@ -1,6 +1,7 @@
 module Api
   module V1
     class ServicePointServicesController < ApiController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request, only: [:index]
       before_action :set_service_point
       before_action :authorize_admin_or_partner, except: [:index]

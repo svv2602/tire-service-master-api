@@ -2,6 +2,7 @@
 # Контроллер для работы с динамической доступностью
 
 class Api::V1::AvailabilityController < ApplicationController
+  skip_after_action :verify_authorized
   skip_before_action :authenticate_request, except: [:client_check_availability]
   before_action :set_service_point, except: [
     :client_check_availability, :check_with_category, :slots_for_category,

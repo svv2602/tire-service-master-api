@@ -1,11 +1,11 @@
 class PartnerPolicy < ApplicationPolicy
-  # Основные действия с партнерами
+  # Main actions with partners -- clients are explicitly denied
   def index?
-    user.admin? || user.partner?
+    user.admin? || user.partner? || user.manager?
   end
 
   def show?
-    user.admin? || (user.partner? && user.partner == record)
+    user.admin? || user.manager? || (user.partner? && user.partner == record)
   end
 
   def create?
@@ -20,7 +20,7 @@ class PartnerPolicy < ApplicationPolicy
     user.admin?
   end
 
-  # Специфичные действия для сервисных точек
+  # Service point management actions
   def create_service_point?
     user.admin? || (user.partner? && user.partner == record)
   end
@@ -29,10 +29,10 @@ class PartnerPolicy < ApplicationPolicy
     user.admin? || (user.partner? && user.partner == record)
   end
 
-  # Scope для списка партнеров
+  # Scope for partner list -- clients see nothing
   class Scope < Scope
     def resolve
-      if user.admin?
+      if user.admin? || user.manager?
         scope.all
       elsif user.partner?
         scope.where(id: user.partner.id)
@@ -47,4 +47,4 @@ class PartnerPolicy < ApplicationPolicy
   def record
     @record
   end
-end 
+end

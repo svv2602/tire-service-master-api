@@ -62,6 +62,10 @@ module Api
           render json: { error: 'Пользователь не найден' }, status: :unauthorized
         rescue Auth::TokenExpiredError => e
           render json: { error: 'Токен истек' }, status: :unauthorized
+        rescue Auth::TokenRevokedError => e
+          cookies.delete(:access_token)
+          cookies.delete(:refresh_token)
+          render json: { error: 'Токен отозван', code: 'token_revoked' }, status: :unauthorized
         rescue Auth::TokenInvalidError => e
           render json: { error: 'Неверный токен' }, status: :unauthorized
         rescue JWT::DecodeError => e

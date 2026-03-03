@@ -4,6 +4,7 @@ module Api
   module V1
     # Controller for delivery tracking operations
     class DeliveryController < ApplicationController
+      skip_after_action :verify_authorized
       before_action :authenticate_user!, except: [:track]
 
       # GET /api/v1/delivery/track/:ttn

@@ -1,6 +1,7 @@
 module Api
   module V1
     class ScheduleController < ApiController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request, only: [:day, :period]
       before_action :set_service_point
       

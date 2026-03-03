@@ -1,6 +1,21 @@
 class AuditLogJob < ApplicationJob
   queue_as :audit
-  
+
+  # Handle permanently failed jobs
+  sidekiq_retries_exhausted do |msg, _ex|
+    Rails.logger.error "[AuditLogJob] Permanently failed: #{msg['error_message']}"
+    SystemLog.create(
+      action: 'job_permanently_failed',
+      resource_type: 'AuditLogJob',
+      additional_data: { error: msg['error_message'], job_id: msg['jid'], args: msg['args'] }
+    ) rescue nil
+    AdminNotificationService.notify_job_permanently_failed(
+      job_class: 'AuditLogJob',
+      error_message: msg['error_message'],
+      job_id: msg['jid']
+    ) if defined?(AdminNotificationService)
+  end
+
   # Создание лога создания объекта
   def self.log_create(user_id:, resource_type:, resource_id:, new_value:, **options)
     perform_later(
@@ -149,8 +164,8 @@ class AuditLogJob < ApplicationJob
     Rails.logger.error "AuditLogJob failed: #{e.message}"
     Rails.logger.error e.backtrace.join("\n")
     
-    # Можно отправить уведомление администраторам о проблеме с аудитом
-    # AdminNotificationService.notify_audit_failure(e) if Rails.env.production?
+    # Notify administrators about audit failures
+    AdminNotificationService.notify_audit_failure(e) if Rails.env.production?
   end
   
   private

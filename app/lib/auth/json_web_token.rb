@@ -4,6 +4,9 @@ module Auth
   class TokenRevokedError < StandardError; end
 
   class JsonWebToken
+    ACCESS_TOKEN_EXPIRY = 1.hour
+    REFRESH_TOKEN_EXPIRY = 30.days
+
     # Получение секретного ключа из переменной окружения или credentials
     def self.secret_key
       ENV['SECRET_KEY_BASE'] || Rails.application.credentials.secret_key_base
@@ -23,7 +26,19 @@ module Auth
           true,
           algorithm: 'HS256'
         ).first
-        HashWithIndifferentAccess.new(decoded)
+        result = HashWithIndifferentAccess.new(decoded)
+
+        # Check token blacklist (individual token revocation)
+        raise TokenRevokedError, 'Token has been revoked' if TokenBlacklistService.revoked?(token)
+
+        # Check user-level revocation (e.g. password change)
+        if result[:user_id] && result[:iat]
+          if TokenBlacklistService.user_tokens_revoked?(result[:user_id], result[:iat])
+            raise TokenRevokedError, 'Token has been revoked due to credential change'
+          end
+        end
+
+        result
       rescue JWT::ExpiredSignature
         raise TokenExpiredError
       rescue JWT::DecodeError
@@ -35,6 +50,7 @@ module Auth
     def self.encode_access_token(payload)
       payload = payload.dup
       payload[:token_type] = 'access'
+      payload[:iat] = Time.current.to_i
       payload[:exp] = 1.hour.from_now.to_i
       JWT.encode(payload, secret_key, 'HS256')
     end
@@ -43,6 +59,7 @@ module Auth
     def self.encode_refresh_token(payload)
       payload = payload.dup
       payload[:token_type] = 'refresh'
+      payload[:iat] = Time.current.to_i
       payload[:exp] = 30.days.from_now.to_i
       JWT.encode(payload, secret_key, 'HS256')
     end

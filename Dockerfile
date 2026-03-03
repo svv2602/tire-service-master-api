@@ -29,7 +29,7 @@ RUN gem install bundler:2.5.23 && \
 COPY . .
 
 # Устанавливаем права доступа
-RUN chmod +x bin/rails
+RUN chmod +x bin/rails bin/docker-entrypoint
 
 # Создаем пользователя для безопасности
 RUN addgroup -g 1001 -S appgroup && \
@@ -49,5 +49,8 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
-# Команда по умолчанию
-CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "8000"] 
+# Entrypoint runs db:migrate automatically before starting the server
+ENTRYPOINT ["bin/docker-entrypoint"]
+
+# Default command
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "8000"]

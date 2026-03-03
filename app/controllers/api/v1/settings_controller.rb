@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class Api::V1::SettingsController < ApplicationController
+  skip_after_action :verify_authorized
   before_action :authenticate_request
   before_action :authorize_admin!
 

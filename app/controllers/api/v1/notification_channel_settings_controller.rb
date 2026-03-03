@@ -1,4 +1,5 @@
 class Api::V1::NotificationChannelSettingsController < ApplicationController
+  skip_after_action :verify_authorized
   before_action :authenticate_request
   before_action :ensure_admin
   before_action :set_channel_setting, only: [:show, :update]

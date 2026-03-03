@@ -9,9 +9,13 @@ class Rack::Attack
     Rack::Attack.cache.store = ActiveSupport::Cache::MemoryStore.new
   end
 
-  # Safelist localhost in development and test environments
-  safelist("allow-localhost") do |req|
-    (Rails.env.development? || Rails.env.test?) && req.ip == "127.0.0.1"
+  # Safelist localhost in development and test environments only.
+  # IMPORTANT: Never safelist localhost in production — attackers can spoof
+  # X-Forwarded-For headers to bypass rate limiting.
+  unless Rails.env.production?
+    safelist("allow-localhost") do |req|
+      req.ip == "127.0.0.1" || req.ip == "::1"
+    end
   end
 
   # Login throttle: 5 requests per minute per IP

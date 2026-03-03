@@ -1,4 +1,5 @@
 class Api::V1::TireOrdersController < ApplicationController
+  skip_after_action :verify_authorized
   before_action :authenticate_request
   before_action :set_order, only: [:show, :cancel, :archive]
   before_action :ensure_admin!, only: [:index_all, :confirm, :start_processing, :complete]

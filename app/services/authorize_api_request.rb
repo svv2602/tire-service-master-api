@@ -43,10 +43,9 @@ class AuthorizeApiRequest
   end
   
   def http_auth_header
-    Rails.logger.info("Authorization header: #{headers['Authorization']}")
     if headers['Authorization'].present?
       token = headers['Authorization'].split(' ').last
-      Rails.logger.info("Extracted token: #{token}")
+      Rails.logger.debug("AuthorizeApiRequest: Bearer token present")
       return token
     end
     nil

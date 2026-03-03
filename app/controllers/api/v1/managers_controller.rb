@@ -1,6 +1,7 @@
 module Api
   module V1
     class ManagersController < ApiController
+      skip_after_action :verify_authorized
       before_action :set_manager, only: [:show, :update, :destroy]
       before_action :set_partner, only: [:index, :create, :create_test]
       before_action :authorize_admin, except: [:index, :show, :create_test]

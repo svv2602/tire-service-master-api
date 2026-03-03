@@ -5,6 +5,7 @@ class Api::V1::CountriesController < Api::V1::ApiController
   before_action :authenticate_request!, except: [:index, :show]
   before_action :set_country, only: [:show, :update, :destroy]
   before_action :authorize_admin_or_manager!, except: [:index, :show]
+  skip_after_action :verify_authorized
 
   # GET /api/v1/countries
   def index

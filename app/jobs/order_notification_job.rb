@@ -8,6 +8,22 @@ class OrderNotificationJob < ApplicationJob
   # Retry on temporary failures
   retry_on StandardError, wait: :exponentially_longer, attempts: 3
 
+  # Handle permanently failed jobs
+  sidekiq_retries_exhausted do |msg, _ex|
+    Rails.logger.error "[OrderNotificationJob] Permanently failed: #{msg['error_message']}"
+    SystemLog.create(
+      action: 'job_permanently_failed',
+      resource_type: 'OrderNotificationJob',
+      resource_id: msg['args']&.first,
+      additional_data: { error: msg['error_message'], job_id: msg['jid'], args: msg['args'] }
+    ) rescue nil
+    AdminNotificationService.notify_job_permanently_failed(
+      job_class: 'OrderNotificationJob',
+      error_message: msg['error_message'],
+      job_id: msg['jid']
+    ) if defined?(AdminNotificationService)
+  end
+
   # @param order_id [Integer] Order ID
   # @param notification_type [String] Type: order_ready, order_delivered, order_canceled
   def perform(order_id, notification_type)

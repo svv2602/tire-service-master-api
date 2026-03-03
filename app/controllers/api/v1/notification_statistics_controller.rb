@@ -1,4 +1,5 @@
 class Api::V1::NotificationStatisticsController < Api::V1::ApiController
+  skip_after_action :verify_authorized
   before_action :authenticate_request!
   before_action :ensure_admin!
 

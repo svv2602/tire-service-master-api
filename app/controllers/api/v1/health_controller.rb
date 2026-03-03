@@ -7,6 +7,7 @@ module Api
     class HealthController < ApplicationController
       # Skip authentication for health checks
       skip_before_action :authenticate_request, only: [:index, :deep, :cache_stats]
+      skip_after_action :verify_authorized
 
       # GET /api/v1/health
       # Basic liveness check - returns 200 if app is running
@@ -28,8 +29,21 @@ module Api
           openai: check_openai
         }
 
-        overall_status = checks.values.all? { |c| c[:status] == 'ok' } ? 'ok' : 'degraded'
-        http_status = overall_status == 'ok' ? :ok : :service_unavailable
+        # Determine overall status and HTTP code.
+        # Only return 503 when critical services (database, redis) are down.
+        # Non-critical services (sidekiq, openai) in warning/not_configured
+        # state result in a degraded status with HTTP 200.
+        critical_services = [:database, :redis]
+        critical_down = critical_services.any? { |svc| checks[svc][:status] == 'error' }
+
+        overall_status = if critical_down
+                           'error'
+                         elsif checks.values.all? { |c| c[:status] == 'ok' }
+                           'ok'
+                         else
+                           'degraded'
+                         end
+        http_status = critical_down ? :service_unavailable : :ok
 
         render json: {
           status: overall_status,
@@ -165,11 +179,24 @@ module Api
         }
       end
 
-      # Get application version from git or environment
+      # Get application version from ENV, VERSION file, or git
       def app_version
-        ENV.fetch('APP_VERSION', nil) ||
-          `git rev-parse --short HEAD 2>/dev/null`.strip.presence ||
+        @app_version ||=
+          ENV.fetch('APP_VERSION', nil) ||
+          version_from_file ||
+          git_revision ||
           'unknown'
+      end
+
+      def version_from_file
+        version_file = Rails.root.join('VERSION')
+        return nil unless File.exist?(version_file)
+
+        File.read(version_file).strip.presence
+      end
+
+      def git_revision
+        `git rev-parse --short HEAD 2>/dev/null`.strip.presence
       end
     end
   end

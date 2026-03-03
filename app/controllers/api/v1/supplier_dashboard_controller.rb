@@ -1,6 +1,7 @@
 module Api
   module V1
     class SupplierDashboardController < ApiController
+      skip_after_action :verify_authorized
       include HttpCacheable
 
       before_action :authenticate_request

@@ -1,6 +1,7 @@
 module Api
   module V1
     class ClientBookingsController < ApiController
+      skip_after_action :verify_authorized
       # Пропускаем аутентификацию для клиентских записей (гостевые записи)
       # Но для create делаем опциональную аутентификацию - пытаемся аутентифицировать, но не требуем этого
       skip_before_action :authenticate_request, only: [:create, :show, :update, :cancel, :reschedule, :reschedule_suggestions, :check_availability_for_booking]

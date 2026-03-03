@@ -261,8 +261,8 @@ class Api::V1::OperatorServicePointsController < ApplicationController
   end
 
   def set_audit_context
-    Thread.current[:current_audit_user] = current_user
-    Thread.current[:current_ip_address] = request.remote_ip
-    Thread.current[:current_user_agent] = request.user_agent
+    CurrentContext.audit_user = current_user
+    CurrentContext.ip_address = request.remote_ip
+    CurrentContext.user_agent = request.user_agent
   end
 end

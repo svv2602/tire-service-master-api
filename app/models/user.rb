@@ -45,7 +45,8 @@ class User < ApplicationRecord
   validates :role_id, presence: true
   validates :first_name, presence: true, length: { minimum: 2, maximum: 50 }
   validates :last_name, length: { minimum: 2, maximum: 50, allow_blank: true }
-  validates :password, length: { minimum: 6 }, if: -> { password.present? }
+  validates :password, length: { minimum: 8 }, if: -> { password.present? }
+  validate :password_complexity, if: -> { password.present? }
   validates :preferred_locale, inclusion: { in: SUPPORTED_LOCALES }
   
   # ✅ НОВАЯ ВАЛИДАЦИЯ: email ИЛИ телефон обязателен
@@ -175,6 +176,35 @@ class User < ApplicationRecord
   def update_last_login!
     update_column(:last_login, Time.current)
   end
+
+  # Account lockout constants
+  MAX_FAILED_LOGIN_ATTEMPTS = 10
+  LOCKOUT_DURATION = 30.minutes
+
+  # Check if the account is currently locked
+  def locked?
+    locked_until.present? && locked_until > Time.current
+  end
+
+  # Record a failed login attempt; lock the account if threshold is exceeded
+  def record_failed_login!
+    new_count = (failed_login_attempts || 0) + 1
+    attrs = { failed_login_attempts: new_count }
+
+    if new_count >= MAX_FAILED_LOGIN_ATTEMPTS
+      attrs[:locked_until] = LOCKOUT_DURATION.from_now
+      Rails.logger.warn "AccountLockout: user_id=#{id} locked after #{new_count} failed attempts"
+    end
+
+    update_columns(attrs)
+  end
+
+  # Reset the failed login counter (called on successful login)
+  def reset_failed_login_attempts!
+    return if failed_login_attempts.to_i == 0 && locked_until.nil?
+
+    update_columns(failed_login_attempts: 0, locked_until: nil)
+  end
   
   def activate!
     update!(is_active: true)
@@ -231,6 +261,15 @@ class User < ApplicationRecord
   def email_or_phone_present
     if email.blank? && phone.blank?
       errors.add(:base, 'Необходимо указать email или номер телефона')
+    end
+  end
+
+  # Password must contain at least one letter and one digit
+  def password_complexity
+    return if password.blank?
+
+    unless password.match?(/[a-zA-Zа-яА-ЯіІїЇєЄґҐ]/) && password.match?(/\d/)
+      errors.add(:password, 'must contain at least one letter and one digit')
     end
   end
   

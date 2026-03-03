@@ -1,6 +1,7 @@
 module Api
   module V1
     class ClientFavoritePointsController < ApiController
+      skip_after_action :verify_authorized
       before_action :set_client
       before_action :set_favorite_point, only: [:show, :destroy]
       

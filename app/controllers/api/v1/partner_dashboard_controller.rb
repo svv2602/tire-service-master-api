@@ -4,6 +4,7 @@ module Api
   module V1
     # PartnerDashboardController - provides dashboard data for partners
     class PartnerDashboardController < ApiController
+      skip_after_action :verify_authorized
       include HttpCacheable
 
       before_action :authenticate_request

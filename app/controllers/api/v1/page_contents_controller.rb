@@ -1,6 +1,7 @@
 module Api
   module V1
     class PageContentsController < ApiController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request, only: [:index, :show, :sections]
       before_action :set_current_user_if_authenticated, only: [:index]
       before_action :authorize_admin, except: [:index, :show, :sections]

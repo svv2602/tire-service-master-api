@@ -1,4 +1,5 @@
 class Api::V1::BookingStatusesController < ApplicationController
+  skip_after_action :verify_authorized
   before_action :authenticate_request, except: [:index]
   
   # GET /api/v1/booking_statuses

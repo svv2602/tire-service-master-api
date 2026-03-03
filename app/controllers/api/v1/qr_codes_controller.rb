@@ -4,6 +4,7 @@ module Api
   module V1
     # Controller for QR code generation and verification
     class QrCodesController < ApplicationController
+      skip_after_action :verify_authorized
       before_action :authenticate_user!
       before_action :set_order, only: [:generate, :show]
       before_action :authorize_order_access!, only: [:generate, :show]

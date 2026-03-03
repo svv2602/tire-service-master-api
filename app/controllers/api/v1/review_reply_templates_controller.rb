@@ -4,6 +4,7 @@ module Api
   module V1
     # Controller for managing review reply templates
     class ReviewReplyTemplatesController < ApplicationController
+      skip_after_action :verify_authorized
       before_action :authenticate_user!
       before_action :authorize_partner_or_admin!
       before_action :set_template, only: [:show, :update, :destroy]

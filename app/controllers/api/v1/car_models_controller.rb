@@ -1,6 +1,7 @@
 module Api
   module V1
     class CarModelsController < ApiController
+      skip_after_action :verify_authorized
       before_action :set_car_brand, only: [:index, :create]
       before_action :set_car_model, only: [:show, :update, :destroy]
       before_action :authorize_admin, except: [:index, :show]

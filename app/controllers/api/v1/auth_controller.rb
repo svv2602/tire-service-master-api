@@ -6,6 +6,7 @@ module Api
     class AuthController < BaseController
       # Не требуем авторизации для входа и обновления токена
       skip_before_action :authenticate_request, only: [:login, :refresh]
+      skip_after_action :verify_authorized
       
       # POST /api/v1/auth/login
       # Универсальный вход для всех ролей пользователей
@@ -31,8 +32,19 @@ module Api
           return
         end
 
+        # Check account lockout before attempting authentication
+        if user.locked?
+          Rails.logger.debug "Auth#login: user_id=#{user.id} is locked until #{user.locked_until}"
+          render json: {
+            error: I18n.t('auth.errors.account_locked', default: 'Аккаунт временно заблокирован из-за множественных неудачных попыток входа. Попробуйте позже.'),
+            locked_until: user.locked_until
+          }, status: :forbidden
+          return
+        end
+
         unless user.authenticate(password)
-          Rails.logger.debug "Auth#login: authentication failed for user_id=#{user.id}"
+          user.record_failed_login!
+          Rails.logger.debug "Auth#login: authentication failed for user_id=#{user.id}, attempts=#{user.failed_login_attempts}"
           render json: { error: I18n.t('auth.errors.invalid_credentials') }, status: :unauthorized
           return
         end
@@ -43,14 +55,17 @@ module Api
           return
         end
 
+        # Reset failed login counter on successful authentication
+        user.reset_failed_login_attempts!
+
         # Обновляем время последнего входа
         user.update_last_login!
 
         # ✅ Логируем успешный вход в систему
         AuditLogJob.log_login(
           user_id: user.id,
-          ip_address: Thread.current[:current_ip_address],
-          user_agent: Thread.current[:current_user_agent],
+          ip_address: CurrentContext.ip_address,
+          user_agent: CurrentContext.user_agent,
           additional_data: {
             login_method: 'password',
             user_role: user.role,
@@ -166,19 +181,27 @@ module Api
         if current_user
           AuditLogJob.log_logout(
             user_id: current_user.id,
-            ip_address: Thread.current[:current_ip_address],
-            user_agent: Thread.current[:current_user_agent],
+            ip_address: CurrentContext.ip_address,
+            user_agent: CurrentContext.user_agent,
             additional_data: {
               logout_at: Time.current,
               user_role: current_user.role
             }
           )
         end
-        
+
+        # Revoke current tokens so they cannot be reused
+        TokenBlacklistService.revoke(cookies[:access_token]) if cookies[:access_token].present?
+        TokenBlacklistService.revoke(cookies[:refresh_token]) if cookies[:refresh_token].present?
+
+        # Also revoke token from Authorization header if present
+        header = request.headers['Authorization']
+        TokenBlacklistService.revoke(header.split(' ').last) if header.present?
+
         # ✅ Удаляем ВСЕ куки при выходе
         cookies.delete(:refresh_token)
         cookies.delete(:access_token)
-        
+
         Rails.logger.debug "Auth#logout: user logged out"
         render json: { message: I18n.t('auth.messages.logout_success') }, status: :ok
       end

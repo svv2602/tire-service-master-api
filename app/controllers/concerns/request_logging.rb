@@ -9,10 +9,10 @@ module RequestLogging
   private
 
   def log_request_start
-    Thread.current[:request_start_time] = Time.now
-    
+    CurrentContext.request_start_time = Time.now
+
     # Store request context for loggers
-    Thread.current[:request_context] = {
+    CurrentContext.request_context = {
       request_id: request.request_id,
       remote_ip: request.remote_ip,
       user_agent: request.user_agent,
@@ -22,8 +22,8 @@ module RequestLogging
 
     # Add user context if authenticated
     if defined?(current_user) && current_user
-      Thread.current[:request_context][:user_id] = current_user.id
-      
+      CurrentContext.request_context[:user_id] = current_user.id
+
       # Set user context for Sentry
       if defined?(Sentry)
         Sentry.set_user(id: current_user.id, email: current_user.email)
@@ -39,9 +39,9 @@ module RequestLogging
   end
 
   def log_request_end
-    start_time = Thread.current[:request_start_time]
+    start_time = CurrentContext.request_start_time
     duration = start_time ? ((Time.now - start_time) * 1000).round(2) : nil
-    
+
     # Log request end
     Rails.logger.info({
       event: 'request_completed',
@@ -51,11 +51,8 @@ module RequestLogging
       duration_ms: duration,
       content_type: response.content_type
     })
-    
-    # Clear thread local variables to prevent memory leaks
-    Thread.current[:request_start_time] = nil
-    Thread.current[:request_context] = nil
-    
+
+    # CurrentContext is auto-reset per request; no manual cleanup needed.
     # Clear Sentry context
     Sentry.set_user(nil) if defined?(Sentry)
   end

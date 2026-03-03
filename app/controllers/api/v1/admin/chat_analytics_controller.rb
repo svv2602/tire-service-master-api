@@ -6,6 +6,7 @@ module Api
       # Controller for chat analytics dashboard
       # Provides statistics and insights about tire chat usage
       class ChatAnalyticsController < BaseController
+      skip_after_action :verify_authorized
         before_action :authorize_admin
 
         # GET /api/v1/admin/chat_analytics/summary

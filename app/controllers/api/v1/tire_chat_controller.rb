@@ -3,6 +3,7 @@
 module Api
   module V1
     class TireChatController < BaseController
+      skip_after_action :verify_authorized
       # Public endpoints - no auth required (but try optional auth)
       skip_before_action :authenticate_request, only: [:message, :stream, :reset, :status, :history, :conversations, :resume]
       before_action :authenticate_optional, only: [:message, :conversations, :resume]

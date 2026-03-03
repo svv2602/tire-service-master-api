@@ -80,6 +80,40 @@ class AdminNotificationService
       log_error('notify_critical_deletion', e)
     end
 
+    # Notify admins when an audit log operation fails.
+    #
+    # @param error [StandardError] the error that occurred
+    def notify_audit_failure(error)
+      message = build_audit_failure_message(error)
+
+      deliver_to_all_channels(
+        subject: "Audit log failure: #{error.class.name}",
+        message: message
+      )
+    rescue StandardError => e
+      log_error('notify_audit_failure', e)
+    end
+
+    # Notify admins when a Sidekiq job permanently fails.
+    #
+    # @param job_class [String] class name of the failed job
+    # @param error_message [String] error message from the last attempt
+    # @param job_id [String] Sidekiq job ID
+    def notify_job_permanently_failed(job_class:, error_message:, job_id: nil)
+      message = build_job_failure_message(
+        job_class: job_class,
+        error_message: error_message,
+        job_id: job_id
+      )
+
+      deliver_to_all_channels(
+        subject: "Sidekiq job permanently failed: #{job_class}",
+        message: message
+      )
+    rescue StandardError => e
+      log_error('notify_job_permanently_failed', e)
+    end
+
     private
 
     # -------------------------------------------------------------------
@@ -122,6 +156,28 @@ class AdminNotificationService
 
         Deleted by: #{admin_label}
         Resource: #{resource_type} ##{resource_id}
+        Time: #{Time.current.strftime('%Y-%m-%d %H:%M:%S %Z')}
+      MSG
+    end
+
+    def build_audit_failure_message(error)
+      <<~MSG.strip
+        *Audit Log Failure*
+
+        Error: #{error.class.name}
+        Message: #{error.message}
+        Backtrace: #{error.backtrace&.first(3)&.join("\n")}
+        Time: #{Time.current.strftime('%Y-%m-%d %H:%M:%S %Z')}
+      MSG
+    end
+
+    def build_job_failure_message(job_class:, error_message:, job_id:)
+      <<~MSG.strip
+        *Sidekiq Job Permanently Failed*
+
+        Job: #{job_class}
+        Job ID: #{job_id || 'unknown'}
+        Error: #{error_message}
         Time: #{Time.current.strftime('%Y-%m-%d %H:%M:%S %Z')}
       MSG
     end

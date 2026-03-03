@@ -1,4 +1,7 @@
 class ServicePoint < ApplicationRecord
+  # Audit logging for tracking changes
+  include Auditable
+
   # Связи
   belongs_to :partner
   belongs_to :city

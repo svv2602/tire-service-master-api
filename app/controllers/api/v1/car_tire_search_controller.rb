@@ -2,6 +2,7 @@
 
 # Контроллер для поиска шин по автомобилю
 class Api::V1::CarTireSearchController < ApplicationController
+  skip_after_action :verify_authorized
   skip_before_action :authenticate_request  # Публичный API
   before_action :set_locale
 

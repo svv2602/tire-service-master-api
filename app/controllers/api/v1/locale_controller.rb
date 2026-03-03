@@ -1,6 +1,7 @@
 module Api
   module V1
     class LocaleController < ApplicationController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request
 
       # GET /api/v1/locale

@@ -3,6 +3,7 @@
 module Api
   module V1
     class OnboardingController < ApiController
+      skip_after_action :verify_authorized
       before_action :authenticate_request
 
       # GET /api/v1/onboarding/progress

@@ -3,6 +3,7 @@
 module Api
   module V1
     class ScheduleSlotsController < BaseController
+      skip_after_action :verify_authorized
       # Skip auth for public slot viewing and reservation endpoints
       skip_before_action :authenticate_request, only: [
         :index, :show, :available, :reserve, :release, :reserved, :extend_reservation

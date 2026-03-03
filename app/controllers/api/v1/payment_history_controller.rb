@@ -3,6 +3,7 @@
 module Api
   module V1
     class PaymentHistoryController < ApiController
+      skip_after_action :verify_authorized
       before_action :authenticate_request
       before_action :set_payment, only: [:show, :receipt, :refund_request]
 

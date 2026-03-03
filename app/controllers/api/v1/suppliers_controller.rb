@@ -1,6 +1,7 @@
 module Api
   module V1
     class SuppliersController < ApiController
+      skip_after_action :verify_authorized
       skip_before_action :authenticate_request, only: [:all_products, :upload_price]
       before_action :authenticate_supplier, only: [:upload_price]
       before_action :ensure_admin!, except: [:upload_price, :all_products]

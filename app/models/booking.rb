@@ -3,6 +3,8 @@ class Booking < ApplicationRecord
   include BookingStatuses
   # Подключаем интеграцию со слотами расписания
   include BookingSlotIntegration
+  # Audit logging for tracking changes
+  include Auditable
   
   # Связи
   belongs_to :client, optional: true  # ✅ Делаем связь опциональной для гостевых бронирований
