@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 class Api::V1::CountriesController < Api::V1::ApiController
-  before_action :authenticate_request!
+  skip_before_action :authenticate_request, only: [:index, :show]
+  before_action :authenticate_request!, except: [:index, :show]
   before_action :set_country, only: [:show, :update, :destroy]
-  before_action :authorize_admin_or_manager!
+  before_action :authorize_admin_or_manager!, except: [:index, :show]
 
   # GET /api/v1/countries
   def index

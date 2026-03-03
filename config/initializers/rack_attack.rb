@@ -11,7 +11,7 @@ class Rack::Attack
 
   # Safelist localhost in development and test environments
   safelist("allow-localhost") do |req|
-    Rails.env.development? || Rails.env.test? && req.ip == "127.0.0.1"
+    (Rails.env.development? || Rails.env.test?) && req.ip == "127.0.0.1"
   end
 
   # Login throttle: 5 requests per minute per IP

@@ -86,9 +86,9 @@ class AuditContextMiddleware
 
     begin
       decoded_token = JWT.decode(
-        token, 
-        Rails.application.credentials.secret_key_base, 
-        true, 
+        token,
+        Auth::JsonWebToken.secret_key,
+        true,
         { algorithm: 'HS256' }
       )
       user_id = decoded_token[0]['user_id']

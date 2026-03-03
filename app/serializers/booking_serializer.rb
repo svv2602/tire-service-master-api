@@ -102,76 +102,40 @@ class BookingSerializer < ActiveModel::Serializer
   end
 
   def service_point
-    begin
-      service_point_obj = object.service_point
-      
-      if service_point_obj.nil? && object.service_point_id.present?
-        Rails.logger.info "🔍 Attempting to load service_point ##{object.service_point_id} via direct query"
-        service_point_obj = ServicePoint.includes(:city, :partner).find_by(id: object.service_point_id)
-      end
-      
-      if service_point_obj
-        Rails.logger.info "✅ Service point loaded: #{service_point_obj.name}"
-        
-        {
-          id: service_point_obj.id,
-          name: service_point_obj.name,
-          address: service_point_obj.address,
-          phone: service_point_obj.contact_phone,
-          city: service_point_obj.city ? {
-            id: service_point_obj.city.id,
-            name: service_point_obj.city.name
-          } : nil,
-          partner_name: service_point_obj.partner&.name
-        }
+    sp = cached_service_point
+
+    if sp
+      {
+        id: sp.id,
+        name: sp.name,
+        address: sp.address,
+        phone: sp.contact_phone,
+        city: sp.city ? { id: sp.city.id, name: sp.city.name } : nil,
+        partner_name: sp.partner&.name
+      }
+    else
+      {
+        id: object.service_point_id,
+        name: I18n.t('bookings.service_point.unknown', id: object.service_point_id),
+        address: nil,
+        phone: nil,
+        city: nil,
+        partner_name: nil
+      }
+    end
+  end
+
+  private
+
+  # Reuse the preloaded service_point association (loaded via includes in controller).
+  # Falls back to a single query only when the association was not eager-loaded.
+  def cached_service_point
+    @cached_service_point ||= begin
+      sp = object.service_point
+      if sp.nil? && object.service_point_id.present?
+        ServicePoint.includes(:city, :partner).find_by(id: object.service_point_id)
       else
-        Rails.logger.warn "⚠️ Service point ##{object.service_point_id} not found, using fallback"
-        {
-          id: object.service_point_id,
-          name: I18n.t('bookings.service_point.unknown', id: object.service_point_id),
-          address: nil,
-          phone: nil,
-          city: nil,
-          partner_name: nil
-        }
-      end
-    rescue => e
-      Rails.logger.error "❌ Error loading service_point ##{object.service_point_id}: #{e.message}"
-      
-      begin
-        service_point_obj = ServicePoint.find_by(id: object.service_point_id)
-        if service_point_obj
-          {
-            id: service_point_obj.id,
-            name: service_point_obj.name || I18n.t('bookings.service_point.unknown', id: service_point_obj.id),
-            address: service_point_obj.address,
-            phone: service_point_obj.contact_phone,
-            city: service_point_obj.city_id ? {
-              id: service_point_obj.city_id,
-              name: City.find_by(id: service_point_obj.city_id)&.name || I18n.t('bookings.city.unknown', id: service_point_obj.city_id)
-            } : nil,
-            partner_name: service_point_obj.partner_id ? Partner.find_by(id: service_point_obj.partner_id)&.name : nil
-          }
-        else
-          {
-            id: object.service_point_id,
-            name: I18n.t('bookings.service_point.unknown', id: object.service_point_id),
-            address: nil,
-            phone: nil,
-            city: nil,
-            partner_name: nil
-          }
-        end
-      rescue => final_error
-        Rails.logger.error "❌ Final fallback failed: #{final_error.message}"
-        {
-          id: object.service_point_id,
-          name: I18n.t('bookings.service_point.unknown', id: object.service_point_id),
-          address: nil,
-          phone: nil,
-          city: nil,
-          partner_name: nil
-        }
+        sp
       end
     end
   end

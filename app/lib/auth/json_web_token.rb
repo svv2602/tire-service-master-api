@@ -62,7 +62,7 @@ module Auth
     end
 
     def self.refresh_access_token(refresh_token)
-      Rails.logger.info "🔄 Attempting to refresh token with key: #{secret_key[0..10]}..."
+      Rails.logger.info "Attempting to refresh token..."
       decoded = decode_refresh_token(refresh_token)
       Rails.logger.info "✅ Successfully decoded refresh token for user: #{decoded[:user_id]}"
       

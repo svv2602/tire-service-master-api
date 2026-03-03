@@ -97,6 +97,8 @@ module Api
       
       # POST /api/v1/partners/:partner_id/managers/create_test
       def create_test
+        return head :not_found unless Rails.env.development? || Rails.env.test?
+
         ActiveRecord::Base.transaction do
           # Создаем пользователя
           @user = User.create!(

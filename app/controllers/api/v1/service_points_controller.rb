@@ -10,9 +10,15 @@ module Api
       # GET /api/v1/service_points
       # GET /api/v1/partners/:partner_id/service_points
       def index
-        # Для запросов к конкретному партнеру требуем аутентификацию
+        # Require authentication for partner-scoped requests and verify ownership
         if params[:partner_id].present?
           authenticate_request unless current_user.present?
+
+          # IDOR protection: partners can only access their own service points
+          if current_user&.partner? && current_user.partner&.id != params[:partner_id].to_i
+            render json: { error: 'Forbidden' }, status: :forbidden
+            return
+          end
         end
         
         # Генерируем ключ кэша на основе параметров запроса

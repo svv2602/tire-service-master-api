@@ -7,6 +7,11 @@ module Api
         user = User.find_by(email: params[:email])
         
         if user&.authenticate(params[:password])
+          unless user.is_active?
+            render json: { error: I18n.t('auth.errors.account_blocked', default: 'Account is blocked') }, status: :forbidden
+            return
+          end
+
           access_token = Auth::JsonWebToken.encode_access_token(user_id: user.id)
           refresh_token = Auth::JsonWebToken.encode_refresh_token(user_id: user.id)
           

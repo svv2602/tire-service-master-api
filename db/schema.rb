@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_03_100003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -584,6 +584,15 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
     t.index ["sent_at"], name: "index_notifications_on_sent_at"
   end
 
+  create_table "onboarding_progresses", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.jsonb "completed_steps", default: [], null: false
+    t.boolean "welcome_shown", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_onboarding_progresses_on_user_id", unique: true
+  end
+
   create_table "operator_schedules", force: :cascade do |t|
     t.bigint "operator_id", null: false
     t.bigint "service_point_id", null: false
@@ -807,9 +816,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
     t.index ["tire_brand_id", "tire_diameter"], name: "idx_exceptions_on_brand_diameter"
     t.index ["tire_brand_id"], name: "index_partner_supplier_agreement_exceptions_on_tire_brand_id"
     t.index ["tire_diameter"], name: "index_partner_supplier_agreement_exceptions_on_tire_diameter"
-    t.check_constraint "application_scope::text = ANY (ARRAY['per_order'::character varying, 'per_item'::character varying]::text[])", name: "check_application_scope_valid"
+    t.check_constraint "application_scope::text = ANY (ARRAY['per_order'::character varying::text, 'per_item'::character varying::text])", name: "check_application_scope_valid"
     t.check_constraint "exception_type::text = 'fixed_amount'::text AND exception_amount IS NOT NULL AND exception_percentage IS NULL OR exception_type::text = 'percentage'::text AND exception_percentage IS NOT NULL AND exception_amount IS NULL", name: "check_exception_value_consistency"
-    t.check_constraint "exception_type::text = ANY (ARRAY['fixed_amount'::character varying, 'percentage'::character varying]::text[])", name: "check_exception_type_valid"
+    t.check_constraint "exception_type::text = ANY (ARRAY['fixed_amount'::character varying::text, 'percentage'::character varying::text])", name: "check_exception_type_valid"
   end
 
   create_table "partner_supplier_agreements", force: :cascade do |t|
@@ -832,9 +841,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
     t.index ["partner_id"], name: "index_partner_supplier_agreements_on_partner_id"
     t.index ["start_date"], name: "index_partner_supplier_agreements_on_start_date"
     t.index ["supplier_id"], name: "index_partner_supplier_agreements_on_supplier_id"
-    t.check_constraint "commission_type::text = ANY (ARRAY['fixed_amount'::character varying, 'percentage'::character varying, 'custom'::character varying]::text[])", name: "check_commission_type_valid"
-    t.check_constraint "commission_unit::text = ANY (ARRAY['per_order'::character varying, 'per_item'::character varying]::text[])", name: "check_commission_unit_valid"
-    t.check_constraint "order_types::text = ANY (ARRAY['cart_orders'::character varying, 'pickup_orders'::character varying, 'both'::character varying]::text[])", name: "check_order_types_valid"
+    t.check_constraint "commission_type::text = ANY (ARRAY['fixed_amount'::character varying::text, 'percentage'::character varying::text, 'custom'::character varying::text])", name: "check_commission_type_valid"
+    t.check_constraint "commission_unit::text = ANY (ARRAY['per_order'::character varying::text, 'per_item'::character varying::text])", name: "check_commission_unit_valid"
+    t.check_constraint "order_types::text = ANY (ARRAY['cart_orders'::character varying::text, 'pickup_orders'::character varying::text, 'both'::character varying::text])", name: "check_order_types_valid"
   end
 
   create_table "partners", force: :cascade do |t|
@@ -867,6 +876,29 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
     t.integer "sort_order", default: 0
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "payments", force: :cascade do |t|
+    t.string "payment_id", null: false, comment: "External payment provider ID"
+    t.string "provider", default: "liqpay", null: false, comment: "Payment provider name"
+    t.string "payment_type", null: false, comment: "booking or order"
+    t.bigint "entity_id", null: false, comment: "ID of related booking or order"
+    t.bigint "user_id", null: false
+    t.decimal "amount", precision: 10, scale: 2, null: false
+    t.string "currency", default: "UAH", null: false
+    t.string "status", default: "pending", null: false
+    t.string "description"
+    t.datetime "paid_at"
+    t.datetime "refunded_at"
+    t.decimal "refund_amount", precision: 10, scale: 2
+    t.string "receipt_url"
+    t.string "provider_payment_id", comment: "Provider internal transaction ID"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["payment_id"], name: "index_payments_on_payment_id", unique: true
+    t.index ["payment_type", "entity_id"], name: "index_payments_on_payment_type_and_entity_id"
+    t.index ["status"], name: "index_payments_on_status"
+    t.index ["user_id"], name: "index_payments_on_user_id"
   end
 
   create_table "price_list_items", force: :cascade do |t|
@@ -944,6 +976,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
     t.index ["is_active"], name: "index_push_subscriptions_on_is_active"
     t.index ["user_id", "is_active"], name: "index_push_subscriptions_on_user_id_and_is_active"
     t.index ["user_id"], name: "index_push_subscriptions_on_user_id"
+  end
+
+  create_table "refund_requests", force: :cascade do |t|
+    t.bigint "payment_id", null: false
+    t.bigint "user_id", null: false, comment: "User who requested the refund"
+    t.decimal "amount", precision: 10, scale: 2, null: false
+    t.string "reason", null: false
+    t.string "reason_category", null: false
+    t.boolean "is_full_refund", default: false, null: false
+    t.string "status", default: "pending", null: false
+    t.datetime "processed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["payment_id"], name: "index_refund_requests_on_payment_id"
+    t.index ["status"], name: "index_refund_requests_on_status"
+    t.index ["user_id"], name: "index_refund_requests_on_user_id"
   end
 
   create_table "regions", force: :cascade do |t|
@@ -1684,6 +1732,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
   add_foreign_key "managers", "partners"
   add_foreign_key "managers", "users"
   add_foreign_key "notifications", "notification_types"
+  add_foreign_key "onboarding_progresses", "users"
   add_foreign_key "operator_schedules", "operators"
   add_foreign_key "operator_schedules", "service_points"
   add_foreign_key "operator_schedules", "users", column: "confirmed_by_id"
@@ -1710,6 +1759,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
   add_foreign_key "partners", "cities"
   add_foreign_key "partners", "regions"
   add_foreign_key "partners", "users"
+  add_foreign_key "payments", "users"
   add_foreign_key "price_list_items", "price_lists"
   add_foreign_key "price_list_items", "services"
   add_foreign_key "price_lists", "partners"
@@ -1717,6 +1767,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_04_100005) do
   add_foreign_key "promotions", "partners"
   add_foreign_key "promotions", "service_points"
   add_foreign_key "push_subscriptions", "users"
+  add_foreign_key "refund_requests", "payments"
+  add_foreign_key "refund_requests", "users"
   add_foreign_key "review_reply_templates", "partners"
   add_foreign_key "review_request_tokens", "bookings"
   add_foreign_key "reviews", "bookings"

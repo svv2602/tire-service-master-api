@@ -1,4 +1,15 @@
+require 'sidekiq/web'
+
+# Protect Sidekiq Web UI with Basic Auth
+Sidekiq::Web.use Rack::Auth::Basic do |username, password|
+  ActiveSupport::SecurityUtils.secure_compare(username, ENV.fetch('SIDEKIQ_WEB_USER', 'admin')) &
+    ActiveSupport::SecurityUtils.secure_compare(password, ENV.fetch('SIDEKIQ_WEB_PASSWORD', 'password'))
+end
+
 Rails.application.routes.draw do
+  # Mount Sidekiq Web UI for queue monitoring
+  mount Sidekiq::Web => '/sidekiq'
+
   # Mount ActionCable for WebSocket connections
   mount ActionCable.server => '/cable'
 
@@ -70,6 +81,20 @@ Rails.application.routes.draw do
         post 'refund', action: :refund
       end
 
+      # Payment history (for frontend payment history page)
+      scope 'payments', controller: 'payment_history' do
+        get '/', action: :index, as: :payment_history_list
+        get '/:id', action: :show, as: :payment_history_detail
+        get '/:id/receipt', action: :receipt, as: :payment_history_receipt
+        post '/:payment_id/refund_request', action: :refund_request, as: :payment_refund_request
+      end
+
+      # Onboarding progress
+      scope 'onboarding', controller: 'onboarding' do
+        get 'progress', action: :progress
+        patch 'progress', action: :update_progress
+      end
+
       # QR-коды для выдачи заказов
       namespace :qr_codes do
         get ':order_type/:order_id', action: :show
@@ -123,6 +148,12 @@ Rails.application.routes.draw do
             post :deliver
             post :complete
             post :cancel
+          end
+          collection do
+            post :bulk_confirm, to: 'bulk_supplier_orders#bulk_confirm'
+            post :bulk_start_processing, to: 'bulk_supplier_orders#bulk_start_processing'
+            post :bulk_ship, to: 'bulk_supplier_orders#bulk_ship'
+            post :bulk_cancel, to: 'bulk_supplier_orders#bulk_cancel'
           end
         end
 
@@ -336,7 +367,7 @@ Rails.application.routes.draw do
       get 'service_points/cities', to: 'service_points#cities_with_service_points'
       
       # Клиентский API записей (включая гостевые записи)
-      resources :client_bookings, only: [:create, :show, :update, :destroy] do
+      resources :client_bookings, only: [:index, :create, :show, :update, :destroy] do
         member do
           post :cancel, to: 'client_bookings#cancel'
           post :reschedule, to: 'client_bookings#reschedule'
@@ -413,6 +444,10 @@ Rails.application.routes.draw do
         end
         collection do
           get :check_exists
+          post :bulk_activate, to: 'bulk_users#bulk_activate'
+          post :bulk_deactivate, to: 'bulk_users#bulk_deactivate'
+          post :bulk_suspend, to: 'bulk_users#bulk_suspend'
+          post :bulk_unsuspend, to: 'bulk_users#bulk_unsuspend'
         end
       end
       

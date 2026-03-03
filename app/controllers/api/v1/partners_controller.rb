@@ -3,7 +3,7 @@ module Api
     class PartnersController < ApiController
       before_action :set_partner, only: [:show, :update, :destroy, :toggle_active, :related_data]
       before_action :authorize_admin, except: [:index, :show, :create, :create_test, :toggle_active]
-      skip_before_action :authenticate_request, only: [:index, :create_test, :create]
+      skip_before_action :authenticate_request, only: [:create_test, :create]
       
       # GET /api/v1/partners
       def index
@@ -217,6 +217,8 @@ module Api
 
       # POST /api/v1/partners/create_test
       def create_test
+        return head :not_found unless Rails.env.development? || Rails.env.test?
+
         ActiveRecord::Base.transaction do
           # Создаем пользователя
           @user = User.create!(

@@ -10,7 +10,7 @@ module Api
         authorize Order
         
         @orders = apply_filters(policy_scope(Order))
-        @orders = @orders.includes(:order_items, :service_point, :supplier)
+        @orders = @orders.includes(:order_items, :supplier, service_point: :city)
                          .order(created_at: :desc)
                          .limit(params[:per_page] || 20)
                          .offset(((params[:page] || 1).to_i - 1) * (params[:per_page] || 20).to_i)

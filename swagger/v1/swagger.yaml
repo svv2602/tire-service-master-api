@@ -28,11 +28,33 @@ paths:
               schema:
                 type: object
                 properties:
-                  auth_token:
-                    type: string
                   message:
                     type: string
-                    example: Account created successfully
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      first_name:
+                        type: string
+                      last_name:
+                        type: string
+                      phone:
+                        type: string
+                  client:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      preferred_notification_method:
+                        type: string
+                  tokens:
+                    type: object
+                    properties:
+                      access:
+                        type: string
         '422':
           description: Некорректные параметры
           content:
@@ -40,45 +62,40 @@ paths:
               schema:
                 type: object
                 properties:
-                  errors:
-                    type: object
+                  error:
+                    type: string
+                  details:
+                    type: array
+                    items:
+                      type: string
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                client:
+                user:
                   type: object
                   properties:
+                    first_name:
+                      type: string
+                    last_name:
+                      type: string
                     email:
+                      type: string
+                      description: Email (optional for client registration)
+                    phone:
                       type: string
                     password:
                       type: string
                     password_confirmation:
                       type: string
-                    first_name:
-                      type: string
-                    last_name:
-                      type: string
-                    middle_name:
-                      type: string
-                    phone:
-                      type: string
-                    preferred_notification_method:
-                      type: string
-                      enum:
-                      - email
-                      - phone
-                      - push
-                    marketing_consent:
-                      type: boolean
                   required:
-                  - email
-                  - password
-                  - password_confirmation
                   - first_name
                   - last_name
+                  - phone
+                  - password
+                  - password_confirmation
   "/api/v1/clients/login":
     post:
       summary: Вход клиента в систему
@@ -151,21 +168,16 @@ paths:
             schema:
               type: object
               properties:
-                auth:
-                  type: object
-                  properties:
-                    login:
-                      type: string
-                      example: ivan@example.com
-                      description: Email или телефон
-                    password:
-                      type: string
-                      example: password123
-                  required:
-                  - login
-                  - password
+                email:
+                  type: string
+                  example: client@test.com
+                  description: Email клиента
+                password:
+                  type: string
+                  example: client123
               required:
-              - auth
+              - email
+              - password
   "/api/v1/clients/me":
     get:
       summary: Информация о текущем клиенте
@@ -259,15 +271,61 @@ paths:
           description: API работает
   "/api/v1/auth/login":
     post:
-      summary: Authenticates user and returns JWT token
+      summary: Универсальный вход в систему (все роли)
       tags:
       - Authentication
+      description: 'Авторизация пользователя по email или телефону. Формат тела запроса: {"auth": {"login": "...", "password": "..."}}'
       parameters: []
       responses:
         '200':
-          description: authentication successful
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      email:
+                        type: string
+                      first_name:
+                        type: string
+                      last_name:
+                        type: string
+                      role:
+                        type: string
+                      is_active:
+                        type: boolean
+                  tokens:
+                    type: object
+                    properties:
+                      access:
+                        type: string
+                  partner:
+                    type: object
+                    description: Present if user is a partner
+                    nullable: true
+                  operator:
+                    type: object
+                    description: Present if user is an operator
+                    nullable: true
+                  client:
+                    type: object
+                    description: Present if user is a client
+                    nullable: true
+                  supplier:
+                    type: object
+                    description: Present if user is a supplier
+                    nullable: true
         '401':
-          description: Invalid credentials
+          description: Неверные учетные данные
+        '404':
+          description: Пользователь не найден
       requestBody:
         content:
           application/json:
@@ -277,14 +335,15 @@ paths:
                 auth:
                   type: object
                   properties:
-                    email:
+                    login:
                       type: string
-                      example: user@example.com
+                      example: admin@test.com
+                      description: Email или телефон пользователя
                     password:
                       type: string
-                      example: password
+                      example: admin123
                   required:
-                  - email
+                  - login
                   - password
               required:
               - auth

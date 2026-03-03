@@ -58,16 +58,7 @@ Rails.application.config.after_initialize do
     end
   end
 
-  # Log cache stats periodically in production (every 5 minutes)
-  if Rails.env.production?
-    Thread.new do
-      loop do
-        sleep 300 # 5 minutes
-        CacheMonitoring.log_stats
-        CacheMonitoring.reset_stats!
-      rescue StandardError => e
-        Rails.logger.error "[CacheMonitoring] Thread error: #{e.message}"
-      end
-    end
-  end
+  # Periodic cache stats logging is handled by CacheMonitoringJob (via cron).
+  # The previous Thread.new approach was removed because threads spawned in
+  # initializers are lost when Puma forks worker processes.
 end

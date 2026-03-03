@@ -8,7 +8,7 @@ module Api
       # GET /api/v1/partners/:partner_id/orders
       def index
         orders_scope = apply_filters(base_orders_scope)
-        orders_scope = orders_scope.includes(:order_items, :service_point)
+        orders_scope = orders_scope.includes(:order_items, :supplier, service_point: :city)
                                   .order(created_at: :desc)
         
         paginated_data = paginate(orders_scope)

@@ -10,6 +10,7 @@ class ApplicationController < ActionController::API
   before_action :set_csrf_cookie
   
   # Обработка ошибок
+  rescue_from StandardError, with: :internal_server_error if Rails.env.production?
   rescue_from ActiveRecord::RecordNotFound, with: :not_found
   rescue_from ActiveRecord::RecordInvalid, with: :unprocessable_entity
   rescue_from Pundit::NotAuthorizedError, with: :forbidden
@@ -177,6 +178,12 @@ class ApplicationController < ActionController::API
   
   def bad_request
     render json: { error: 'Bad request - malformed parameters' }, status: :bad_request
+  end
+
+  def internal_server_error(exception)
+    Rails.logger.error "Unhandled exception: #{exception.class} - #{exception.message}"
+    Rails.logger.error exception.backtrace&.first(20)&.join("\n")
+    render json: { error: 'Internal server error' }, status: :internal_server_error
   end
   
   def json_request?

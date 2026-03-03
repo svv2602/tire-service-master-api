@@ -1,19 +1,11 @@
-# Настройки кэширования для повышения производительности системы ролей и изоляции данных
+# Performance caching configuration for role system and data isolation
+# NOTE: cache_store is configured in config/environments/*.rb (not here) to avoid duplication.
 
 Rails.application.configure do
-  # Включаем фрагментное кэширование в development для тестирования
+  # Enable fragment caching in development for testing purposes
   if Rails.env.development?
     config.action_controller.perform_caching = true
-    config.cache_store = :redis_cache_store, { url: ENV['REDIS_URL'] || 'redis://localhost:6379/1' }
-  end
-  
-  # В production используем Redis для кэширования
-  if Rails.env.production?
-    config.cache_store = :redis_cache_store, { 
-      url: ENV['REDIS_URL'],
-      expires_in: 1.hour,
-      namespace: 'tire_service_cache'
-    }
+    config.cache_store = :redis_cache_store, { url: ENV.fetch('REDIS_URL', 'redis://localhost:6379/1') }
   end
 end
 

@@ -24,7 +24,8 @@ module Api
         checks = {
           database: check_database,
           redis: check_redis,
-          sidekiq: check_sidekiq
+          sidekiq: check_sidekiq,
+          openai: check_openai
         }
 
         overall_status = checks.values.all? { |c| c[:status] == 'ok' } ? 'ok' : 'degraded'
@@ -136,6 +137,28 @@ module Api
         }
       rescue StandardError => e
         Rails.logger.error "[Health] Sidekiq check failed: #{e.message}"
+        {
+          status: 'error',
+          error: e.message
+        }
+      end
+
+      # Check OpenAI API connectivity
+      def check_openai
+        return { status: 'not_configured' } unless ENV['OPENAI_API_KEY'].present?
+
+        start_time = Time.current
+        client = OpenAI::Client.new
+        response = client.models.list
+        latency_ms = ((Time.current - start_time) * 1000).round(2)
+
+        {
+          status: 'ok',
+          models_available: response['data']&.length || 0,
+          latency_ms: latency_ms
+        }
+      rescue StandardError => e
+        Rails.logger.error "[Health] OpenAI check failed: #{e.message}"
         {
           status: 'error',
           error: e.message

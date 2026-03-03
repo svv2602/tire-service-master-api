@@ -9,6 +9,49 @@ module Api
       before_action :set_booking, only: [:show, :update, :cancel, :reschedule, :reschedule_suggestions, :assign_to_client]
       before_action :validate_client_data, only: [:create], unless: -> { ENV['SWAGGER_DRY_RUN'] }
       
+      # GET /api/v1/client_bookings
+      # Получение списка бронирований текущего клиента
+      def index
+        unless current_user
+          render json: { error: 'Authentication required' }, status: :unauthorized
+          return
+        end
+
+        client = current_user.client
+        unless client
+          render json: { bookings: [], pagination: { current_page: 1, total_pages: 0, total_count: 0, per_page: 20 } }
+          return
+        end
+
+        bookings = client.bookings.includes(
+          :car_type, :service_category, :payment_status,
+          { service_point: [:city, :partner] },
+          { car: [:brand, :model] },
+          { booking_services: :service }
+        ).order(booking_date: :desc, start_time: :desc)
+
+        # Filter by status
+        bookings = bookings.where(status: params[:status]) if params[:status].present?
+
+        # Pagination
+        page = [params[:page].to_i, 1].max
+        per_page = [[params[:per_page].to_i, 20].max, 100].min
+        total_count = bookings.count
+        total_pages = [(total_count.to_f / per_page).ceil, 1].max
+
+        bookings = bookings.offset((page - 1) * per_page).limit(per_page)
+
+        render json: {
+          bookings: bookings.map { |b| format_booking_response(b) },
+          pagination: {
+            current_page: page,
+            total_pages: total_pages,
+            total_count: total_count,
+            per_page: per_page
+          }
+        }
+      end
+
       # POST /api/v1/client_bookings
       # Создание записи клиентом (включая гостевые записи)
       def create

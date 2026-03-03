@@ -36,4 +36,14 @@ end
 # Ежедневные сводки для партнеров
 every 1.day, at: '9:00 pm' do
   runner "NotificationService.send_daily_summaries"
-end 
+end
+
+# Automatic audit log rotation -- delete entries older than 90 days
+every 1.day, at: '3:00 am' do
+  runner "AuditLogCleanupJob.perform_later"
+end
+
+# Periodic cache monitoring stats logging (replaces Thread.new in initializer)
+every 5.minutes do
+  runner "CacheMonitoringJob.perform_later"
+end

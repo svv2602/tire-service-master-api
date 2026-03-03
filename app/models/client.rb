@@ -6,6 +6,7 @@ class Client < ApplicationRecord
   has_many :reviews, dependent: :nullify
   has_many :favorite_points, class_name: 'ClientFavoritePoint', dependent: :destroy
   has_many :favorite_service_points, through: :favorite_points, source: :service_point
+  has_many :notifications, -> { where(recipient_type: 'Client') }, foreign_key: :recipient_id, dependent: :destroy
   
   # Валидации
   validates :user_id, presence: true, uniqueness: true

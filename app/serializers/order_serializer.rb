@@ -43,20 +43,20 @@ class OrderSerializer
       formatted_order_date: order.order_date&.strftime('%d.%m.%Y %H:%M'),
       formatted_phone: formatted_phone,
       
-      # Информация о сервисной точке
-      service_point_name: order.service_point&.name,
-      service_point_city: order.service_point&.city&.name,
-      service_point_address: order.service_point&.address,
-      
-      # Информация о поставщике
+      # Service point info (uses preloaded association via includes)
+      service_point_name: cached_service_point&.name,
+      service_point_city: cached_service_point&.city&.name,
+      service_point_address: cached_service_point&.address,
+
+      # Supplier info (uses preloaded association via includes)
       supplier_name: order.supplier&.name,
       supplier_firm_id: order.supplier&.firm_id,
-      
-      # Количество товаров
-      items_count: order.order_items.count,
+
+      # Items count — .size uses preloaded collection, .count always hits DB
+      items_count: order.order_items.size,
       items_summary: items_summary,
-      
-      # Товары заказа
+
+      # Order items (reuse the already-loaded collection)
       order_items: order.order_items.map { |item| OrderItemSerializer.new(item).as_json }
     }
   end
@@ -101,8 +101,13 @@ class OrderSerializer
   end
   
   def items_summary
-    order.order_items.limit(3).map do |item|
+    items = order.order_items
+    items.first(3).map do |item|
       "#{item.name} (#{item.quantity} шт.)"
-    end.join(', ') + (order.order_items.count > 3 ? '...' : '')
+    end.join(', ') + (items.size > 3 ? '...' : '')
+  end
+
+  def cached_service_point
+    @cached_service_point ||= order.service_point
   end
 end 

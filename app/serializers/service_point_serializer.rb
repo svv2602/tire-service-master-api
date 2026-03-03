@@ -18,11 +18,11 @@ class ServicePointSerializer < ActiveModel::Serializer
   end
   
   def posts_count
-    object.service_posts.active.count
+    cached_active_posts.size
   end
-  
+
   def service_posts_summary
-    object.service_posts.active.order(:post_number).map do |post|
+    cached_active_posts.map do |post|
       {
         id: post.id,
         post_number: post.post_number,
@@ -32,12 +32,19 @@ class ServicePointSerializer < ActiveModel::Serializer
       }
     end
   end
-  
+
   def service_posts
     locale = instance_options[:locale]
     object.service_posts.order(:post_number).map do |post|
       ServicePostSerializer.new(post, locale: locale).as_json
     end
+  end
+
+  private
+
+  # Memoized collection of active posts — avoids 3 duplicate queries per service point.
+  def cached_active_posts
+    @cached_active_posts ||= object.service_posts.active.order(:post_number)
   end
   
   def services

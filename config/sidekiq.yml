@@ -1,0 +1,11 @@
+# Sidekiq configuration
+# See: https://github.com/sidekiq/sidekiq/wiki/Advanced-Options
+
+:concurrency: 5
+
+:queues:
+  - [default, 5]
+  - [notifications, 4]
+  - [schedules, 3]
+  - [audit, 2]
+  - [reports, 1]
