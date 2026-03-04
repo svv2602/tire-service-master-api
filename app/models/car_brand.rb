@@ -1,4 +1,6 @@
 class CarBrand < ApplicationRecord
+  include CacheVersioning
+
   # Active Storage
   has_one_attached :logo
 
@@ -6,11 +8,14 @@ class CarBrand < ApplicationRecord
   has_many :car_models, foreign_key: 'brand_id', dependent: :destroy
   has_many :client_cars, foreign_key: 'brand_id', dependent: :restrict_with_error
   has_many :car_tire_configurations, foreign_key: 'brand_id', dependent: :destroy
-  
+
   # Валидации
   validates :name, presence: true, uniqueness: true
   validate :acceptable_logo
-  
+
+  # Cache invalidation on data changes
+  after_commit :increment_cache_version
+
   # Скоупы
   scope :active, -> { where(is_active: true) }
   scope :alphabetical, -> { order(:name) }

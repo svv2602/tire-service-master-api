@@ -69,7 +69,7 @@ class CarSearchLlmService
 
     begin
       response = @openai_service.chat_completion("#{CAR_SEARCH_PROMPT}#{query}", {
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         max_tokens: 300,
         temperature: 0.1
       })

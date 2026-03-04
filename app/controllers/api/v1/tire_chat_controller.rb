@@ -14,6 +14,24 @@ module Api
 
       # Process user message
       def message
+        # Phase-02: Quota check for AI chat
+        quota_result = AiQuotaService.check_and_increment!(
+          service_name: 'tire_chat',
+          user: current_user,
+          ip_address: request.remote_ip
+        )
+
+        unless quota_result[:allowed]
+          render json: {
+            success: false,
+            error: 'Превышен лимит сообщений. Попробуйте позже.',
+            retry_after: quota_result[:retry_after],
+            limit: quota_result[:limit],
+            remaining: 0
+          }, status: :too_many_requests
+          return
+        end
+
         locale = params[:locale] || 'ru'
         I18n.with_locale(locale.to_sym) do
           chat_service = initialize_chat_service(locale)

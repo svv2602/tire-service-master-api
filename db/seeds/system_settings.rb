@@ -43,11 +43,11 @@ integration_settings = [
   },
   {
     key: 'openai_model',
-    value: 'gpt-4o-mini',
+    value: 'gpt-4.1-mini',
     description: 'Модель OpenAI для обработки запросов',
     category: 'integrations',
     setting_type: 'select',
-    default_value: 'gpt-4o-mini'
+    default_value: 'gpt-4.1-mini'
   },
   {
     key: 'openai_max_tokens',

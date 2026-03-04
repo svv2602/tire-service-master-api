@@ -1,6 +1,6 @@
 class NotificationChannelSetting < ApplicationRecord
   # Константы для типов каналов
-  CHANNEL_TYPES = %w[email push telegram].freeze
+  CHANNEL_TYPES = %w[email push telegram sms].freeze
   
   # Валидации
   validates :channel_type, presence: true, 
@@ -46,10 +46,12 @@ class NotificationChannelSetting < ApplicationRecord
     case channel_type
     when 'email'
       'Email'
-    when 'push' 
+    when 'push'
       'Push уведомления'
     when 'telegram'
       'Telegram'
+    when 'sms'
+      'SMS'
     else
       channel_type.humanize
     end

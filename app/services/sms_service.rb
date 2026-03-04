@@ -74,10 +74,11 @@ class SmsService
 
     def build_booking_reminder_message(booking)
       service_point_name = booking.service_point&.name || 'СТО'
+      date = booking.booking_date.strftime('%d.%m.%Y')
       time = booking.start_time.strftime('%H:%M')
       address = booking.service_point&.address || ''
 
-      "Нагадуємо: завтра о #{time} ви записані на #{service_point_name}.\nАдреса: #{address}"
+      "Nahadvuyemo: #{date} o #{time} vy zapysani na #{service_point_name}.\nAdresa: #{address}\nDlya vidminy zv'yazhitsya: #{booking.service_point&.contact_phone || ''}"
     end
 
     def build_booking_cancelled_message(booking)

@@ -70,27 +70,14 @@ class Booking < ApplicationRecord
   after_commit :broadcast_new_booking, on: :create, unless: -> { skip_notifications }
   after_commit :broadcast_status_change, on: :update, if: -> { saved_change_to_status? && !skip_notifications }
   after_commit :broadcast_booking_update, on: :update, if: -> { !saved_change_to_status? && !skip_notifications }
-  
-  # Коллбэки для отправки уведомлений
-  after_create :send_creation_notification, unless: -> { skip_notifications }
-  after_create :send_admin_new_booking_notification, unless: -> { skip_notifications }
-  after_create :send_telegram_creation_notification, unless: -> { skip_notifications }
-  after_create :send_partner_new_booking_notification, unless: -> { skip_notifications }
-  
-  after_update :send_status_change_notification, if: -> { saved_change_to_status? && !skip_notifications }
-  after_update :send_status_change_admin_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
-  after_update :send_telegram_cancellation_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
-  after_update :send_partner_booking_cancelled_notification, if: -> { booking_cancelled? && saved_change_to_status? && !skip_notifications }
-  
-  after_update :send_time_change_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
-  after_update :send_time_change_admin_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
-  after_update :send_telegram_time_change_notification, if: -> { (saved_change_to_start_time? || saved_change_to_booking_date?) && !skip_notifications }
-  
-  after_update :send_service_point_change_notification, if: -> { saved_change_to_service_point_id? && !skip_notifications }
-  after_update :send_service_point_change_admin_notification, if: -> { saved_change_to_service_point_id? && !skip_notifications }
-  after_update :send_telegram_location_change_notification, if: -> { saved_change_to_service_point_id? && !skip_notifications }
-  
-  after_update :send_client_info_change_notification, if: -> { client_info_changed? && !skip_notifications }
+
+  # Single event-based notification publisher (replaces 15+ individual callbacks).
+  # Detects the most important event from saved_changes and dispatches
+  # all relevant notifications via BookingNotificationJob.
+  after_commit :publish_events, unless: -> { skip_notifications }
+
+  # Auto-refund when a paid booking is cancelled
+  after_commit :schedule_auto_refund, on: :update, if: -> { saved_change_to_status? && cancelled_status? }
   
   # Инициализация статуса при создании
   before_validation :initialize_status, on: :create, unless: -> { status.present? }
@@ -98,6 +85,16 @@ class Booking < ApplicationRecord
   # Автоматическая установка флага служебного бронирования
   before_validation :set_service_booking_flag
   
+  # Eager loading scope to avoid N+1 queries in list endpoints
+  scope :with_associations, -> {
+    includes(
+      :car_type, :service_category, :payment_status,
+      { service_point: [:city, :partner] },
+      { client: :user },
+      { booking_services: :service }
+    )
+  }
+
   # Скоупы (обновленные для работы со строковыми статусами)
   scope :upcoming, -> { where('booking_date >= ?', Date.current) }
   scope :past, -> { where('booking_date < ?', Date.current) }
@@ -309,44 +306,49 @@ class Booking < ApplicationRecord
   def overlaps_with_other_bookings?
     overlapping = self.class.overlapping_time(booking_date, start_time, end_time)
                      .where(service_point_id: service_point_id)
-                     
+
     # Исключаем текущее бронирование если оно уже существует
     overlapping = overlapping.where.not(id: id) if persisted?
-    
+
     overlapping.exists?
   end
-  
+
+  # Check if booking status is cancelled (used by ActionCable broadcasts and publisher)
+  def booking_cancelled?
+    CANCELLED_STATUSES.map(&:to_s).include?(status)
+  end
+
   private
-  
+
   def end_time_after_start_time
     return unless start_time && end_time
-    
+
     # В слотовой архитектуре допускаем end_time = start_time
     if end_time < start_time
       errors.add(:end_time, I18n.t('errors.after_start_time'))
     end
   end
-  
+
   def car_belongs_to_client
     return unless car_id.present?
     return unless client_id.present?  # ✅ Пропускаем валидацию для гостевых бронирований
-    
+
     unless car&.client_id == client_id
       errors.add(:car_id, I18n.t('bookings.errors.invalid_car'))
     end
   end
-  
+
   def booking_time_available
     return if skip_availability_check
     return unless service_point_id && booking_date && start_time && end_time
-    
+
     # Преобразуем время в правильный формат для проверки
     start_datetime = if start_time.is_a?(String)
       Time.parse("#{booking_date} #{start_time}")
     else
       Time.parse("#{booking_date} #{start_time.strftime('%H:%M')}")
     end
-    
+
     # Проверяем что время в рабочих часах с учетом категории услуг
     availability = DynamicAvailabilityService.check_availability_at_time(
       service_point_id,
@@ -356,11 +358,11 @@ class Booking < ApplicationRecord
       exclude_booking_id: persisted? ? id : nil,
       category_id: service_category_id
     )
-    
+
     unless availability[:available]
       errors.add(:base, I18n.t('bookings.errors.invalid_time'))
     end
-    
+
     # Проверяем пересечения с другими бронированиями
     if overlaps_with_other_bookings?
       available_posts = self.class.available_posts_at_time(service_point_id, booking_date, start_time)
@@ -369,221 +371,25 @@ class Booking < ApplicationRecord
       end
     end
   end
-  
+
   def service_category_matches_service_point
     return unless service_category_id.present? && service_point_id.present?
-    
+
     unless service_point.supports_category?(service_category_id)
       errors.add(:service_category_id, I18n.t('bookings.errors.invalid_service_point'))
     end
   end
-  
+
   def initialize_status
     self.status = 'pending' if status.nil?
   end
-  
-  def send_creation_notification
-    BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_created])
-  end
-  
-  def send_status_change_notification
-    case status
-    when 'confirmed'
-      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_confirmed])
-    when 'cancelled_by_client', 'cancelled_by_partner'
-      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_cancelled])
-    when 'completed'
-      BookingNotificationJob.perform_later(id, NotificationService::NOTIFICATION_TYPES[:booking_completed])
-    end
-  end
-  
-  # Проверяем изменения в данных клиента
-  def client_info_changed?
-    saved_change_to_service_recipient_first_name? ||
-    saved_change_to_service_recipient_last_name? ||
-    saved_change_to_service_recipient_phone? ||
-    saved_change_to_service_recipient_email?
-  end
 
-  # Отправка уведомления об изменении времени/даты
-  def send_time_change_notification
-    Rails.logger.info "📅 Отправка уведомления об изменении времени для бронирования ##{id}"
-    BookingNotificationJob.perform_later(id, 'booking_time_changed')
-  end
-
-  # Отправка уведомления об изменении сервисной точки  
-  def send_service_point_change_notification
-    Rails.logger.info "📍 Отправка уведомления об изменении сервисной точки для бронирования ##{id}"
-    BookingNotificationJob.perform_later(id, 'booking_location_changed')
-  end
-
-  # Отправка уведомления об изменении данных клиента
-  def send_client_info_change_notification
-    Rails.logger.info "👤 Отправка уведомления об изменении данных клиента для бронирования ##{id}"
-    BookingNotificationJob.perform_later(id, 'booking_client_info_changed')
-    # Также уведомляем администраторов об изменении
-    send_admin_booking_changed_notification
-  end
-
-  # Админские уведомления для конкретных изменений
-  def send_status_change_admin_notification
-    send_admin_booking_cancelled_notification if booking_cancelled?
-  end
-
-  def send_time_change_admin_notification
-    send_admin_booking_changed_notification
-  end
-
-  def send_service_point_change_admin_notification
-    send_admin_booking_changed_notification
-  end
-
-  # Проверка статуса отмены
-  def booking_cancelled?
-    CANCELLED_STATUSES.map(&:to_s).include?(status)
-  end
-
-  # === АДМИНСКИЕ УВЕДОМЛЕНИЯ ===
-
-  # Отправка уведомления администраторам о новом бронировании
-  def send_admin_new_booking_notification
-    Rails.logger.info "🔔 Отправка админского уведомления о новом бронировании ##{id}"
-    admin_emails.each do |email|
-      BookingNotificationJob.perform_later(id, 'admin_new_booking', email)
-    end
-  end
-
-  # Отправка уведомления администраторам об изменении бронирования
-  def send_admin_booking_changed_notification
-    Rails.logger.info "🔔 Отправка админского уведомления об изменении бронирования ##{id}"
-    admin_emails.each do |email|
-      BookingNotificationJob.perform_later(id, 'admin_booking_changed', email)
-    end
-  end
-
-  # Отправка уведомления администраторам об отмене бронирования
-  def send_admin_booking_cancelled_notification
-    Rails.logger.info "🔔 Отправка админского уведомления об отмене бронирования ##{id}"
-    admin_emails.each do |email|
-      BookingNotificationJob.perform_later(id, 'admin_booking_cancelled', email)
-    end
-  end
-
-  # === TELEGRAM УВЕДОМЛЕНИЯ ===
-
-  # Отправка Telegram уведомления о создании бронирования
-  def send_telegram_creation_notification
-    Rails.logger.info "📱 Отправка Telegram уведомления о создании бронирования ##{id}"
-    BookingNotificationJob.perform_later(id, 'telegram_booking_created')
-  end
-
-  # Отправка Telegram уведомления об отмене бронирования
-  def send_telegram_cancellation_notification
-    Rails.logger.info "📱 Отправка Telegram уведомления об отмене бронирования ##{id}"
-    BookingNotificationJob.perform_later(id, 'telegram_booking_cancelled')
-  end
-
-  # Отправка Telegram уведомления об изменении времени
-  def send_telegram_time_change_notification
-    Rails.logger.info "📱 Отправка Telegram уведомления об изменении времени бронирования ##{id}"
-    BookingNotificationJob.perform_later(id, 'telegram_booking_time_changed')
-  end
-
-  # Отправка Telegram уведомления об изменении места
-  def send_telegram_location_change_notification
-    Rails.logger.info "📱 Отправка Telegram уведомления об изменении места бронирования ##{id}"
-    BookingNotificationJob.perform_later(id, 'telegram_booking_location_changed')
-  end
-
-  # === ПАРТНЁРСКИЕ УВЕДОМЛЕНИЯ ===
-
-  # Отправка уведомления партнёру о новой записи
-  def send_partner_new_booking_notification
-    Rails.logger.info "🔔 Отправка уведомления партнёру о новом бронировании ##{id}"
-
-    # Получаем партнёра через сервисную точку
-    partner = service_point&.partner
-    return unless partner&.user
-
-    # Email уведомление партнёру
-    BookingNotificationJob.perform_later(id, 'partner_new_booking', partner.user.email)
-
-    # Push уведомление партнёру
-    BookingNotificationJob.perform_later(id, 'push_partner_new_booking')
-
-    # Telegram уведомление партнёру
-    BookingNotificationJob.perform_later(id, 'telegram_partner_new_booking')
-
-    # Также уведомляем операторов сервисной точки
-    send_operators_new_booking_notification
-  end
-
-  # Отправка уведомления операторам о новой записи
-  def send_operators_new_booking_notification
-    return unless service_point
-
-    service_point.active_operators.each do |operator|
-      next unless operator.user
-
-      Rails.logger.info "🔔 Отправка уведомления оператору #{operator.id} о новом бронировании ##{id}"
-
-      # Push уведомление оператору
-      BookingNotificationJob.perform_later(id, 'push_operator_new_booking', operator.user.id.to_s)
-    end
-  end
-
-  # Отправка уведомления партнёру об отмене бронирования
-  def send_partner_booking_cancelled_notification
-    Rails.logger.info "🔔 Отправка уведомления партнёру об отмене бронирования ##{id}"
-
-    # Получаем партнёра через сервисную точку
-    partner = service_point&.partner
-    return unless partner&.user
-
-    # Email уведомление партнёру
-    BookingNotificationJob.perform_later(id, 'partner_booking_cancelled', partner.user.email)
-
-    # Push уведомление партнёру
-    BookingNotificationJob.perform_later(id, 'push_partner_booking_cancelled')
-
-    # Telegram уведомление партнёру
-    BookingNotificationJob.perform_later(id, 'telegram_partner_booking_cancelled')
-
-    # Также уведомляем операторов
-    send_operators_booking_cancelled_notification
-  end
-
-  # Отправка уведомления операторам об отмене бронирования
-  def send_operators_booking_cancelled_notification
-    return unless service_point
-
-    service_point.active_operators.each do |operator|
-      next unless operator.user
-
-      Rails.logger.info "🔔 Отправка уведомления оператору #{operator.id} об отмене бронирования ##{id}"
-
-      # Push уведомление оператору
-      BookingNotificationJob.perform_later(id, 'push_operator_booking_cancelled', operator.user.id.to_s)
-    end
-  end
-
-  private
-
-  # Получение списка email администраторов
-  def admin_emails
-    # Можно настроить через ENV или базу данных
-    admin_list = ENV['ADMIN_NOTIFICATION_EMAILS']&.split(',') || ['admin@tireservice.ua']
-    
-    # Добавляем email администраторов из базы данных через связь с User
-    if defined?(Administrator)
-      db_admin_emails = User.joins(:administrator)
-                           .where(is_active: true, email_verified: true)
-                           .where.not(email: nil)
-                           .pluck(:email)
-      admin_list.concat(db_admin_emails)
-    end
-    
-    admin_list.compact.uniq
+  # Publish notification events via BookingEventPublisher.
+  # Single entry point replacing 15+ individual notification callbacks.
+  def publish_events
+    BookingEventPublisher.call(self)
+  rescue StandardError => e
+    Rails.logger.error "[Booking] Failed to publish events for booking ##{id}: #{e.message}"
   end
 
   # Автоматическая установка флага служебного бронирования
@@ -595,76 +401,22 @@ class Booking < ApplicationRecord
     self.is_service_booking = user.admin? || user.partner? || user.manager? || user.operator?
   end
   
-  # Автоподтверждение бронирований на основе настроек сервисной точки и роли пользователя
+  # Auto-confirmation delegated to BookingConfirmationService
+  # Evaluates decision tree: admin/partner -> immediate, auto_confirm_enabled -> check delay,
+  # category auto_confirmation -> immediate, otherwise -> pending
   def auto_confirm_if_needed
-    Rails.logger.info "=== АВТОПОДТВЕРЖДЕНИЕ БРОНИРОВАНИЯ ID=#{id} ==="
-
-    # Если бронирование уже подтверждено, ничего не делаем
-    if status == 'confirmed'
-      Rails.logger.info "Бронирование уже подтверждено, пропускаем"
-      return
-    end
-
-    # Определяем, является ли это служебным бронированием (от админа/партнера)
-    is_admin_booking = client&.user&.admin? || client&.user&.partner?
-
-    Rails.logger.info "Тип бронирования: #{is_admin_booking ? 'админское/партнерское' : 'клиентское'}"
-    Rails.logger.info "Категория услуг ID: #{service_category_id}"
-
-    should_confirm = false
-    use_delayed_confirm = false
-
-    if is_admin_booking
-      # Админские/партнерские бронирования всегда подтверждаются автоматически
-      should_confirm = true
-      Rails.logger.info "Подтверждаем: админское/партнерское бронирование"
-    elsif service_point.auto_confirm_enabled?
-      # Проверяем глобальные настройки автоматизации сервисной точки
-      delay_minutes = service_point.auto_confirm_delay_minutes
-      if delay_minutes.positive?
-        use_delayed_confirm = true
-        Rails.logger.info "Отложенное подтверждение: через #{delay_minutes} минут"
-      else
-        should_confirm = true
-        Rails.logger.info "Подтверждаем: автоподтверждение включено для точки"
-      end
-    elsif service_category_id && service_point.auto_confirmation_enabled_for_category?(service_category_id)
-      # Клиентские бронирования подтверждаются если для категории включено автоподтверждение
-      should_confirm = true
-      Rails.logger.info "Подтверждаем: для категории #{service_category_id} включено автоподтверждение"
-    else
-      Rails.logger.info "Не подтверждаем: клиентское бронирование, автоподтверждение выключено"
-    end
-
-    if use_delayed_confirm
-      # Планируем отложенное подтверждение через фоновую задачу
-      service_point.schedule_auto_confirm(self)
-      Rails.logger.info "📅 Запланировано отложенное подтверждение"
-    elsif should_confirm
-      # Обновляем статус без вызова callbacks (чтобы избежать зацикливания)
-      update_column(:status, 'confirmed')
-      Rails.logger.info "✅ Статус изменен на 'confirmed'"
-
-      # Отправляем SMS если включено в настройках
-      send_auto_confirm_sms if service_point.send_confirmation_sms_enabled?
-    else
-      Rails.logger.info "⏳ Статус остается 'pending'"
-    end
-  rescue StandardError => e
-    Rails.logger.error "❌ Ошибка при автоподтверждении бронирования ID=#{id}: #{e.message}"
-    Rails.logger.error e.backtrace.join("\n")
+    BookingConfirmationService.call(self)
   end
 
-  # Send SMS on auto-confirm
-  def send_auto_confirm_sms
-    return unless service_recipient_phone.present?
+  # === AUTO-REFUND ON CANCELLATION ===
 
-    begin
-      SmsService.send_booking_confirmation(service_recipient_phone, self)
-      Rails.logger.info "📱 SMS подтверждения отправлено на #{service_recipient_phone}"
-    rescue StandardError => e
-      Rails.logger.error "❌ Ошибка отправки SMS: #{e.message}"
-    end
+  # Schedule a background job to refund payment if booking was paid
+  def schedule_auto_refund
+    return unless payment_status_id == PaymentStatus.paid_id
+
+    PaymentAutoRefundJob.perform_later(id)
+  rescue StandardError => e
+    Rails.logger.error "[Booking] Failed to schedule auto-refund: #{e.message}"
   end
 
   # === ACTIONCABLE BROADCASTS ===
@@ -672,6 +424,7 @@ class Booking < ApplicationRecord
   # Broadcast new booking to partner via WebSocket
   def broadcast_new_booking
     BookingsChannel.broadcast_new_booking(self)
+    AdminMetricsChannel.broadcast_new_booking(self)
   rescue StandardError => e
     Rails.logger.error "[ActionCable] Failed to broadcast new booking: #{e.message}"
   end
@@ -683,6 +436,7 @@ class Booking < ApplicationRecord
     else
       BookingsChannel.broadcast_status_change(self)
     end
+    AdminMetricsChannel.broadcast_booking_status_change(self)
   rescue StandardError => e
     Rails.logger.error "[ActionCable] Failed to broadcast status change: #{e.message}"
   end

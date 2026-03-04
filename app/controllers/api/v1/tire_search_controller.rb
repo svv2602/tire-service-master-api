@@ -3,19 +3,36 @@ module Api
     class TireSearchController < ApiController
       skip_after_action :verify_authorized
       skip_before_action :authenticate_request, only: [:search, :suggestions, :popular, :brands, :models, :diameters]
-      
+
       # POST /api/v1/tire_search
       def search
         query = params[:query].to_s.strip
-        
+
         if query.blank?
           locale = detect_locale
           I18n.with_locale(locale) do
-            render json: { 
+            render json: {
               error: I18n.t('tire_search.messages.empty_query'),
               suggestions: TireSearchService::SearchStats.popular_queries
             }, status: :bad_request
           end
+          return
+        end
+
+        # Phase-02: Quota check for AI search
+        quota_result = AiQuotaService.check_and_increment!(
+          service_name: 'tire_search',
+          user: current_user,
+          ip_address: request.remote_ip
+        )
+
+        unless quota_result[:allowed]
+          render json: {
+            error: 'Превышен лимит запросов к AI-поиску. Попробуйте позже.',
+            retry_after: quota_result[:retry_after],
+            limit: quota_result[:limit],
+            remaining: 0
+          }, status: :too_many_requests
           return
         end
         
@@ -33,7 +50,8 @@ module Api
           offset: [params[:offset].to_i, 0].max,
           use_llm: params[:use_llm] != 'false',
           locale: locale,
-          context: context
+          context: context,
+          force_refresh: params[:force_refresh] == 'true'
         }
         
         Rails.logger.info "TireSearchController: Context param: #{params[:context].inspect}"
@@ -85,43 +103,62 @@ module Api
       end
       
       # GET /api/v1/tire_search/suggestions
+      # Cached for 15 minutes (Phase-02) with versioned keys
       def suggestions
         query = params[:query].to_s.strip
-        
+
         if query.length < 2
           render json: { suggestions: [] }
           return
         end
-        
-        # Поиск предложений в базе данных
-        suggestions = generate_suggestions(query)
-        
+
+        cache_key = CacheVersioning.versioned_key(
+          "tire_search:suggestions:#{Digest::SHA256.hexdigest(query.downcase)}",
+          "tire_search_suggestions"
+        )
+        suggestions = Rails.cache.fetch(cache_key, expires_in: 15.minutes) do
+          generate_suggestions(query)
+        end
+
         render json: { suggestions: suggestions }
       end
-      
+
       # GET /api/v1/tire_search/popular
+      # Cached for 1 hour (Phase-02) with versioned keys
       def popular
         limit = [params[:limit].to_i, 20].min.positive? ? [params[:limit].to_i, 20].min : 10
-        
-        popular_queries = TireSearchService::SearchStats.popular_queries(limit)
-        
-        render json: { 
+
+        cache_key = CacheVersioning.versioned_key(
+          "tire_search:popular:#{limit}",
+          "tire_search_popular"
+        )
+        popular_queries = Rails.cache.fetch(cache_key, expires_in: 1.hour) do
+          TireSearchService::SearchStats.popular_queries(limit)
+        end
+
+        render json: {
           popular_queries: popular_queries,
           total: popular_queries.size
         }
       end
-      
+
       # GET /api/v1/tire_search/brands
+      # Cached for 24 hours (Phase-02) with versioned keys
       def brands
-        brands = CarBrand.active
-                         .joins(:car_tire_configurations)
-                         .distinct
-                         .order(:name)
-                         .limit(50)
-        
-        render json: {
-          brands: brands.map { |brand| { id: brand.id, name: brand.name } }
-        }
+        cache_key = CacheVersioning.versioned_key(
+          "tire_search:brands:#{TireDataVersion.current&.version || 'default'}",
+          "tire_search_brands"
+        )
+        brands_data = Rails.cache.fetch(cache_key, expires_in: 24.hours) do
+          CarBrand.active
+                  .joins(:car_tire_configurations)
+                  .distinct
+                  .order(:name)
+                  .limit(50)
+                  .map { |brand| { id: brand.id, name: brand.name } }
+        end
+
+        render json: { brands: brands_data }
       end
       
       # GET /api/v1/tire_search/models

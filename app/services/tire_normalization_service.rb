@@ -92,37 +92,43 @@ class TireNormalizationService
     batch.each { |product| normalize_product(product) }
   end
 
-  # Нормализация бренда для товара
+  # Нormalization of brand for product with regex fallback
   def normalize_brand_for_product(product)
     return false if product.tire_brand_id.present?
-    
-    # Ищем бренд по нормализованному названию и алиасам
+
+    # Primary: DB lookup by normalized name and aliases
     tire_brand = find_tire_brand(product.original_brand)
-    
+
+    # Fallback: regex-based normalization when DB lookup fails
+    tire_brand ||= regex_find_tire_brand(product.original_brand)
+
     if tire_brand
       product.tire_brand_id = tire_brand.id
       Rails.logger.debug "Найден бренд: #{product.original_brand} -> #{tire_brand.name}"
       return true
     end
-    
+
     Rails.logger.warn "Бренд не найден: #{product.original_brand}"
     false
   end
 
-  # Нормализация модели для товара
+  # Normalization of model for product with regex fallback
   def normalize_model_for_product(product)
     return false if product.tire_model_id.present?
     return false unless product.tire_brand_id
-    
-    # Ищем модель в рамках конкретного бренда
+
+    # Primary: DB lookup by normalized name and aliases
     tire_model = find_tire_model(product.original_model, product.tire_brand_id)
-    
+
+    # Fallback: regex-based normalization when DB lookup fails
+    tire_model ||= regex_find_tire_model(product.original_model, product.tire_brand_id)
+
     if tire_model
       product.tire_model_id = tire_model.id
       Rails.logger.debug "Найдена модель: #{product.original_model} -> #{tire_model.name}"
       return true
     end
-    
+
     Rails.logger.debug "Модель не найдена: #{product.original_model} для бренда ID=#{product.tire_brand_id}"
     false
   end
@@ -267,6 +273,95 @@ class TireNormalizationService
     puts "  🏷️ Бренды: #{total_with_brands}/#{total_products} (#{percentage(total_with_brands, total_products)}%)"
     puts "  🚗 Модели: #{total_with_models}/#{total_products} (#{percentage(total_with_models, total_products)}%)"
     puts "  🌍 Страны: #{total_with_countries}/#{total_products} (#{percentage(total_with_countries, total_products)}%)"
+  end
+
+  # === Regex-based fallback normalization ===
+
+  # Regex fallback for brand normalization
+  # Cleans and standardizes brand name, then searches DB with fuzzy match
+  # @param brand_name [String] Original brand name from supplier
+  # @return [TireBrand, nil] Matched brand or nil
+  def regex_find_tire_brand(brand_name)
+    return nil if brand_name.blank?
+
+    # Step 1: Clean the brand name (remove extra whitespace, special chars)
+    cleaned = brand_name.to_s
+                        .gsub(/[^\p{L}\p{N}\s\-]/u, '') # Keep letters, numbers, spaces, hyphens
+                        .gsub(/\s+/, ' ')
+                        .strip
+
+    return nil if cleaned.blank?
+
+    # Step 2: Try case-insensitive ILIKE search on name field
+    tire_brand = TireBrand.active.where('name ILIKE ?', cleaned).first
+    return tire_brand if tire_brand
+
+    # Step 3: Try with common transliteration patterns
+    transliterated = regex_transliterate_brand(cleaned)
+    if transliterated != cleaned.downcase
+      tire_brand = TireBrand.active.where('LOWER(name) = ?', transliterated).first
+      return tire_brand if tire_brand
+    end
+
+    # Step 4: Fuzzy partial match (brand starts with or contains)
+    tire_brand = TireBrand.active.where('name ILIKE ?', "#{cleaned}%").first
+    return tire_brand if tire_brand
+
+    nil
+  end
+
+  # Regex fallback for model normalization
+  # Cleans model name and searches with fuzzy matching within brand
+  # @param model_name [String] Original model name
+  # @param tire_brand_id [Integer] Brand ID to scope search
+  # @return [TireModel, nil] Matched model or nil
+  def regex_find_tire_model(model_name, tire_brand_id)
+    return nil if model_name.blank?
+
+    # Clean the model name
+    cleaned = model_name.to_s
+                        .gsub(/[^\p{L}\p{N}\s\-\.\/]/u, '')
+                        .gsub(/\s+/, ' ')
+                        .strip
+
+    return nil if cleaned.blank?
+
+    # Try case-insensitive match within brand
+    TireModel.active
+             .where(tire_brand_id: tire_brand_id)
+             .where('name ILIKE ?', cleaned)
+             .first ||
+      TireModel.active
+               .where(tire_brand_id: tire_brand_id)
+               .where('name ILIKE ?', "#{cleaned}%")
+               .first
+  end
+
+  # Simple transliteration for common tire brand names (Cyrillic -> Latin)
+  BRAND_TRANSLITERATIONS = {
+    'мишлен' => 'michelin', 'мишелин' => 'michelin',
+    'бриджстоун' => 'bridgestone', 'бриджстон' => 'bridgestone',
+    'континенталь' => 'continental', 'конти' => 'continental',
+    'пирелли' => 'pirelli', 'пирели' => 'pirelli',
+    'гудьир' => 'goodyear', 'гудиер' => 'goodyear',
+    'данлоп' => 'dunlop',
+    'йокохама' => 'yokohama', 'иокохама' => 'yokohama',
+    'ханкук' => 'hankook', 'ханкок' => 'hankook',
+    'кумхо' => 'kumho',
+    'нокиан' => 'nokian',
+    'купер' => 'cooper',
+    'тойо' => 'toyo',
+    'фалькен' => 'falken',
+    'кордиант' => 'cordiant',
+    'виатти' => 'viatti',
+    'белшина' => 'belshina',
+    'росава' => 'rosava',
+    'кама' => 'kama'
+  }.freeze
+
+  def regex_transliterate_brand(brand_name)
+    normalized = brand_name.to_s.strip.downcase
+    BRAND_TRANSLITERATIONS[normalized] || normalized
   end
 
   # Вычисление процента

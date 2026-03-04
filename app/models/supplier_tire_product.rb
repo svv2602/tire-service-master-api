@@ -1,4 +1,7 @@
 class SupplierTireProduct < ApplicationRecord
+  # Elasticsearch full-text search with DB fallback (Phase-03)
+  include TireSearchable
+
   # Связи
   belongs_to :supplier
   belongs_to :tire_brand, optional: true
@@ -103,6 +106,7 @@ class SupplierTireProduct < ApplicationRecord
   before_validation :normalize_season
   before_validation :set_in_stock_status
   before_save :update_search_tokens
+  after_commit :invalidate_tire_search_caches, on: [:create, :update, :destroy]
   
   # Методы класса
   def self.normalize_brand(brand_name)
@@ -292,8 +296,18 @@ class SupplierTireProduct < ApplicationRecord
       tire_size, load_speed_indices,
       original_country, country&.name, season_display
     ].compact.join(' ')
-    
+
     self.search_tokens = tokens
   end
-  
+
+  # Invalidate tire search caches when supplier data changes (Phase-02)
+  # Uses versioned keys instead of O(n) delete_matched
+  def invalidate_tire_search_caches
+    CacheVersioning.increment_version("tire_search_suggestions")
+    CacheVersioning.increment_version("tire_search_popular")
+    CacheVersioning.increment_version("tire_search_brands")
+  rescue StandardError => e
+    Rails.logger.warn "[SupplierTireProduct] Cache invalidation failed: #{e.message}"
+  end
+
 end

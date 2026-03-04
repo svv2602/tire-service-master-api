@@ -34,3 +34,8 @@ production:
   database: tire_service_prod_new
   username: <%= ENV['POSTGRES_USER'] %>
   password: <%= ENV['POSTGRES_PASSWORD'] %>
+  # Connection pooling optimizations
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 10 } %>
+  checkout_timeout: 5
+  idle_timeout: 300
+  reaping_frequency: 30

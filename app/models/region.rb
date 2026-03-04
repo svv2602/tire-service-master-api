@@ -1,13 +1,18 @@
 class Region < ApplicationRecord
+  include CacheVersioning
+
   # Связи
   has_many :cities, dependent: :destroy
-  
+
   # Валидации
   validates :name, presence: true, uniqueness: true
   validates :code, uniqueness: true, allow_nil: true
   validates :name_ru, presence: true
   validates :name_uk, presence: true
-  
+
+  # Cache invalidation on data changes
+  after_commit :increment_cache_version
+
   # Скоупы
   scope :active, -> { where(is_active: true) }
   

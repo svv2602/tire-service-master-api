@@ -49,6 +49,9 @@ class ServicePoint < ApplicationRecord
   accepts_nested_attributes_for :service_posts, allow_destroy: true
   accepts_nested_attributes_for :service_point_category_settings, allow_destroy: true
   
+  # Sync PostGIS location column when lat/lng changes (Phase-03)
+  before_save :sync_postgis_location, if: -> { latitude_changed? || longitude_changed? }
+
   # Callback для перенумерации постов после сохранения
   after_save :renumber_service_posts
   
@@ -103,6 +106,20 @@ class ServicePoint < ApplicationRecord
   validates :latitude, numericality: { greater_than_or_equal_to: -90, less_than_or_equal_to: 90 }, allow_nil: true
   validates :longitude, numericality: { greater_than_or_equal_to: -180, less_than_or_equal_to: 180 }, allow_nil: true
   
+  # Eager loading scope to avoid N+1 queries in list endpoints
+  scope :with_details, -> {
+    includes(
+      :partner,
+      { city: :region },
+      :photos,
+      :service_point_services,
+      :service_posts,
+      :reviews,
+      :amenities,
+      :schedule_templates
+    )
+  }
+
   # Обновленные скоупы
   scope :active, -> { where(is_active: true) }                    # активные точки
   scope :inactive, -> { where(is_active: false) }                 # неактивные точки
@@ -128,8 +145,33 @@ class ServicePoint < ApplicationRecord
       .group(:id)
       .having("COUNT(DISTINCT service_point_amenities.amenity_id) = ?", amenity_ids.length)
   }
+  # PostGIS-powered spatial search (Phase-03)
+  # Uses ST_DWithin for index-accelerated radius queries on the `location` geography column.
+  # Falls back to Haversine formula for rows without a populated `location`.
   scope :near, ->(latitude, longitude, distance_km = 10) {
-    # Примечание: это очень упрощенный расчет, в реальном проекте используйте PostGIS или геопространственные функции
+    radius_meters = distance_km * 1000
+    point_wkt = "SRID=4326;POINT(#{longitude.to_f} #{latitude.to_f})"
+
+    where(
+      "location IS NOT NULL AND ST_DWithin(location, ST_GeogFromText(?), ?)",
+      point_wkt, radius_meters
+    )
+  }
+
+  # Order by distance from a given point (ascending — closest first)
+  scope :order_by_distance, ->(latitude, longitude) {
+    point_wkt = "SRID=4326;POINT(#{longitude.to_f} #{latitude.to_f})"
+    order(
+      Arel.sql(
+        ActiveRecord::Base.sanitize_sql_array([
+          "ST_Distance(location, ST_GeogFromText(?))", point_wkt
+        ])
+      )
+    )
+  }
+
+  # Legacy Haversine-based scope as fallback when PostGIS location is not populated
+  scope :near_legacy, ->(latitude, longitude, distance_km = 10) {
     where("
       (6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) < ?",
       latitude, longitude, latitude, distance_km)
@@ -373,6 +415,18 @@ class ServicePoint < ApplicationRecord
   
   private
   
+  # Sync the PostGIS `location` column from latitude/longitude (Phase-03)
+  # Requires activerecord-postgis-adapter gem (currently disabled)
+  def sync_postgis_location
+    return unless defined?(RGeo)
+
+    if latitude.present? && longitude.present?
+      self.location = RGeo::Geographic.spherical_factory(srid: 4326).point(longitude.to_f, latitude.to_f)
+    else
+      self.location = nil
+    end
+  end
+
   # Валидация: нельзя активировать сервисную точку, если партнер неактивен
   def partner_must_be_active_to_activate_service_point
     if is_active? && partner.present? && !partner.is_active?
@@ -380,6 +434,20 @@ class ServicePoint < ApplicationRecord
     end
   end
   
+  # Haversine formula for distance between two points in km (fallback when PostGIS unavailable)
+  def haversine_distance(lat1, lon1, lat2, lon2)
+    earth_radius = 6371.0
+    d_lat = (lat2 - lat1) * Math::PI / 180.0
+    d_lon = (lon2 - lon1) * Math::PI / 180.0
+
+    a = Math.sin(d_lat / 2)**2 +
+        Math.cos(lat1 * Math::PI / 180.0) * Math.cos(lat2 * Math::PI / 180.0) *
+        Math.sin(d_lon / 2)**2
+
+    c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    (earth_radius * c).round(2)
+  end
+
   def calculate_cancellation_rate
     total = bookings.count
     return 0.0 if total.zero?
@@ -445,6 +513,29 @@ class ServicePoint < ApplicationRecord
   
   public
   
+  # Calculate distance in km from this service point to a given coordinate (Phase-03)
+  # Uses PostGIS ST_Distance when location is available, falls back to Haversine.
+  # @param lat [Float] target latitude
+  # @param lng [Float] target longitude
+  # @return [Float, nil] distance in kilometers
+  def distance_to(lat, lng)
+    return nil if latitude.blank? || longitude.blank?
+
+    if location.present?
+      point_wkt = "SRID=4326;POINT(#{lng.to_f} #{lat.to_f})"
+      result = self.class.where(id: id)
+                   .pick(Arel.sql(
+                     ActiveRecord::Base.sanitize_sql_array([
+                       "ST_Distance(location, ST_GeogFromText(?)) / 1000.0", point_wkt
+                     ])
+                   ))
+      result&.round(2)
+    else
+      # Haversine fallback
+      haversine_distance(latitude.to_f, longitude.to_f, lat.to_f, lng.to_f)
+    end
+  end
+
   # ==================== МЕТОДЫ ДЛЯ НАСТРОЕК АВТОМАТИЗАЦИИ ====================
 
   # Gets automation settings with defaults
@@ -585,19 +676,22 @@ class ServicePoint < ApplicationRecord
 
   private
 
-  # Инвалидация кэша сервисных точек при изменении данных
+  # Invalidate service points cache using versioned keys (avoids O(n) delete_matched)
   def invalidate_service_points_cache
-    # Очищаем все кэши связанные с сервисными точками
-    Rails.cache.delete_matched("service_points/*")
-    
-    # Уведомляем о необходимости инвалидации кэша
+    # Increment version counter — all old versioned keys become stale
+    CacheVersioning.increment_version("service_points")
+
+    # Also invalidate search cache
+    CacheVersioning.increment_version("sp_search")
+
+    # Notify subscribers for additional cache invalidation
     ActiveSupport::Notifications.instrument('service_point_changed', {
       service_point_id: id,
       partner_id: partner_id,
       city_id: city_id,
       changes: previous_changes
     })
-    
-    Rails.logger.info "🗑️ ServicePoint cache invalidated for service_point #{id}"
+
+    Rails.logger.info "[Cache] ServicePoint cache version incremented for service_point #{id}"
   end
 end

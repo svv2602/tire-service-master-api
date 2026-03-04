@@ -279,6 +279,9 @@ Rails.application.routes.draw do
         end
       end
       
+      # Mobile device token registration (APNs / FCM)
+      resources :devices, only: [:index, :show, :create, :update, :destroy]
+
       # Push подписки пользователей
       resources :push_subscriptions do
         member do
@@ -324,6 +327,12 @@ Rails.application.routes.draw do
       get 'locale', to: 'locale#show'
       put 'locale', to: 'locale#update'
       
+      # Loyalty program
+      scope 'loyalty', controller: 'loyalty' do
+        get 'balance', action: :balance
+        get 'transactions', action: :transactions
+      end
+
       # ✅ Универсальная аутентификация (email ИЛИ телефон)
       post 'auth/login', to: 'auth#login'
       post 'auth/logout', to: 'auth#logout'
@@ -376,6 +385,8 @@ Rails.application.routes.draw do
           post :reschedule, to: 'client_bookings#reschedule'
           get :reschedule_suggestions, to: 'client_bookings#reschedule_suggestions'
           post :assign_to_client, to: 'client_bookings#assign_to_client'
+          post :confirm_sms, to: 'client_bookings#confirm_sms'
+          post :resend_sms, to: 'client_bookings#resend_sms'
         end
         collection do
           post :check_availability_for_booking, to: 'client_bookings#check_availability_for_booking'
@@ -497,6 +508,14 @@ Rails.application.routes.draw do
           collection do
             get 'stats'
             get 'export'
+          end
+        end
+
+        # Webhook integrations for partners
+        resources :webhook_endpoints, only: [:index, :show, :create, :update, :destroy] do
+          member do
+            post :test
+            get :deliveries
           end
         end
 
@@ -877,13 +896,15 @@ Rails.application.routes.draw do
         end
       end
       
-      # Тестовые данные для разработки
-      namespace :tests do
-        get 'generate_data', to: 'data_generator#generate'
-        post 'create_test_client', to: 'data_generator#create_test_client'
-        post 'create_test_partner', to: 'data_generator#create_test_partner'
-        post 'create_test_service_point', to: 'data_generator#create_test_service_point'
-        post 'create_test_booking', to: 'data_generator#create_test_booking'
+      # Test data generation -- only available in development/test environments
+      unless Rails.env.production?
+        namespace :tests do
+          get 'generate_data', to: 'data_generator#generate'
+          post 'create_test_client', to: 'data_generator#create_test_client'
+          post 'create_test_partner', to: 'data_generator#create_test_partner'
+          post 'create_test_service_point', to: 'data_generator#create_test_service_point'
+          post 'create_test_booking', to: 'data_generator#create_test_booking'
+        end
       end
       
       resources :service_point_statuses, only: [:index]
@@ -944,6 +965,20 @@ Rails.application.routes.draw do
       # Прямые маршруты для управления привязками операторов
       resources :operator_service_points, only: [:show, :update, :destroy]
 
+      # Operator mobile API
+      namespace :operator do
+        resources :bookings, only: [:show] do
+          collection do
+            get :today
+          end
+          member do
+            patch :start
+            patch :complete
+            patch :no_show
+          end
+        end
+      end
+
       # Аудит логи
       resources :audit_logs, only: [:index, :show, :create] do
         collection do
@@ -991,6 +1026,25 @@ Rails.application.routes.draw do
         get :daily_stats, to: 'chat_analytics#daily_stats'
         get :hourly_distribution, to: 'chat_analytics#hourly_distribution'
         get :response_type_distribution, to: 'chat_analytics#response_type_distribution'
+      end
+
+      # Admin Analytics Dashboard (Phase-03)
+      scope :analytics do
+        get :overview, to: 'analytics#overview'
+        get :funnel, to: 'analytics#funnel'
+        get :financial, to: 'analytics#financial'
+        get :geography, to: 'analytics#geography'
+      end
+
+      # AI usage monitoring (Phase-02)
+      scope :ai_usage do
+        get :summary, to: 'ai_usage#summary'
+        get :daily, to: 'ai_usage#daily'
+        get :by_service, to: 'ai_usage#by_service'
+        get :top_users, to: 'ai_usage#top_users'
+        get :quota_status, to: 'ai_usage#quota_status'
+        get :cache_stats, to: 'ai_usage#cache_stats'
+        post :reset_user_quota, to: 'ai_usage#reset_user_quota'
       end
 
       # Управление данными поиска шин

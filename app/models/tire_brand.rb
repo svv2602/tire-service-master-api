@@ -2,6 +2,8 @@
 
 # Модель справочника брендов шин
 class TireBrand < ApplicationRecord
+  include CacheVersioning
+
   # Ассоциации
   belongs_to :country, optional: true
   has_many :tire_models, dependent: :destroy
@@ -11,7 +13,6 @@ class TireBrand < ApplicationRecord
   validates :name, presence: true, length: { maximum: 100 }
   validates :normalized_name, presence: true, uniqueness: true, length: { maximum: 100 }
   validates :rating_score, inclusion: { in: 1..10 }
-  # aliases не требует отдельной валидации, так как это массив
 
   # Скоупы
   scope :active, -> { where(is_active: true) }
@@ -22,6 +23,7 @@ class TireBrand < ApplicationRecord
   # Callbacks
   before_save :normalize_name
   before_save :clean_aliases
+  after_commit :increment_cache_version
 
   class << self
     # Поиск бренда по названию или алиасу

@@ -5,9 +5,9 @@ module Api
     module Admin
       # Controller for chat analytics dashboard
       # Provides statistics and insights about tire chat usage
-      class ChatAnalyticsController < BaseController
+      class ChatAnalyticsController < AdminController
       skip_after_action :verify_authorized
-        before_action :authorize_admin
+        # Authentication and admin check inherited from AdminController
 
         # GET /api/v1/admin/chat_analytics/summary
         # Returns summary statistics for chat analytics
@@ -95,13 +95,7 @@ module Api
           }
         end
 
-        private
-
-        def authorize_admin
-          return if current_user&.admin?
-
-          render json: { success: false, error: 'Unauthorized' }, status: :forbidden
-        end
+        # Admin authorization inherited from AdminController (ensure_admin! before_action)
       end
     end
   end

@@ -1,12 +1,14 @@
 class ServicePointSerializer < ActiveModel::Serializer
-  attributes :id, :name, :description, :address, :latitude, :longitude, :contact_phone, 
-             :is_active, :work_status, :status_display, :post_count, :default_slot_duration, 
+  attributes :id, :name, :description, :address, :latitude, :longitude, :contact_phone,
+             :is_active, :work_status, :status_display, :post_count, :default_slot_duration,
              :rating, :total_clients_served, :average_rating, :cancellation_rate, :created_at, :updated_at,
              :posts_count, :service_posts_summary, :service_posts, :services, :working_hours,
              :partner_id, :city_id, :category_confirmation_settings,
              # Локализованные поля
              :name_ru, :name_uk, :description_ru, :description_uk, :address_ru, :address_uk,
-             :localized_name, :localized_description, :localized_address
+             :localized_name, :localized_description, :localized_address,
+             # PostGIS distance (Phase-03) — populated when nearby/spatial query is used
+             :distance_km
   
   belongs_to :partner
   belongs_to :city
@@ -15,6 +17,14 @@ class ServicePointSerializer < ActiveModel::Serializer
   
   def status_display
     object.display_status
+  end
+
+  # Distance from a reference point (Phase-03). Only present when the query
+  # includes a computed `distance_km` column (e.g., from the nearby endpoint).
+  def distance_km
+    return nil unless object.respond_to?(:distance_km) && object.has_attribute?(:distance_km)
+
+    object.distance_km&.round(2)
   end
   
   def posts_count

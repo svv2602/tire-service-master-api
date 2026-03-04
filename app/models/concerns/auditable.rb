@@ -173,6 +173,40 @@ module Auditable
     context.empty? ? nil : context
   end
 
+  # Instance method: check for suspicious activity after audit actions
+  def check_for_suspicious_activity(action)
+    return unless current_user_for_audit
+
+    # Check only during off-hours for critical actions
+    if off_hours? && critical_action?(action)
+      SecurityAlertJob.perform_later(
+        'off_hours_activity',
+        user: current_user_for_audit,
+        action: action,
+        resource: "#{self.class.name}##{id}",
+        timestamp: Time.current
+      )
+    end
+
+    # Check for bulk changes (deferred check)
+    if %w[created updated deleted].include?(action)
+      BulkActivityCheckJob.perform_later(current_user_for_audit.id, 1.hour.ago)
+    end
+  rescue StandardError => e
+    Rails.logger.warn("Auditable: suspicious activity check failed: #{e.message}")
+  end
+
+  def off_hours?
+    current_hour = Time.current.hour
+    # Off-hours: 22:00 to 6:00 and weekends
+    current_hour < 6 || current_hour > 22 || Time.current.on_weekend?
+  end
+
+  def critical_action?(action)
+    %w[deleted suspended].include?(action.to_s) ||
+      self.class.name.in?(%w[User SystemLog UserRole])
+  end
+
   class_methods do
     def with_audit_context(user: nil, ip_address: nil, user_agent: nil, session_id: nil, request_id: nil)
       old_user = CurrentContext.audit_user
@@ -228,38 +262,6 @@ module Auditable
         ip_address: CurrentContext.ip_address,
         user_agent: CurrentContext.user_agent
       )
-    end
-
-    # Проверка на подозрительную активность
-    def check_for_suspicious_activity(action)
-      return unless current_user_for_audit
-      
-      # Проверяем только в рабочее время для некритичных действий
-      if is_off_hours? && is_critical_action?(action)
-        SecurityAlertJob.perform_later(
-          'off_hours_activity',
-          user: current_user_for_audit,
-          action: action,
-          resource: "#{self.class.name}##{id}",
-          timestamp: Time.current
-        )
-      end
-      
-      # Проверяем на массовые изменения (отложенная проверка)
-      if %w[created updated deleted].include?(action)
-        BulkActivityCheckJob.perform_later(current_user_for_audit.id, 1.hour.ago)
-      end
-    end
-
-    def is_off_hours?
-      current_hour = Time.current.hour
-      # Нерабочее время: с 22:00 до 6:00 и выходные
-      current_hour < 6 || current_hour > 22 || Time.current.weekend?
-    end
-
-    def is_critical_action?(action)
-      %w[deleted suspended].include?(action.to_s) || 
-      self.class.name.in?(%w[User SystemLog UserRole])
     end
   end
 end 

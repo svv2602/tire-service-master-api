@@ -172,7 +172,7 @@ module Api
       
       def detailed_partner_stats
         orders = @partner.orders
-        service_points = @partner.service_points
+        service_points = @partner.service_points.includes(:city)
         
         # Статистика по периодам
         today = Date.current
@@ -203,7 +203,7 @@ module Api
               revenue: sp_orders.where(status: 'delivered').sum(:total_amount)
             }
           end,
-          recent_orders: orders.order(created_at: :desc).limit(10).map do |order|
+          recent_orders: orders.includes(:service_point).order(created_at: :desc).limit(10).map do |order|
             {
               id: order.id,
               ttn: order.ttn,

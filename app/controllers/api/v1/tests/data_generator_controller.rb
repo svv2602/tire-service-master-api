@@ -4,14 +4,10 @@ module Api
       class DataGeneratorController < ApiController
       skip_after_action :verify_authorized
         skip_before_action :authenticate_request
-        
+        before_action :ensure_non_production!
+
         # GET /api/v1/tests/generate_data
         def generate
-          # Проверяем, что мы в режиме разработки
-          unless Rails.env.development? || Rails.env.test?
-            render json: { error: "This endpoint is only available in development or test environment" }, status: :forbidden
-            return
-          end
           
           ActiveRecord::Base.transaction do
             # Создаем тестового клиента
@@ -74,12 +70,6 @@ module Api
         
         # POST /api/v1/tests/create_test_client
         def create_test_client
-          # Проверяем, что мы в режиме разработки
-          unless Rails.env.development? || Rails.env.test?
-            render json: { error: "This endpoint is only available in development or test environment" }, status: :forbidden
-            return
-          end
-          
           client = create_test_client_internal
           
           render json: {
@@ -97,12 +87,6 @@ module Api
         
         # POST /api/v1/tests/create_test_partner
         def create_test_partner
-          # Проверяем, что мы в режиме разработки
-          unless Rails.env.development? || Rails.env.test?
-            render json: { error: "This endpoint is only available in development or test environment" }, status: :forbidden
-            return
-          end
-          
           partner = create_test_partner_internal
           
           render json: {
@@ -119,12 +103,6 @@ module Api
         
         # POST /api/v1/tests/create_test_service_point
         def create_test_service_point
-          # Проверяем, что мы в режиме разработки
-          unless Rails.env.development? || Rails.env.test?
-            render json: { error: "This endpoint is only available in development or test environment" }, status: :forbidden
-            return
-          end
-          
           # Проверяем наличие partner_id
           unless params[:partner_id].present?
             render json: { error: "Partner ID is required" }, status: :bad_request
@@ -145,12 +123,6 @@ module Api
         
         # POST /api/v1/tests/create_test_booking
         def create_test_booking
-          # Проверяем, что мы в режиме разработки
-          unless Rails.env.development? || Rails.env.test?
-            render json: { error: "This endpoint is only available in development or test environment" }, status: :forbidden
-            return
-          end
-          
           # Проверяем наличие client_id и service_point_id
           unless params[:client_id].present? && params[:service_point_id].present?
             render json: { error: "Client ID and Service Point ID are required" }, status: :bad_request
@@ -437,7 +409,19 @@ module Api
           
           booking
         end
+
+        # Security: block all actions in production environment
+        # Double protection: routes are also excluded in production (see routes.rb)
+        def ensure_non_production!
+          if Rails.env.production?
+            raise "DataGeneratorController is not available in production"
+          end
+
+          unless Rails.env.development? || Rails.env.test?
+            render json: { error: "This endpoint is only available in development or test environment" }, status: :forbidden
+          end
+        end
       end
     end
   end
-end 
+end

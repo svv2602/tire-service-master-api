@@ -8,6 +8,9 @@ gem "rails", "~> 8.0.2"
 # Use postgresql as the database for Active Record
 gem "pg", "~> 1.1"
 
+# PostGIS adapter for geographic queries (Phase-03)
+# gem "activerecord-postgis-adapter", "~> 9.0" # Temporarily disabled: incompatible with Rails 8
+
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", "~> 6.0"
 
@@ -82,13 +85,19 @@ group :development, :test do
   # Debugging
   gem "debug", platforms: %i[ mri mingw x64_mingw ]
   gem "pry-rails"
-  
+
   # Testing
   gem "rspec-rails"
   gem "factory_bot_rails"
   gem "faker"
   gem "shoulda-matchers"
   gem "database_cleaner-active_record"
+
+  # Test coverage
+  gem "simplecov", require: false
+
+  # N+1 query detection
+  gem "bullet"
 end
 
 group :development do
@@ -110,3 +119,7 @@ gem "webpush", "~> 1.1"
 
 # QR-code generation
 gem "rqrcode", "~> 2.0"
+
+# Elasticsearch for full-text tire catalog search (Phase-03)
+# gem "elasticsearch-model", "~> 7.2" # Temporarily disabled: pending version resolution
+# gem "elasticsearch-rails", "~> 7.2" # Temporarily disabled: pending version resolution

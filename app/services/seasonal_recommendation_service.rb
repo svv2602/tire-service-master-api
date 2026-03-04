@@ -57,7 +57,7 @@ class SeasonalRecommendationService
 
     result = @openai.chat(
       messages: build_vehicle_recommendation_messages(vehicle_info, target_season),
-      model: 'gpt-3.5-turbo'
+      model: 'gpt-4.1-nano'
     )
 
     parsed = parse_tire_recommendations(result['content'])
@@ -170,7 +170,7 @@ class SeasonalRecommendationService
   def generate_recommendation(context)
     result = @openai.chat(
       messages: build_recommendation_messages(context),
-      model: 'gpt-3.5-turbo'
+      model: 'gpt-4.1-nano'
     )
 
     parse_recommendation_response(result['content'], context)

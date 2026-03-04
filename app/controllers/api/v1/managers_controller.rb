@@ -5,7 +5,7 @@ module Api
       before_action :set_manager, only: [:show, :update, :destroy]
       before_action :set_partner, only: [:index, :create, :create_test]
       before_action :authorize_admin, except: [:index, :show, :create_test]
-      skip_before_action :authenticate_request, only: [:index, :create_test]
+      skip_before_action :authenticate_request, only: [:create_test]
       
       # GET /api/v1/partners/:partner_id/managers
       def index

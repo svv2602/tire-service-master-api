@@ -79,7 +79,7 @@ module Api
             
             llm_settings = {
               'tire_search_enable_llm' => 'true',
-              'openai_model' => 'gpt-4o-mini',
+              'openai_model' => 'gpt-4.1-mini',
               'openai_max_tokens' => '500',
               'openai_temperature' => '0.1',
               'openai_timeout' => '30'
@@ -415,17 +415,16 @@ module Api
             },
             'openai_model' => {
               key: 'openai_model',
-              value: 'gpt-4o-mini',
+              value: 'gpt-4.1-mini',
               description: 'Модель OpenAI для обработки запросов',
               category: 'integrations',
               type: 'select',
               options: [
+                'gpt-4.1-mini',
+                'gpt-4.1-nano',
+                'gpt-4.1',
                 'gpt-4o-mini',
-                'gpt-4o', 
-                'gpt-4-turbo',
-                'gpt-4',
-                'gpt-3.5-turbo',
-                'gpt-3.5-turbo-16k'
+                'gpt-4o'
               ],
               default: true
             },

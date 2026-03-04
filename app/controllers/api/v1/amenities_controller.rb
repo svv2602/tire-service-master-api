@@ -13,13 +13,20 @@ module Api
       # GET /api/v1/service_points/:service_point_id/amenities
       def index
         if params[:service_point_id].present?
+          # Per-service-point amenities: not cached (scoped, low volume)
           service_point = ServicePoint.find(params[:service_point_id])
           @amenities = service_point.amenities
+          render json: { data: @amenities.map { |a| format_amenity(a) } }
         else
-          @amenities = Amenity.all.order(:name)
-        end
+          # Global amenities list: cached with versioned key
+          cache_key = CacheVersioning.versioned_key("amenities:index:all", "amenities")
 
-        render json: { data: @amenities.map { |a| format_amenity(a) } }
+          result = Rails.cache.fetch(cache_key, expires_in: 24.hours) do
+            { data: Amenity.all.order(:name).map { |a| format_amenity(a) } }
+          end
+
+          render json: result
+        end
       end
 
       # GET /api/v1/amenities/:id

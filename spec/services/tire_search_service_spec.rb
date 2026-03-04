@@ -449,6 +449,75 @@ RSpec.describe TireSearchService, type: :service do
         expect(result[:parsed_data][:model]).to eq('X5')
       end
     end
+
+    context 'AiRequestWrapper resilience' do
+      before do
+        allow(OpenaiService).to receive(:available?).and_return(true)
+        AiRequestWrapper.reset!
+      end
+
+      after do
+        AiRequestWrapper.reset!
+      end
+
+      it 'uses AiRequestWrapper for LLM calls' do
+        expect(AiRequestWrapper).to receive(:call)
+          .with(operation: 'tire_search_facade_llm')
+          .and_return(AiRequestWrapper::Result.new(
+                        data: { brand: 'Tesla', model: 'Model 3' },
+                        error: nil,
+                        success: true,
+                        fallback: false,
+                        attempts: 1,
+                        latency_ms: 150
+                      ))
+
+        # Need a complex query that triggers LLM
+        service = TireSearchService.new('подскажите шины для Tesla Model 3', use_llm: true)
+        result = service.search
+
+        expect(result[:parsed_data][:brand]).to eq('Tesla')
+      end
+
+      it 'returns DB results when circuit breaker is open' do
+        expect(AiRequestWrapper).to receive(:call)
+          .and_return(AiRequestWrapper::Result.new(
+                        data: nil,
+                        error: 'Circuit breaker is open',
+                        success: false,
+                        fallback: true,
+                        attempts: 0,
+                        latency_ms: 0
+                      ))
+
+        service = TireSearchService.new('подскажите шины для Tesla Model 3', use_llm: true)
+        result = service.search
+
+        # Should still return a valid result (DB-only search)
+        expect(result).to be_present
+        expect(result[:parsed_data]).to be_a(Hash)
+      end
+
+      it 'handles timeout with retry and returns DB results on failure' do
+        expect(AiRequestWrapper).to receive(:call)
+          .and_return(AiRequestWrapper::Result.new(
+                        data: nil,
+                        error: 'Timeout::Error: connection timed out',
+                        success: false,
+                        fallback: false,
+                        attempts: 3,
+                        latency_ms: 6500
+                      ))
+
+        service = TireSearchService.new('что посоветуете на BMW X5', use_llm: true)
+        result = service.search
+
+        # Should fall back to parsed data from regex/keywords
+        expect(result).to be_present
+        expect(result[:parsed_data][:brand]).to eq('BMW')
+        expect(result[:parsed_data][:model]).to eq('X5')
+      end
+    end
   end
 
   describe 'SearchStats' do

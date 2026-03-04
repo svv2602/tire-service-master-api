@@ -3,6 +3,11 @@
 module TireSearch
   # Service - главный оркестратор для поиска шин
   # Композирует QueryBuilder, ResultProcessor, CompatibilityCalculator, SuggestionEngine
+  #
+  # Phase-02: Redis caching for AI search queries
+  #   - LLM parsing results cached with SHA256 key, 1 hour TTL
+  #   - force_refresh option to bypass cache
+  #   - Cache hit/miss metrics logged
   class Service
     # Константы алиасов (экспортируем для обратной совместимости)
     BRAND_ALIASES = TireSearchService::BRAND_ALIASES
@@ -10,6 +15,10 @@ module TireSearch
     TIRE_BRANDS = TireSearchService::TIRE_BRANDS
     TIRE_BRAND_ALIASES = TireSearchService::TIRE_BRAND_ALIASES
     SEASONALITY_ALIASES = TireSearchService::SEASONALITY_ALIASES
+
+    # Cache configuration
+    AI_SEARCH_CACHE_TTL = 1.hour
+    AI_SEARCH_CACHE_PREFIX = 'tire_search'
 
     attr_reader :query, :options, :parsed_data
 
@@ -20,6 +29,7 @@ module TireSearch
       @locale = options[:locale] || 'ru'
       @context = options[:context] || {}
       @use_llm = options[:use_llm] != false
+      @force_refresh = options[:force_refresh] == true
     end
 
     # Главный метод поиска
@@ -32,7 +42,7 @@ module TireSearch
       # Шаг 2: Объединение с контекстом
       merge_with_context
 
-      # Шаг 3: LLM парсинг (если нужен)
+      # Шаг 3: LLM парсинг (если нужен) - with Redis caching
       apply_llm_parsing if needs_llm_parsing?
 
       # Шаг 4: Определение сценария и обработка
@@ -131,11 +141,51 @@ module TireSearch
     def apply_llm_parsing
       return unless OpenaiService.available?
 
+      # Try cached LLM result first (Phase-02)
+      cache_key = ai_search_cache_key(@query)
+
+      if !@force_refresh && (cached = Rails.cache.read(cache_key))
+        Rails.logger.info "[TireSearch] Cache HIT for query: '#{@query.truncate(50)}' (key: #{cache_key})"
+        log_cache_metric(:hit)
+        @parsed_data = smart_merge_results(@parsed_data, cached)
+        return
+      end
+
+      Rails.logger.info "[TireSearch] Cache MISS for query: '#{@query.truncate(50)}' (key: #{cache_key})"
+      log_cache_metric(:miss)
+
+      result = AiRequestWrapper.call(operation: 'tire_search_llm_parsing') do
+        OpenaiService.new.parse_tire_search_query(@query)
+      end
+
+      if result.success? && result.data.present?
+        # Cache only successful results
+        Rails.cache.write(cache_key, result.data, expires_in: AI_SEARCH_CACHE_TTL)
+        Rails.logger.info "[TireSearch] Cached AI result for query: '#{@query.truncate(50)}'"
+        @parsed_data = smart_merge_results(@parsed_data, result.data)
+      elsif result.fallback?
+        Rails.logger.warn "TireSearch: AI unavailable (circuit open), using DB-only search"
+      end
+    end
+
+    # Generate cache key for AI search query
+    def ai_search_cache_key(query)
+      normalized = query.downcase.strip
+      "#{AI_SEARCH_CACHE_PREFIX}:#{Digest::SHA256.hexdigest(normalized)}"
+    end
+
+    # Track cache hit/miss metrics in Redis
+    def log_cache_metric(type)
+      today = Date.current.to_s
+      metric_key = "tire_search_cache_metrics:#{today}"
+      field = type == :hit ? 'hits' : 'misses'
+
       begin
-        llm_result = OpenaiService.new.parse_tire_search_query(@query)
-        @parsed_data = smart_merge_results(@parsed_data, llm_result) if llm_result.present?
-      rescue StandardError => e
-        Rails.logger.error "TireSearch LLM error: #{e.message}"
+        redis = Redis.new(url: ENV.fetch('REDIS_URL', 'redis://localhost:6379/1'))
+        redis.hincrby(metric_key, field, 1)
+        redis.expire(metric_key, 7.days.to_i) # Keep metrics for 7 days
+      rescue Redis::BaseError => e
+        Rails.logger.warn "[TireSearch] Failed to log cache metric: #{e.message}"
       end
     end
 

@@ -9,33 +9,42 @@ class Api::V1::TireBrandsController < Api::V1::ApiController
 
   # GET /api/v1/tire_brands
   def index
-    @tire_brands = TireBrand.includes(:country, :tire_models)
-                           .order(:name)
+    cache_key = CacheVersioning.versioned_key(
+      "tire_brands:index:#{tire_brands_cache_params_key}",
+      "tire_brands"
+    )
 
-    # Фильтрация по поиску
-    if params[:search].present?
-      search_term = "%#{params[:search].downcase}%"
-      @tire_brands = @tire_brands.joins(:country)
-                                .where(
-                                  'LOWER(tire_brands.name) LIKE ? OR LOWER(countries.name) LIKE ?', 
-                                  search_term, search_term
-                                )
+    result = Rails.cache.fetch(cache_key, expires_in: 24.hours) do
+      @tire_brands = TireBrand.includes(:country, :tire_models)
+                             .order(:name)
+
+      # Filter by search
+      if params[:search].present?
+        search_term = "%#{params[:search].downcase}%"
+        @tire_brands = @tire_brands.joins(:country)
+                                  .where(
+                                    'LOWER(tire_brands.name) LIKE ? OR LOWER(countries.name) LIKE ?',
+                                    search_term, search_term
+                                  )
+      end
+
+      # Filter by country
+      @tire_brands = @tire_brands.where(country_id: params[:country_id]) if params[:country_id].present?
+
+      # Filter by active status
+      @tire_brands = @tire_brands.where(is_active: true) if params[:active_only] == 'true'
+
+      # Filter by premium status
+      @tire_brands = @tire_brands.where(is_premium: true) if params[:premium_only] == 'true'
+
+      # Paginate via ApiController method
+      paginated = paginate(@tire_brands)
+
+      # Format data
+      paginated[:data] = paginated[:data].map { |brand| format_tire_brand(brand) }
+
+      paginated
     end
-
-    # Фильтрация по стране
-    @tire_brands = @tire_brands.where(country_id: params[:country_id]) if params[:country_id].present?
-
-    # Фильтрация по статусу
-    @tire_brands = @tire_brands.where(is_active: true) if params[:active_only] == 'true'
-
-    # Фильтрация по премиум статусу
-    @tire_brands = @tire_brands.where(is_premium: true) if params[:premium_only] == 'true'
-
-    # Применяем пагинацию через метод paginate из ApiController
-    result = paginate(@tire_brands)
-    
-    # Форматируем данные
-    result[:data] = result[:data].map { |brand| format_tire_brand(brand) }
 
     render json: result
   end
@@ -131,6 +140,17 @@ class Api::V1::TireBrandsController < Api::V1::ApiController
     unless current_user&.admin? || current_user&.manager?
       render json: { error: 'Доступ запрещен' }, status: :forbidden
     end
+  end
+
+  def tire_brands_cache_params_key
+    [
+      params[:search],
+      params[:country_id],
+      params[:active_only],
+      params[:premium_only],
+      params[:page],
+      params[:per_page]
+    ].compact.join(':')
   end
 
   def format_tire_brand(brand)

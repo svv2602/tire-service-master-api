@@ -9,54 +9,60 @@ Rails.application.configure do
   end
 end
 
-# Настройки кэширования для системы ролей
+# Cache configuration for role system
 module RolesCacheConfig
-  # Время жизни кэша для различных типов данных
+  # TTL for different data types
   USER_PERMISSIONS_TTL = 5.minutes
   SERVICE_POINTS_TTL = 10.minutes
   POLICY_RESULTS_TTL = 2.minutes
   STATISTICS_TTL = 30.minutes
-  
-  # Ключи кэша
+
+  # Cache keys
   def self.user_permissions_key(user_id)
     "user_permissions:#{user_id}"
   end
-  
+
   def self.user_service_points_key(user_id, role)
     "user_service_points:#{user_id}:#{role}"
   end
-  
+
   def self.policy_result_key(user_id, resource_type, resource_id, action)
     "policy:#{user_id}:#{resource_type}:#{resource_id}:#{action}"
   end
-  
+
   def self.statistics_key(type, period = 'daily')
     "stats:#{type}:#{period}:#{Date.current}"
   end
 end
 
-# Автоматическая инвалидация кэша при изменении ролей
+# Automatic cache invalidation on role changes
+# Uses versioned keys + direct key deletion instead of O(n) delete_matched
 ActiveSupport::Notifications.subscribe('user_role_changed') do |name, start, finish, id, payload|
   user_id = payload[:user_id]
-  
-  # Очищаем кэш пользователя
+
+  # Delete specific per-user cache keys (O(1) operations)
   Rails.cache.delete(RolesCacheConfig.user_permissions_key(user_id))
-  Rails.cache.delete_matched("user_service_points:#{user_id}:*")
-  Rails.cache.delete_matched("policy:#{user_id}:*")
-  
-  Rails.logger.info "🗑️ Cache invalidated for user #{user_id} due to role change"
+
+  # Increment version counters to invalidate all versioned user keys
+  CacheVersioning.increment_version("user_service_points:#{user_id}")
+  CacheVersioning.increment_version("user_policies:#{user_id}")
+
+  Rails.logger.info "[Cache] Versioned cache invalidated for user #{user_id} due to role change"
 end
 
-# Инвалидация кэша при изменении назначений операторов
+# Cache invalidation on operator assignment changes
 ActiveSupport::Notifications.subscribe('operator_assignment_changed') do |name, start, finish, id, payload|
   operator_id = payload[:operator_id]
   user_id = payload[:user_id]
-  
+
   if user_id
+    # Delete specific per-user cache keys (O(1) operations)
     Rails.cache.delete(RolesCacheConfig.user_permissions_key(user_id))
-    Rails.cache.delete_matched("user_service_points:#{user_id}:*")
-    Rails.cache.delete_matched("policy:#{user_id}:*")
-    
-    Rails.logger.info "🗑️ Cache invalidated for operator user #{user_id}"
+
+    # Increment version counters to invalidate all versioned user keys
+    CacheVersioning.increment_version("user_service_points:#{user_id}")
+    CacheVersioning.increment_version("user_policies:#{user_id}")
+
+    Rails.logger.info "[Cache] Versioned cache invalidated for operator user #{user_id}"
   end
-end 
+end

@@ -5,6 +5,7 @@ class ApplicationController < ActionController::API
   include Pundit::Authorization
   include RequestLogging
   include ActionController::HttpAuthentication::Token::ControllerMethods
+  include SparseFieldsets
 
   # CSRF protection for cookie-based auth
   before_action :set_csrf_cookie
@@ -16,6 +17,7 @@ class ApplicationController < ActionController::API
   rescue_from StandardError, with: :internal_server_error if Rails.env.production?
   rescue_from ActiveRecord::RecordNotFound, with: :not_found
   rescue_from ActiveRecord::RecordInvalid, with: :unprocessable_entity
+  rescue_from ActiveRecord::RecordNotUnique, with: :conflict_error
   rescue_from Pundit::NotAuthorizedError, with: :forbidden
   rescue_from ActionDispatch::Http::Parameters::ParseError, with: :bad_request
   
@@ -187,6 +189,11 @@ class ApplicationController < ActionController::API
     render json: { error: 'Bad request - malformed parameters' }, status: :bad_request
   end
 
+  def conflict_error(exception)
+    Rails.logger.warn "RecordNotUnique conflict: #{exception.message}"
+    render json: { error: 'Resource conflict - duplicate entry', code: 'conflict' }, status: :conflict
+  end
+
   def internal_server_error(exception)
     Rails.logger.error "Unhandled exception: #{exception.class} - #{exception.message}"
     Rails.logger.error exception.backtrace&.first(20)&.join("\n")
@@ -200,6 +207,12 @@ class ApplicationController < ActionController::API
 
   def json_request?
     request.format.json?
+  end
+
+  # Returns the API version requested by the client (from ApiVersionMiddleware).
+  # Defaults to "1" when no API-Version header is present.
+  def api_version
+    request.env[ApiVersionMiddleware::ENV_KEY] || ApiVersionMiddleware::CURRENT_VERSION
   end
 
   # Set CSRF token in cookie for JavaScript to read

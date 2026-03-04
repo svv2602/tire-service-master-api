@@ -22,6 +22,11 @@ class TireOrder < ApplicationRecord
   validates :total_amount, presence: true, numericality: { greater_than_or_equal_to: 0 }
   validates :tracking_number, length: { maximum: 100 }, allow_blank: true
 
+  # Eager loading scope to avoid N+1 queries in list endpoints
+  scope :with_associations, -> {
+    includes(:user, :supplier, :partner, tire_order_items: :supplier_tire_product)
+  }
+
   # Scopes (additional to those from TireOrderStatuses)
   scope :by_status, ->(status) { where(status: status) }
   scope :by_user, ->(user_id) { where(user_id: user_id) }
@@ -114,6 +119,7 @@ class TireOrder < ApplicationRecord
   # Broadcast new order to supplier via WebSocket
   def broadcast_new_order
     SupplierOrdersChannel.broadcast_new_order(self)
+    AdminMetricsChannel.broadcast_new_order(self)
   rescue StandardError => e
     Rails.logger.error "[ActionCable] Failed to broadcast new order: #{e.message}"
   end

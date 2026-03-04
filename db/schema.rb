@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_04_200001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -172,12 +172,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.bigint "service_post_id"
     t.jsonb "reserved_slot_ids", default: []
     t.integer "calculated_duration_minutes"
+    t.boolean "sms_confirmed", default: false, null: false
     t.index ["booking_date", "start_time", "end_time"], name: "idx_bookings_time_range"
     t.index ["booking_session_id"], name: "index_bookings_on_booking_session_id"
     t.index ["cancellation_reason_id"], name: "index_bookings_on_cancellation_reason_id"
     t.index ["car_brand", "car_model"], name: "index_bookings_on_car_brand_model"
     t.index ["car_id"], name: "index_bookings_on_car_id"
     t.index ["car_type_id"], name: "index_bookings_on_car_type_id"
+    t.index ["client_id", "booking_date"], name: "idx_bookings_client_date"
     t.index ["client_id", "status", "booking_date"], name: "idx_bookings_client_status_date"
     t.index ["client_id"], name: "index_bookings_guest_only", where: "(client_id IS NULL)"
     t.index ["client_id"], name: "index_bookings_on_client_id"
@@ -187,7 +189,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.index ["payment_status_id"], name: "index_bookings_on_payment_status_id"
     t.index ["review_request_sent_at"], name: "index_bookings_on_review_request_sent_at"
     t.index ["service_category_id"], name: "index_bookings_on_service_category_id"
+    t.index ["service_point_id", "booking_date", "start_time", "service_post_id"], name: "idx_unique_active_booking_per_post", unique: true, where: "((service_post_id IS NOT NULL) AND ((status)::text <> ALL (ARRAY[('cancelled_by_client'::character varying)::text, ('cancelled_by_partner'::character varying)::text, ('no_show'::character varying)::text, ('completed'::character varying)::text])))"
     t.index ["service_point_id", "booking_date", "start_time"], name: "idx_bookings_service_point_date_time"
+    t.index ["service_point_id", "booking_date", "status"], name: "idx_bookings_point_date_status"
     t.index ["service_point_id", "booking_date"], name: "idx_bookings_point_date"
     t.index ["service_point_id", "status", "booking_date", "start_time"], name: "idx_bookings_complex_filter"
     t.index ["service_point_id", "status"], name: "idx_bookings_point_status"
@@ -195,6 +199,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.index ["service_post_id"], name: "index_bookings_on_service_post_id"
     t.index ["service_recipient_phone"], name: "index_bookings_on_guest_phone"
     t.index ["service_recipient_phone"], name: "index_bookings_on_service_recipient_phone"
+    t.index ["sms_confirmed"], name: "index_bookings_sms_confirmed_guests", where: "(client_id IS NULL)"
     t.index ["status"], name: "index_bookings_on_status"
     t.index ["status_id"], name: "index_bookings_on_status_id"
   end
@@ -425,6 +430,24 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.index ["name"], name: "index_custom_variables_on_name", unique: true
   end
 
+  create_table "devices", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "device_token", null: false
+    t.string "platform", null: false
+    t.string "device_name"
+    t.string "device_model"
+    t.string "os_version"
+    t.string "app_version"
+    t.boolean "is_active", default: true, null: false
+    t.datetime "last_used_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["device_token"], name: "index_devices_on_device_token", unique: true
+    t.index ["is_active"], name: "index_devices_on_is_active"
+    t.index ["user_id", "platform"], name: "index_devices_on_user_id_and_platform"
+    t.index ["user_id"], name: "index_devices_on_user_id"
+  end
+
   create_table "email_settings", force: :cascade do |t|
     t.string "smtp_host"
     t.integer "smtp_port", default: 587
@@ -497,6 +520,37 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "loyalty_accounts", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.integer "points", default: 0, null: false
+    t.string "level", default: "bronze", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["level"], name: "index_loyalty_accounts_on_level"
+    t.index ["points"], name: "index_loyalty_accounts_on_points"
+    t.index ["user_id"], name: "index_loyalty_accounts_on_user_id", unique: true
+  end
+
+  create_table "loyalty_transactions", force: :cascade do |t|
+    t.bigint "loyalty_account_id", null: false
+    t.integer "points", null: false
+    t.string "reason", null: false
+    t.bigint "booking_id"
+    t.bigint "tire_order_id"
+    t.bigint "review_id"
+    t.bigint "referral_user_id"
+    t.text "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["booking_id"], name: "index_loyalty_transactions_on_booking_id"
+    t.index ["created_at"], name: "index_loyalty_transactions_on_created_at"
+    t.index ["loyalty_account_id"], name: "index_loyalty_transactions_on_loyalty_account_id"
+    t.index ["reason"], name: "index_loyalty_transactions_on_reason"
+    t.index ["referral_user_id"], name: "index_loyalty_transactions_on_referral_user_id"
+    t.index ["review_id"], name: "index_loyalty_transactions_on_review_id"
+    t.index ["tire_order_id"], name: "index_loyalty_transactions_on_tire_order_id"
+  end
+
   create_table "manager_service_points", force: :cascade do |t|
     t.bigint "manager_id", null: false
     t.bigint "service_point_id", null: false
@@ -549,6 +603,18 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.json "metadata"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_notification_logs_on_created_at"
+    t.index ["notification_type", "status"], name: "idx_notification_logs_type_status"
+    t.index ["notification_type"], name: "index_notification_logs_on_notification_type"
+    t.index ["recipient_email"], name: "index_notification_logs_on_recipient_email"
+    t.index ["recipient_type", "recipient_id"], name: "index_notification_logs_on_recipient_type_and_recipient_id"
+    t.index ["sent_at"], name: "index_notification_logs_on_sent_at"
+    t.index ["status", "created_at"], name: "idx_notification_logs_status_created_at"
+    t.index ["status", "sent_at"], name: "idx_notification_logs_status_sent_at"
+    t.index ["status"], name: "index_notification_logs_on_status"
+    t.index ["template_id"], name: "index_notification_logs_on_template_id"
+    t.index ["template_type", "status"], name: "idx_notification_logs_template_type_status"
+    t.index ["template_type"], name: "index_notification_logs_on_template_type"
   end
 
   create_table "notification_types", force: :cascade do |t|
@@ -703,6 +769,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.index ["point_id"], name: "index_orders_on_point_id"
     t.index ["qr_code_token"], name: "index_orders_on_qr_code_token", unique: true
     t.index ["qr_scanned_by_id"], name: "index_orders_on_qr_scanned_by_id"
+    t.index ["service_point_id", "order_date"], name: "idx_orders_point_date"
     t.index ["service_point_id", "status"], name: "index_orders_on_service_point_id_and_status"
     t.index ["service_point_id"], name: "index_orders_on_service_point_id"
     t.index ["supplier_id", "status"], name: "index_orders_on_supplier_id_and_status"
@@ -1056,6 +1123,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.index ["client_id", "created_at"], name: "idx_reviews_client_created"
     t.index ["client_id"], name: "index_reviews_on_client_id"
     t.index ["recommend"], name: "index_reviews_on_recommend"
+    t.index ["service_point_id", "created_at"], name: "idx_reviews_point_created"
     t.index ["service_point_id", "is_published"], name: "idx_reviews_point_published"
     t.index ["service_point_id"], name: "index_reviews_on_service_point_id"
     t.index ["status"], name: "index_reviews_on_status"
@@ -1368,6 +1436,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.index ["production_year"], name: "index_supplier_tire_products_on_production_year"
     t.index ["season"], name: "index_supplier_tire_products_on_season"
     t.index ["supplier_id", "external_id"], name: "index_supplier_tire_products_on_supplier_id_and_external_id", unique: true
+    t.index ["supplier_id", "in_stock", "tire_brand_id"], name: "idx_stp_supplier_stock_brand"
     t.index ["supplier_id"], name: "index_supplier_tire_products_on_supplier_id"
     t.index ["tire_brand_id", "tire_model_id"], name: "idx_on_tire_brand_id_tire_model_id_7823a23358"
     t.index ["tire_brand_id", "width", "height", "diameter", "season", "in_stock"], name: "idx_supplier_products_normalized_search"
@@ -1414,17 +1483,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.index ["action", "created_at"], name: "idx_system_logs_action_created"
     t.index ["action"], name: "index_system_logs_on_action"
     t.index ["additional_data"], name: "idx_system_logs_additional_data_gin", using: :gin
-    t.index ["additional_data"], name: "index_system_logs_on_additional_data", using: :gin
     t.index ["created_at"], name: "index_system_logs_on_created_at"
     t.index ["ip_address", "created_at"], name: "idx_system_logs_ip_created"
     t.index ["record_changes"], name: "idx_system_logs_changes_gin", using: :gin
-    t.index ["record_changes"], name: "idx_system_logs_record_changes_gin", using: :gin
-    t.index ["record_changes"], name: "index_system_logs_on_record_changes", using: :gin
     t.index ["resource_type", "action"], name: "index_system_logs_on_resource_type_and_action"
     t.index ["resource_type", "resource_id", "created_at"], name: "idx_system_logs_resource_created"
     t.index ["resource_type", "resource_id"], name: "idx_system_logs_resource"
     t.index ["user_id", "created_at"], name: "idx_system_logs_user_created"
-    t.index ["user_id", "created_at"], name: "index_system_logs_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_system_logs_on_user_id"
   end
 
@@ -1672,6 +1737,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.text "suspension_reason", comment: "Причина блокировки"
     t.bigint "suspended_by_id", comment: "Кто заблокировал пользователя"
     t.datetime "suspended_at", comment: "Дата и время блокировки"
+    t.integer "failed_login_attempts", default: 0, null: false
+    t.datetime "locked_until"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["id", "is_active"], name: "idx_users_id_active"
     t.index ["is_suspended"], name: "index_users_on_is_suspended"
@@ -1681,6 +1748,38 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
     t.index ["role_id"], name: "index_users_on_role_id"
     t.index ["suspended_by_id"], name: "index_users_on_suspended_by_id"
     t.index ["suspended_until"], name: "index_users_on_suspended_until"
+  end
+
+  create_table "webhook_deliveries", force: :cascade do |t|
+    t.bigint "webhook_endpoint_id", null: false
+    t.string "event", null: false
+    t.jsonb "payload", default: {}, null: false
+    t.string "status", default: "pending", null: false
+    t.integer "response_code"
+    t.text "response_body"
+    t.integer "attempt", default: 0, null: false
+    t.datetime "delivered_at"
+    t.text "error_message"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_webhook_deliveries_on_created_at"
+    t.index ["event"], name: "index_webhook_deliveries_on_event"
+    t.index ["status"], name: "index_webhook_deliveries_on_status"
+    t.index ["webhook_endpoint_id"], name: "index_webhook_deliveries_on_webhook_endpoint_id"
+  end
+
+  create_table "webhook_endpoints", force: :cascade do |t|
+    t.bigint "partner_id", null: false
+    t.string "url", null: false
+    t.string "secret", null: false
+    t.string "events", default: [], null: false, array: true
+    t.boolean "is_active", default: true, null: false
+    t.string "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["events"], name: "index_webhook_endpoints_on_events", using: :gin
+    t.index ["is_active"], name: "index_webhook_endpoints_on_is_active"
+    t.index ["partner_id"], name: "index_webhook_endpoints_on_partner_id"
   end
 
   create_table "weekdays", force: :cascade do |t|
@@ -1725,10 +1824,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
   add_foreign_key "conversation_messages", "conversations"
   add_foreign_key "conversations", "users"
   add_foreign_key "custom_variables", "users", column: "created_by_id"
+  add_foreign_key "devices", "users"
   add_foreign_key "email_template_custom_variables", "custom_variables"
   add_foreign_key "email_template_custom_variables", "email_templates"
   add_foreign_key "google_calendar_settings", "partners"
   add_foreign_key "google_calendar_settings", "service_points"
+  add_foreign_key "loyalty_accounts", "users"
+  add_foreign_key "loyalty_transactions", "bookings"
+  add_foreign_key "loyalty_transactions", "loyalty_accounts"
+  add_foreign_key "loyalty_transactions", "reviews"
+  add_foreign_key "loyalty_transactions", "tire_orders"
+  add_foreign_key "loyalty_transactions", "users", column: "referral_user_id"
   add_foreign_key "manager_service_points", "managers"
   add_foreign_key "manager_service_points", "service_points"
   add_foreign_key "managers", "partners"
@@ -1819,4 +1925,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_03_150311) do
   add_foreign_key "user_social_accounts", "users"
   add_foreign_key "users", "user_roles", column: "role_id"
   add_foreign_key "users", "users", column: "suspended_by_id"
+  add_foreign_key "webhook_deliveries", "webhook_endpoints"
+  add_foreign_key "webhook_endpoints", "partners"
 end

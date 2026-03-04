@@ -20,6 +20,9 @@ class Partner < ApplicationRecord
   has_many :suppliers, through: :partner_supplier_agreements
   has_many :partner_rewards, dependent: :destroy
 
+  # Webhook integrations
+  has_many :webhook_endpoints, dependent: :destroy
+
   # Google Calendar интеграция
   has_one :google_calendar_setting, dependent: :destroy
   

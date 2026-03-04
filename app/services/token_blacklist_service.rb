@@ -9,12 +9,14 @@ class TokenBlacklistService
   class << self
     # Revoke a token by adding it to the blacklist.
     # The token is stored with a TTL equal to its remaining lifetime.
+    # Uses the jti claim from the JWT payload when available,
+    # otherwise falls back to a SHA256 digest of the raw token.
     # @param token [String] the raw JWT string
     def revoke(token)
       return if token.blank?
 
       begin
-        # Decode without raising on expiry so we can get the exp claim
+        # Decode without raising on expiry so we can get the exp and jti claims
         decoded = JWT.decode(
           token,
           Auth::JsonWebToken.secret_key,
@@ -28,9 +30,9 @@ class TokenBlacklistService
 
         # Only blacklist if the token hasn't already expired
         if ttl > 0
-          jti = token_identifier(token)
-          redis.setex(cache_key(jti), ttl, '1')
-          Rails.logger.debug "TokenBlacklist: revoked token, ttl=#{ttl}s"
+          identifier = extract_identifier(decoded, token)
+          redis.setex(cache_key(identifier), ttl, '1')
+          Rails.logger.debug "TokenBlacklist: revoked token (jti=#{decoded['jti'] || 'none'}), ttl=#{ttl}s"
         end
       rescue JWT::DecodeError => e
         Rails.logger.warn "TokenBlacklist: failed to decode token for revocation: #{e.message}"
@@ -38,13 +40,38 @@ class TokenBlacklistService
     end
 
     # Check whether a token has been revoked.
+    # Checks both jti-based and hash-based identifiers for backward compatibility.
     # @param token [String] the raw JWT string
     # @return [Boolean]
     def revoked?(token)
       return false if token.blank?
 
-      jti = token_identifier(token)
-      redis.exists?(cache_key(jti))
+      # Try to decode and check by jti first
+      begin
+        decoded = JWT.decode(
+          token,
+          Auth::JsonWebToken.secret_key,
+          true,
+          algorithm: 'HS256',
+          verify_expiration: false
+        ).first
+
+        identifier = extract_identifier(decoded, token)
+        return true if redis.exists?(cache_key(identifier))
+
+        # Backward compatibility: also check the hash-based identifier
+        # if the token has a jti but was revoked before jti support
+        if decoded['jti'].present?
+          fallback_id = token_hash(token)
+          return redis.exists?(cache_key(fallback_id))
+        end
+      rescue JWT::DecodeError
+        # If we cannot decode, fall back to hash-based check
+        fallback_id = token_hash(token)
+        return redis.exists?(cache_key(fallback_id))
+      end
+
+      false
     end
 
     # Revoke all tokens for a specific user by storing a "revoke before" timestamp.
@@ -69,8 +96,17 @@ class TokenBlacklistService
 
     private
 
+    # Extract the best available identifier from a decoded token.
+    # Prefers the jti claim; falls back to a SHA256 hash of the raw token.
+    # @param decoded [Hash] the decoded JWT payload
+    # @param token [String] the raw JWT string
+    # @return [String]
+    def extract_identifier(decoded, token)
+      decoded['jti'].presence || token_hash(token)
+    end
+
     # Use a SHA256 digest of the token as the identifier (avoids storing full tokens in Redis)
-    def token_identifier(token)
+    def token_hash(token)
       Digest::SHA256.hexdigest(token)
     end
 

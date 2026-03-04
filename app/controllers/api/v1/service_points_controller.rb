@@ -173,129 +173,50 @@ module Api
       end
       
       # GET /api/v1/service_points/nearby?latitude=XX&longitude=XX&distance=YY
+      # Uses PostGIS ST_DWithin for index-accelerated spatial queries (Phase-03)
       def nearby
         latitude = params[:latitude].to_f
         longitude = params[:longitude].to_f
-        distance = params[:distance].to_f || 10.0 # Default 10km radius
-        
-        @service_points = ServicePoint.active.near(latitude, longitude, distance)
-        
+        distance = (params[:distance].presence || 10.0).to_f
+
+        @service_points = ServicePoint.active
+                                      .near(latitude, longitude, distance)
+                                      .order_by_distance(latitude, longitude)
+
+        # Include distance in response
+        point_wkt = "SRID=4326;POINT(#{longitude} #{latitude})"
+        @service_points = @service_points.select(
+          "service_points.*",
+          Arel.sql(
+            ActiveRecord::Base.sanitize_sql_array([
+              "ST_Distance(location, ST_GeogFromText(?)) / 1000.0 AS distance_km", point_wkt
+            ])
+          )
+        )
+
         render json: paginate(@service_points)
       end
       
       # GET /api/v1/service_points/search?city=:city_name&region_id=:region_id
       # Клиентский поиск сервисных точек по названию города и региону
       def client_search
-        city_name = params[:city]
-        region_id = params[:region_id] # фильтр по региону
-        query = params[:query] # поиск по названию/адресу точки
-        category_id = params[:category_id] # фильтр по категории услуг
-        service_id = params[:service_id] # фильтр по конкретной услуге
-        
-        # Базовая выборка - только доступные для бронирования точки
-        @service_points = ServicePoint.available_for_booking
-        
-        # Фильтрация по региону (приоритетная) - если указан, фильтруем по региону
-        if region_id.present?
-          @service_points = @service_points.joins(:city).where(cities: { region_id: region_id })
-        end
-        
-        # Фильтрация по id города (приоритетнее, чем по имени)
-        if params[:city_id].present?
-          @service_points = @service_points.where(city_id: params[:city_id])
-        elsif city_name.present?
-          city = City.joins(:region).where("LOWER(cities.name) LIKE LOWER(?)", "%#{city_name}%").first
-          if city
-            @service_points = @service_points.where(city_id: city.id)
-          else
-            # Если город не найден, возвращаем пустой результат
-            @service_points = ServicePoint.none
-          end
-        end
-        # Если ни город, ни регион не указаны, показываем все доступные сервисные точки
-        
-        # Фильтрация по категории услуг (через service_posts) - используем подзапрос
-        if category_id.present?
-          service_point_ids = ServicePost.where(service_category_id: category_id, is_active: true)
-                                        .pluck(:service_point_id).uniq
-          @service_points = @service_points.where(id: service_point_ids)
-        end
-        
-        # Фильтрация по конкретной услуге (через service_point_services) - используем подзапрос  
-        if service_id.present?
-          service_point_ids = ServicePointService.where(service_id: service_id, is_available: true)
-                                                 .pluck(:service_point_id).uniq
-          @service_points = @service_points.where(id: service_point_ids)
-        end
-        
-        # Поиск по названию или адресу точки
-        if query.present?
-          @service_points = @service_points.where(
-            "LOWER(service_points.name) LIKE LOWER(?) OR LOWER(service_points.address) LIKE LOWER(?)", 
-            "%#{query}%", "%#{query}%"
+        # Skip caching for geolocation-based requests (distance varies per user)
+        has_geolocation = params[:latitude].present? && params[:longitude].present?
+
+        if has_geolocation
+          render json: build_client_search_response
+        else
+          cache_key = CacheVersioning.versioned_key(
+            "sp:client_search:#{client_search_cache_params_key}",
+            "sp_search"
           )
+
+          result = Rails.cache.fetch(cache_key, expires_in: 15.minutes) do
+            build_client_search_response
+          end
+
+          render json: result
         end
-        
-        # Сортировка по рейтингу (лучшие сначала)
-        @service_points = @service_points.includes(:city, :partner, :reviews, :photos)
-                                       .order(average_rating: :desc, name: :asc)
-        
-        # Пагинация
-        page = [params[:page].to_i, 1].max  # Минимум 1
-        per_page = (params[:per_page] || 12).to_i
-        per_page = [per_page, 50].min # ограничиваем максимальным значением 50
-        
-        # Подсчет общего количества без проблем с JSON полями
-        total_count = @service_points.count
-        offset = (page - 1) * per_page
-        @service_points = @service_points.offset(offset).limit(per_page)
-        
-        # Возвращаем данные с дополнительной информацией для клиентов
-        render json: {
-          data: @service_points.map do |point|
-            {
-              id: point.id,
-              name: point.name,
-              description: point.description,
-              address: point.address,
-              city: {
-                id: point.city.id,
-                name: point.city.name,
-                region: point.city.region.name
-              },
-              partner: {
-                id: point.partner.id,
-                name: point.partner.company_name
-              },
-              contact_phone: point.contact_phone,
-              average_rating: point.average_rating&.round(1) || 0.0,
-              reviews_count: point.reviews.count,
-              posts_count: point.posts_count,
-              can_accept_bookings: point.can_accept_bookings?,
-              work_status: point.display_status,
-              distance: params[:latitude] && params[:longitude] ? 
-                calculate_distance(params[:latitude].to_f, params[:longitude].to_f, point.latitude, point.longitude) : nil,
-              # Добавляем фотографии для отображения в карточке
-              photos: point.photos.sorted.map do |photo|
-                {
-                  id: photo.id,
-                  url: photo.file.attached? ? Rails.application.routes.url_helpers.url_for(photo.file) : nil,
-                  description: photo.description,
-                  is_main: photo.is_main,
-                  sort_order: photo.sort_order
-                }
-              end
-            }
-          end,
-          total: total_count,
-          city_found: city_name.blank? || @service_points.any?,
-          pagination: {
-            current_page: page,
-            total_pages: (total_count.to_f / per_page).ceil,
-            total_count: total_count,
-            per_page: per_page
-          }
-        }
       end
       
       # GET /api/v1/service_points/:id/client_details  
@@ -1079,24 +1000,24 @@ module Api
         !today.sunday?
       end
       
-      # Расчет расстояния между двумя точками (упрощенный)
+      # Calculate distance between two points in km (Phase-03: PostGIS-aware)
+      # Uses Haversine formula (fast enough for controller-level per-row calculation).
+      # For bulk distance queries, prefer the PostGIS `order_by_distance` scope instead.
       def calculate_distance(lat1, lon1, lat2, lon2)
         return nil if lat2.nil? || lon2.nil?
-        
-        # Формула гаверсинуса для расчета расстояния
-        earth_radius = 6371 # км
-        
+
+        # Haversine formula
+        earth_radius = 6371 # km
+
         dlat = (lat2 - lat1) * Math::PI / 180
         dlon = (lon2 - lon1) * Math::PI / 180
-        
+
         a = Math.sin(dlat / 2) * Math.sin(dlat / 2) +
             Math.cos(lat1 * Math::PI / 180) * Math.cos(lat2 * Math::PI / 180) *
             Math.sin(dlon / 2) * Math.sin(dlon / 2)
-        
+
         c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        distance = earth_radius * c
-        
-        distance.round(2)
+        (earth_radius * c).round(2)
       end
       
       # Обновляет шаблоны расписания на основе переданных рабочих часов
@@ -1143,12 +1064,134 @@ module Api
         @service_point.update_working_hours_from_templates
       end
 
+      # Build response for client_search (extracted for caching)
+      def build_client_search_response
+        city_name = params[:city]
+        region_id = params[:region_id]
+        query = params[:query]
+        category_id = params[:category_id]
+        service_id = params[:service_id]
+
+        # Base scope - only available for booking
+        @service_points = ServicePoint.available_for_booking
+
+        # Filter by region
+        if region_id.present?
+          @service_points = @service_points.joins(:city).where(cities: { region_id: region_id })
+        end
+
+        # Filter by city id (higher priority than name)
+        if params[:city_id].present?
+          @service_points = @service_points.where(city_id: params[:city_id])
+        elsif city_name.present?
+          city = City.joins(:region).where("LOWER(cities.name) LIKE LOWER(?)", "%#{city_name}%").first
+          if city
+            @service_points = @service_points.where(city_id: city.id)
+          else
+            @service_points = ServicePoint.none
+          end
+        end
+
+        # Filter by service category (via service_posts)
+        if category_id.present?
+          sp_ids = ServicePost.where(service_category_id: category_id, is_active: true)
+                              .pluck(:service_point_id).uniq
+          @service_points = @service_points.where(id: sp_ids)
+        end
+
+        # Filter by specific service (via service_point_services)
+        if service_id.present?
+          sp_ids = ServicePointService.where(service_id: service_id, is_available: true)
+                                       .pluck(:service_point_id).uniq
+          @service_points = @service_points.where(id: sp_ids)
+        end
+
+        # Search by name or address
+        if query.present?
+          @service_points = @service_points.where(
+            "LOWER(service_points.name) LIKE LOWER(?) OR LOWER(service_points.address) LIKE LOWER(?)",
+            "%#{query}%", "%#{query}%"
+          )
+        end
+
+        # Sort by rating (best first)
+        @service_points = @service_points.includes(:city, :partner, :reviews, :photos, :service_posts, :service_point_services)
+                                         .order(average_rating: :desc, name: :asc)
+
+        # Pagination
+        page = [params[:page].to_i, 1].max
+        per_page = (params[:per_page] || 12).to_i
+        per_page = [per_page, 50].min
+
+        total_count = @service_points.count
+        offset = (page - 1) * per_page
+        @service_points = @service_points.offset(offset).limit(per_page)
+
+        {
+          data: @service_points.map do |point|
+            {
+              id: point.id,
+              name: point.name,
+              description: point.description,
+              address: point.address,
+              city: {
+                id: point.city.id,
+                name: point.city.name,
+                region: point.city.region.name
+              },
+              partner: {
+                id: point.partner.id,
+                name: point.partner.company_name
+              },
+              contact_phone: point.contact_phone,
+              average_rating: point.average_rating&.round(1) || 0.0,
+              reviews_count: point.reviews.count,
+              posts_count: point.posts_count,
+              can_accept_bookings: point.can_accept_bookings?,
+              work_status: point.display_status,
+              distance: params[:latitude] && params[:longitude] ?
+                calculate_distance(params[:latitude].to_f, params[:longitude].to_f, point.latitude, point.longitude) : nil,
+              photos: point.photos.sorted.map do |photo|
+                {
+                  id: photo.id,
+                  url: photo.file.attached? ? Rails.application.routes.url_helpers.url_for(photo.file) : nil,
+                  description: photo.description,
+                  is_main: photo.is_main,
+                  sort_order: photo.sort_order
+                }
+              end
+            }
+          end,
+          total: total_count,
+          city_found: city_name.blank? || @service_points.any?,
+          pagination: {
+            current_page: page,
+            total_pages: (total_count.to_f / per_page).ceil,
+            total_count: total_count,
+            per_page: per_page
+          }
+        }
+      end
+
+      def client_search_cache_params_key
+        Digest::MD5.hexdigest([
+          params[:city],
+          params[:city_id],
+          params[:region_id],
+          params[:query],
+          params[:category_id],
+          params[:service_id],
+          params[:page],
+          params[:per_page]
+        ].map(&:to_s).join(':'))
+      end
+
       def generate_service_points_cache_key
-        # Создаем уникальный ключ кэша на основе всех параметров запроса
+        # Build unique cache key based on request params with version
         key_parts = [
           'service_points',
           params[:partner_id],
-          params[:manager_id], 
+          params[:manager_id],
           params[:region_id],
           params[:city_id],
           params[:is_active],
@@ -1163,10 +1206,9 @@ module Api
           current_user&.role,
           I18n.locale
         ].compact.join('/')
-        
-        # Добавляем timestamp последнего обновления сервисных точек
-        last_updated = ServicePoint.maximum(:updated_at)&.to_i || 0
-        "#{key_parts}/#{last_updated}"
+
+        # Use versioned key instead of querying ServicePoint.maximum(:updated_at)
+        CacheVersioning.versioned_key(key_parts, "service_points")
       end
 
       def build_service_points_response
@@ -1187,14 +1229,16 @@ module Api
           @service_points = policy_scope(ServicePoint)
         end
 
-        # Eager loading для избежания N+1 запросов
+        # Eager loading to avoid N+1 queries
         @service_points = @service_points.includes(
           :partner,
           { city: :region },
           :photos,
           :service_point_services,
           :service_posts,
-          :reviews
+          :reviews,
+          :amenities,
+          :schedule_templates
         )
         
         # Фильтрация по региону

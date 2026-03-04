@@ -153,7 +153,9 @@ class Api::V1::PaymentsController < Api::V1::BaseController
   # POST /api/v1/payments/refund
   # Refund payment (admin only)
   def refund
-    authorize! :manage, :payments
+    unless current_user&.admin?
+      return render json: { error: 'Admin access required' }, status: :forbidden
+    end
 
     order_id = params[:order_id]
     amount = params[:amount].to_f
@@ -165,7 +167,19 @@ class Api::V1::PaymentsController < Api::V1::BaseController
     liqpay = LiqpayService.new
     result = liqpay.refund_payment(order_id: order_id, amount: amount)
 
-    if result['status'] == 'reversed' || result['status'] == 'success'
+    if result['status'].in?(%w[reversed success])
+      # Update corresponding Payment record
+      payment = Payment.find_by(payment_id: order_id)
+      if payment
+        refund_amount = amount < payment.amount ? amount : payment.amount
+        new_status = refund_amount < payment.amount ? 'partially_refunded' : 'refunded'
+        payment.update!(
+          status: new_status,
+          refunded_at: Time.current,
+          refund_amount: refund_amount
+        )
+      end
+
       render json: { success: true, status: result['status'] }
     else
       render json: {

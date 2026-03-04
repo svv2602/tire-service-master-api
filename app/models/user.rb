@@ -38,6 +38,12 @@ class User < ApplicationRecord
 
   # Push уведомления
   has_many :push_subscriptions, dependent: :destroy
+
+  # Mobile device tokens (APNs / FCM)
+  has_many :devices, dependent: :destroy
+
+  # Loyalty program
+  has_one :loyalty_account, dependent: :destroy
   
   # Валидации
   validates :email, uniqueness: { case_sensitive: false, allow_blank: true }, format: { with: URI::MailTo::EMAIL_REGEXP, allow_blank: true }
@@ -58,7 +64,8 @@ class User < ApplicationRecord
   # Коллбэки
   before_validation :normalize_email, :normalize_phone, :set_default_locale
   after_create :create_role_specific_record, unless: :skip_role_specific_record
-  
+  after_commit :broadcast_new_user_to_admin, on: :create
+
   # Callback'ы для инвалидации кэша
   after_save :invalidate_users_cache
   after_destroy :invalidate_users_cache
@@ -227,7 +234,14 @@ class User < ApplicationRecord
   end
   
   private
-  
+
+  # Broadcast new user creation to admin metrics channel
+  def broadcast_new_user_to_admin
+    AdminMetricsChannel.broadcast_new_user(self)
+  rescue StandardError => e
+    Rails.logger.error "[ActionCable] Failed to broadcast new user: #{e.message}"
+  end
+
   def normalize_email
     if email.present?
       self.email = email.downcase
@@ -388,18 +402,21 @@ class User < ApplicationRecord
 
   private
 
-  # Инвалидация кэша пользователей при изменении данных
+  # Invalidate users cache using versioned keys (avoids O(n) delete_matched)
   def invalidate_users_cache
-    # Очищаем все кэши связанные с пользователями
-    Rails.cache.delete_matched("users/*")
-    
-    # Уведомляем о необходимости инвалидации кэша ролей
+    # Increment version counter — all old versioned keys become stale
+    CacheVersioning.increment_version("users")
+
+    # Delete specific per-user cache keys (O(1) operations, not pattern-based)
+    Rails.cache.delete(RolesCacheConfig.user_permissions_key(id))
+
+    # Notify subscribers for additional cache invalidation
     ActiveSupport::Notifications.instrument('user_role_changed', {
       user_id: id,
       role: role&.name,
       changes: previous_changes
     })
-    
-    Rails.logger.info "🗑️ Users cache invalidated for user #{id}"
+
+    Rails.logger.info "[Cache] Users cache version incremented for user #{id}"
   end
 end

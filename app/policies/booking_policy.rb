@@ -58,13 +58,15 @@ class BookingPolicy < ApplicationPolicy
 
   def confirm?
     return false unless user.present?
-    
+
     if user.admin?
       true
     elsif user.partner?
       record.service_point.partner_id == user.partner&.id
     elsif user.manager?
       user.manager&.service_points&.include?(record.service_point)
+    elsif user.operator?
+      can_access_service_point?(record.service_point_id)
     else
       false
     end
@@ -72,15 +74,17 @@ class BookingPolicy < ApplicationPolicy
 
   def cancel?
     return false unless user.present?
-    
+
     if user.admin?
       true
     elsif user.partner?
       record.service_point.partner_id == user.partner&.id
     elsif user.manager?
       user.manager&.service_points&.include?(record.service_point)
+    elsif user.operator?
+      can_access_service_point?(record.service_point_id)
     elsif user.client?
-      record.client_id == user.client&.id && 
+      record.client_id == user.client&.id &&
       ["pending", "confirmed"].include?(record.status)
     else
       false
@@ -89,13 +93,15 @@ class BookingPolicy < ApplicationPolicy
 
   def complete?
     return false unless user.present?
-    
+
     if user.admin?
       true
     elsif user.partner?
       record.service_point.partner_id == user.partner&.id
     elsif user.manager?
       user.manager&.service_points&.include?(record.service_point)
+    elsif user.operator?
+      can_access_service_point?(record.service_point_id)
     else
       false
     end

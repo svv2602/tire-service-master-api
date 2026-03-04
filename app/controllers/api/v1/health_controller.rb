@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'open3'
+
 module Api
   module V1
     # HealthController provides endpoints for infrastructure monitoring
@@ -24,8 +26,10 @@ module Api
       def deep
         checks = {
           database: check_database,
+          connection_pool: check_connection_pool,
           redis: check_redis,
           sidekiq: check_sidekiq,
+          elasticsearch: check_elasticsearch,
           openai: check_openai
         }
 
@@ -93,6 +97,53 @@ module Api
           status: 'error',
           error: e.message
         }
+      end
+
+      # Check database connection pool usage (Phase-03)
+      def check_connection_pool
+        pool = ActiveRecord::Base.connection_pool
+        stat = pool.stat
+
+        usage_pct = stat[:busy].to_f / stat[:size] * 100
+
+        {
+          status: usage_pct > 90 ? 'warning' : 'ok',
+          size: stat[:size],
+          busy: stat[:busy],
+          dead: stat[:dead],
+          idle: stat[:idle],
+          waiting: stat[:waiting],
+          checkout_timeout: pool.checkout_timeout,
+          usage_percent: usage_pct.round(1)
+        }
+      rescue StandardError => e
+        Rails.logger.error "[Health] Connection pool check failed: #{e.message}"
+        { status: 'error', error: e.message }
+      end
+
+      # Check Elasticsearch connectivity (Phase-03)
+      def check_elasticsearch
+        return { status: 'not_configured' } unless elasticsearch_configured?
+
+        start_time = Time.current
+        client = Elasticsearch::Model.client
+        health = client.cluster.health
+        latency_ms = ((Time.current - start_time) * 1000).round(2)
+
+        {
+          status: health['status'] == 'red' ? 'error' : 'ok',
+          cluster_status: health['status'],
+          number_of_nodes: health['number_of_nodes'],
+          active_shards: health['active_shards'],
+          latency_ms: latency_ms
+        }
+      rescue StandardError => e
+        Rails.logger.warn "[Health] Elasticsearch check failed: #{e.message}"
+        { status: 'warning', error: e.message }
+      end
+
+      def elasticsearch_configured?
+        defined?(Elasticsearch::Model) && ENV['ELASTICSEARCH_URL'].present?
       end
 
       # Check Redis connectivity
@@ -196,7 +247,10 @@ module Api
       end
 
       def git_revision
-        `git rev-parse --short HEAD 2>/dev/null`.strip.presence
+        stdout, _status = Open3.capture2('git', 'rev-parse', '--short', 'HEAD')
+        stdout.strip.presence
+      rescue StandardError
+        'unknown'
       end
     end
   end

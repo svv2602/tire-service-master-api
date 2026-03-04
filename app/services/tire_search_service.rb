@@ -1190,20 +1190,19 @@ class TireSearchService
     return {} unless OpenaiService.available?
 
     Rails.logger.info "🤖 Используем LLM для парсинга запроса: #{@query}"
-    
-    begin
-      openai_service = OpenaiService.new
-      result = openai_service.parse_tire_search_query(@query)
-      
-      if result.present?
-        Rails.logger.info "✅ LLM успешно распарсил запрос: #{result.inspect}"
-      else
-        Rails.logger.warn "⚠️ LLM не смог распарсить запрос"
-      end
-      
-      result
-    rescue => e
-      Rails.logger.error "❌ Ошибка LLM парсинга: #{e.message}"
+
+    wrapper_result = AiRequestWrapper.call(operation: 'tire_search_facade_llm') do
+      OpenaiService.new.parse_tire_search_query(@query)
+    end
+
+    if wrapper_result.success? && wrapper_result.data.present?
+      Rails.logger.info "✅ LLM успешно распарсил запрос: #{wrapper_result.data.inspect}"
+      wrapper_result.data
+    elsif wrapper_result.fallback?
+      Rails.logger.warn "⚠️ AI сервис недоступен (circuit open), используем только DB-поиск"
+      {}
+    else
+      Rails.logger.warn "⚠️ LLM не смог распарсить запрос"
       {}
     end
   end

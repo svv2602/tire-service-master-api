@@ -1,7 +1,7 @@
 class Api::V1::TireOrdersController < ApplicationController
   skip_after_action :verify_authorized
   before_action :authenticate_request
-  before_action :set_order, only: [:show, :cancel, :archive]
+  before_action :set_order, only: [:show, :cancel, :archive, :confirm, :start_processing, :complete]
   before_action :ensure_admin!, only: [:index_all, :confirm, :start_processing, :complete]
 
   # GET /api/v1/tire_orders
@@ -84,7 +84,8 @@ class Api::V1::TireOrdersController < ApplicationController
   # GET /api/v1/tire_orders/:id
   # Получение конкретного заказа
   def show
-    authorize_order_access!
+    return unless authorize_order_access!
+    load_order_associations!
     render json: { order: format_order_detailed(@order) }
   end
 
@@ -149,9 +150,10 @@ class Api::V1::TireOrdersController < ApplicationController
   # PATCH /api/v1/tire_orders/:id/confirm (только админы)
   def confirm
     if @order.confirm!
-      render json: { 
-        message: 'Заказ подтвержден', 
-        order: format_order(@order) 
+      load_order_associations!
+      render json: {
+        message: 'Заказ подтвержден',
+        order: format_order(@order)
       }
     else
       render json: { errors: @order.errors.full_messages }, status: :unprocessable_entity
@@ -161,9 +163,10 @@ class Api::V1::TireOrdersController < ApplicationController
   # PATCH /api/v1/tire_orders/:id/start_processing (только админы)
   def start_processing
     if @order.start_processing!
-      render json: { 
-        message: 'Заказ взят в обработку', 
-        order: format_order(@order) 
+      load_order_associations!
+      render json: {
+        message: 'Заказ взят в обработку',
+        order: format_order(@order)
       }
     else
       render json: { errors: @order.errors.full_messages }, status: :unprocessable_entity
@@ -173,9 +176,10 @@ class Api::V1::TireOrdersController < ApplicationController
   # PATCH /api/v1/tire_orders/:id/complete (только админы)
   def complete
     if @order.complete!
-      render json: { 
-        message: 'Заказ выполнен', 
-        order: format_order(@order) 
+      load_order_associations!
+      render json: {
+        message: 'Заказ выполнен',
+        order: format_order(@order)
       }
     else
       render json: { errors: @order.errors.full_messages }, status: :unprocessable_entity
@@ -184,12 +188,13 @@ class Api::V1::TireOrdersController < ApplicationController
 
   # PATCH /api/v1/tire_orders/:id/cancel
   def cancel
-    authorize_cancel_access!
-    
+    return unless authorize_cancel_access!
+
     if @order.cancel!
-      render json: { 
-        message: 'Заказ отменен', 
-        order: format_order(@order) 
+      load_order_associations!
+      render json: {
+        message: 'Заказ отменен',
+        order: format_order(@order)
       }
     else
       render json: { errors: @order.errors.full_messages }, status: :unprocessable_entity
@@ -198,12 +203,13 @@ class Api::V1::TireOrdersController < ApplicationController
 
   # PATCH /api/v1/tire_orders/:id/archive
   def archive
-    authorize_order_access!
-    
+    return unless authorize_order_access!
+
     if @order.archive!
-      render json: { 
-        message: 'Заказ перемещен в архив', 
-        order: format_order(@order) 
+      load_order_associations!
+      render json: {
+        message: 'Заказ перемещен в архив',
+        order: format_order(@order)
       }
     else
       render json: { errors: @order.errors.full_messages }, status: :unprocessable_entity
@@ -213,16 +219,25 @@ class Api::V1::TireOrdersController < ApplicationController
   private
 
   def set_order
-    @order = TireOrder.includes(:supplier, :user, tire_order_items: :supplier_tire_product)
-                     .find(params[:id])
+    @order = TireOrder.find(params[:id])
   rescue ActiveRecord::RecordNotFound
     render json: { error: 'Заказ не найден' }, status: :not_found
+  end
+
+  # Eager load associations when needed for rendering
+  def load_order_associations!
+    ActiveRecord::Associations::Preloader.new(
+      records: [@order],
+      associations: [:supplier, :user, { tire_order_items: :supplier_tire_product }]
+    ).call
   end
 
   def authorize_order_access!
     unless current_user.admin? || @order.user == current_user
       render json: { error: 'Доступ запрещен' }, status: :forbidden
+      return false
     end
+    true
   end
 
   def authorize_cancel_access!
@@ -231,10 +246,12 @@ class Api::V1::TireOrdersController < ApplicationController
                  else
                    @order.user == current_user && @order.can_be_cancelled_by_user?
                  end
-    
+
     unless can_cancel
       render json: { error: 'Отмена заказа недоступна' }, status: :forbidden
+      return false
     end
+    true
   end
 
   def format_order(order)

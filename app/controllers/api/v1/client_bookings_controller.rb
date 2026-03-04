@@ -4,10 +4,10 @@ module Api
       skip_after_action :verify_authorized
       # Пропускаем аутентификацию для клиентских записей (гостевые записи)
       # Но для create делаем опциональную аутентификацию - пытаемся аутентифицировать, но не требуем этого
-      skip_before_action :authenticate_request, only: [:create, :show, :update, :cancel, :reschedule, :reschedule_suggestions, :check_availability_for_booking]
+      skip_before_action :authenticate_request, only: [:create, :show, :update, :cancel, :reschedule, :reschedule_suggestions, :check_availability_for_booking, :confirm_sms, :resend_sms]
       before_action :optional_authenticate_request, only: [:create]
 
-      before_action :set_booking, only: [:show, :update, :cancel, :reschedule, :reschedule_suggestions, :assign_to_client]
+      before_action :set_booking, only: [:show, :update, :cancel, :reschedule, :reschedule_suggestions, :assign_to_client, :confirm_sms, :resend_sms]
       before_action :validate_client_data, only: [:create], unless: -> { ENV['SWAGGER_DRY_RUN'] }
       
       # GET /api/v1/client_bookings
@@ -55,13 +55,15 @@ module Api
 
       # POST /api/v1/client_bookings
       # Создание записи клиентом (включая гостевые записи)
+      # Uses BookingSlotLockService for atomic availability check + booking creation
+      # to prevent race conditions (double-booking of the same slot).
       def create
         # Swagger заглушка
         if ENV['SWAGGER_DRY_RUN']
           render json: build_mock_booking_response, status: :created
           return
         end
-        
+
         # Логируем входящие параметры
         Rails.logger.info "=== CLIENT BOOKING CREATE START ==="
         Rails.logger.info "Raw params: #{params.to_unsafe_h}"
@@ -69,42 +71,92 @@ module Api
         Rails.logger.info "Client params present: #{params[:client].present?}"
         Rails.logger.info "Booking params present: #{params[:booking].present?}"
         Rails.logger.info "Car params present: #{params[:car].present?}"
-        
+
         # Создаем или находим клиента (может быть nil для гостевых бронирований)
         @client = find_or_create_client
-        
+
         Rails.logger.info "Client found/created: #{@client&.id || 'GUEST_BOOKING'}"
-        
-        # Проверяем доступность времени
-        availability_check = perform_availability_check
-        unless availability_check[:available]
-          Rails.logger.error "Availability check failed: #{availability_check[:reason]}"
-          render json: { 
-            error: 'Выбранное время недоступно', 
-            reason: availability_check[:reason] 
-          }, status: :unprocessable_entity
+
+        # Determine if availability check should be skipped (non-client roles)
+        skip_availability = current_user.present? && !current_user.client?
+        if skip_availability
+          Rails.logger.info "Non-client user (ID: #{current_user.id}, role: #{current_user.role&.name}) - skipping availability check"
+        end
+
+        # Prepare booking attributes
+        booking_data = build_booking_data_for_lock_service
+        unless booking_data
+          # build_booking_data_for_lock_service already rendered an error
           return
         end
-        
-        Rails.logger.info "Availability check passed"
-        
-        # Создаем бронирование
-        booking_result = create_client_booking
-        
-        Rails.logger.info "Booking creation result: #{booking_result[:success] ? 'SUCCESS' : 'FAILED'}"
-        if !booking_result[:success]
-          Rails.logger.error "Booking errors: #{booking_result[:errors]}"
-        end
-        
-        if booking_result[:success]
-          render json: format_booking_response(booking_result[:booking]), status: :created
+
+        booking_params_data = booking_params_for_duration
+
+        # Use BookingSlotLockService for atomic check + create
+        lock_result = BookingSlotLockService.call(
+          service_point_id: booking_params_data[:service_point_id].to_i,
+          booking_date: booking_params_data[:booking_date],
+          start_time: booking_params_data[:start_time],
+          booking_attrs: booking_data,
+          skip_availability: skip_availability,
+          category_id: booking_params_data[:service_category_id]
+        )
+
+        if lock_result.success?
+          booking = lock_result.data[:booking]
+
+          # Add services if present
+          if params[:services].present?
+            create_booking_services(booking)
+            booking.update_total_price!
+          end
+
+          # Enqueue async jobs (notifications, reminders)
+          BookingNotificationJob.perform_later(booking.id, :created)
+          BookingRemindersJob.perform_later(booking.id)
+
+          # Send SMS confirmation code for guest bookings
+          sms_sent = false
+          if booking.guest_booking?
+            sms_result = SmsConfirmationService.send_code(booking)
+            sms_sent = sms_result.success?
+          end
+
+          Rails.logger.info "Booking creation result: SUCCESS (ID: #{booking.id})"
+          response_data = format_booking_response(booking)
+          response_data[:sms_confirmation_required] = booking.guest_booking?
+          response_data[:sms_confirmation_sent] = sms_sent
+          render json: response_data, status: :created
         else
-          render json: { 
-            error: 'Не удалось создать запись', 
-            details: booking_result[:errors] 
-          }, status: :unprocessable_entity
+          error_type = lock_result.data&.dig(:error_type)
+
+          case error_type
+          when :slot_taken, :db_conflict
+            # 409 Conflict — slot is already taken
+            Rails.logger.warn "Booking slot conflict: #{lock_result.error}"
+            render json: {
+              error: I18n.t('bookings.errors.slot_conflict', default: 'Выбранное время уже занято'),
+              reason: lock_result.error,
+              code: 'slot_conflict'
+            }, status: :conflict
+          when :lock_timeout
+            # 503 Service Unavailable — could not acquire lock in time
+            Rails.logger.warn "Booking lock timeout: #{lock_result.error}"
+            render json: {
+              error: I18n.t('bookings.errors.server_busy', default: 'Сервер перегружен, попробуйте снова'),
+              code: 'lock_timeout'
+            }, status: :service_unavailable
+            response.headers['Retry-After'] = '3'
+          else
+            # Generic validation/creation error
+            Rails.logger.error "Booking creation failed: #{lock_result.error}"
+            render json: {
+              error: 'Не удалось создать запись',
+              details: lock_result.data&.dig(:errors) || [lock_result.error]
+            }, status: :unprocessable_entity
+          end
         end
-        
+
         Rails.logger.info "=== CLIENT BOOKING CREATE END ==="
       end
       
@@ -283,6 +335,66 @@ module Api
         end
       end
 
+      # POST /api/v1/client_bookings/:id/confirm_sms
+      # Confirm guest booking with SMS verification code
+      def confirm_sms
+        unless @booking.guest_booking?
+          return render json: { error: 'SMS confirmation is only required for guest bookings' }, status: :unprocessable_entity
+        end
+
+        if @booking.sms_confirmed?
+          return render json: { error: 'Booking is already confirmed via SMS' }, status: :unprocessable_entity
+        end
+
+        code = params[:code]
+        result = SmsConfirmationService.verify_code(@booking, code)
+
+        if result.success?
+          render json: {
+            message: 'Booking confirmed via SMS',
+            booking: format_booking_response(@booking.reload)
+          }
+        else
+          status_code = case result.error
+                        when 'max_attempts_exceeded' then :too_many_requests
+                        when 'code_expired' then :gone
+                        else :unprocessable_entity
+                        end
+
+          render json: {
+            error: result.error,
+            details: result.data
+          }, status: status_code
+        end
+      end
+
+      # POST /api/v1/client_bookings/:id/resend_sms
+      # Resend SMS confirmation code for guest booking
+      def resend_sms
+        unless @booking.guest_booking?
+          return render json: { error: 'SMS confirmation is only required for guest bookings' }, status: :unprocessable_entity
+        end
+
+        if @booking.sms_confirmed?
+          return render json: { error: 'Booking is already confirmed via SMS' }, status: :unprocessable_entity
+        end
+
+        result = SmsConfirmationService.send_code(@booking)
+
+        if result.success?
+          render json: {
+            message: 'SMS code resent',
+            expires_in: result.data[:expires_in]
+          }
+        else
+          status_code = result.error == 'resend_cooldown' ? :too_many_requests : :unprocessable_entity
+          render json: {
+            error: result.error,
+            details: result.data
+          }, status: status_code
+        end
+      end
+
       # POST /api/v1/client_bookings/:id/assign_to_client
       # Привязка гостевого бронирования к клиенту
       def assign_to_client
@@ -445,54 +557,65 @@ module Api
         Rails.logger.error "Error creating booking services: #{e.message}"
       end
       
-      # Создает бронирование для клиента
-      def create_client_booking
-        # Находим тип автомобиля
+      # Build booking attributes hash for BookingSlotLockService.
+      # Returns nil and renders error response if car_type is missing.
+      def build_booking_data_for_lock_service
+        # Find car type
         car_type = find_or_create_car_type
-        return { success: false, errors: ['Тип автомобиля не найден'] } unless car_type
-        
-        # Создаем бронирование (время и статус уже установлены в booking_params)
-        booking_data = booking_params.merge(
-          client_id: @client&.id,  # ✅ Может быть nil для гостевых бронирований
+        unless car_type
+          render json: {
+            error: 'Не удалось создать запись',
+            details: ['Тип автомобиля не найден']
+          }, status: :unprocessable_entity
+          return nil
+        end
+
+        # Build base booking attributes
+        data = booking_params.merge(
+          client_id: @client&.id,
           car_type_id: car_type.id
         )
 
-        # ✅ Добавляем информацию об автомобиле в соответствующие поля БД
+        # Add car info fields from params
         car_info = car_params
         if car_info[:license_plate].present? || car_info[:car_brand].present? || car_info[:car_model].present?
-          # Заполняем поля БД для данных автомобиля
-          booking_data[:license_plate] = car_info[:license_plate] if car_info[:license_plate].present?
-          booking_data[:car_brand] = car_info[:car_brand] if car_info[:car_brand].present?
-          booking_data[:car_model] = car_info[:car_model] if car_info[:car_model].present?
-          
-          # Также добавляем в комментарии для совместимости
+          data[:license_plate] = car_info[:license_plate] if car_info[:license_plate].present?
+          data[:car_brand] = car_info[:car_brand] if car_info[:car_brand].present?
+          data[:car_model] = car_info[:car_model] if car_info[:car_model].present?
+
           car_notes = []
           car_notes << "Номер: #{car_info[:license_plate]}" if car_info[:license_plate].present?
           car_notes << "Марка: #{car_info[:car_brand]}" if car_info[:car_brand].present?
           car_notes << "Модель: #{car_info[:car_model]}" if car_info[:car_model].present?
-          
-          booking_data[:notes] = [
-            booking_data[:notes],
+
+          data[:notes] = [
+            data[:notes],
             "Информация об автомобиле:",
             *car_notes
           ].compact.join("\n")
         end
 
+        data
+      end
+
+      # Legacy method — kept for backward compatibility with BookingManager flows.
+      # New booking creation goes through BookingSlotLockService via the create action.
+      def create_client_booking
+        booking_data = build_booking_data_for_lock_service
+        return { success: false, errors: ['Тип автомобиля не найден'] } unless booking_data
+
         booking = Booking.new(booking_data)
 
-        # Добавляем услуги если они есть
+        # Add services if present
         if params[:services].present?
           create_booking_services(booking)
           booking.update_total_price!
         end
 
         if booking.save
-          # Отправляем уведомления
           BookingNotificationJob.perform_later(booking.id, :created)
-          
-          # Запускаем напоминания
           BookingRemindersJob.perform_later(booking.id)
-          
+
           { success: true, booking: booking }
         else
           { success: false, errors: booking.errors.full_messages }
@@ -648,6 +771,8 @@ module Api
             name: booking.service_category.name,
             description: booking.service_category.description
           } : nil,
+          sms_confirmed: booking.sms_confirmed?,
+          sms_confirmation_required: booking.guest_booking?,
           created_at: booking.created_at,
           updated_at: booking.updated_at
         }

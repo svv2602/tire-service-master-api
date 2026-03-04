@@ -12,15 +12,34 @@ class Review < ApplicationRecord
   validates :booking_id, uniqueness: true, allow_nil: true
   validates :status, presence: true, inclusion: { in: %w[pending published rejected] }
   
+  # Eager loading scope to avoid N+1 queries in list endpoints
+  scope :with_associations, -> {
+    includes(
+      { client: :user },
+      { service_point: [:city, :partner] },
+      :booking
+    )
+  }
+
   # Скоупы
   scope :published, -> { where(status: 'published') }
   scope :pending, -> { where(status: 'pending') }
   scope :rejected, -> { where(status: 'rejected') }
+  scope :approved, -> { where(status: 'published') }
   scope :ordered_by_date, -> { order(created_at: :desc) }
-  
+
+  # AI moderation scopes
+  scope :moderation_pending, -> { where(moderation_status: 'pending') }
+  scope :moderation_approved, -> { where(moderation_status: 'approved') }
+  scope :moderation_flagged, -> { where(moderation_status: 'flagged') }
+  scope :moderation_rejected, -> { where(moderation_status: 'rejected') }
+  scope :needs_moderation, -> { where(moderation_status: %w[pending flagged]) }
+  scope :by_sentiment, ->(sentiment) { where(ai_sentiment: sentiment) }
+  scope :by_classification, ->(classification) { where(ai_classification: classification) }
+
   # Scope для изоляции данных по партнерам
-  scope :for_partner, ->(partner_id) { 
-    joins(:service_point).where(service_points: { partner_id: partner_id }) 
+  scope :for_partner, ->(partner_id) {
+    joins(:service_point).where(service_points: { partner_id: partner_id })
   }
   
   # Колбэки для синхронизации is_published с status
@@ -33,7 +52,10 @@ class Review < ApplicationRecord
   # Колбэки для уведомлений
   after_create :send_review_creation_notification, unless: -> { skip_notifications }
   after_update :send_review_status_change_notification, if: -> { saved_change_to_status? && !skip_notifications }
-  
+
+  # AI auto-moderation callback
+  after_create :schedule_ai_moderation, unless: -> { skip_notifications }
+
   # Флаг для отключения уведомлений (для тестов и массовых операций)
   attr_accessor :skip_notifications
   
@@ -78,6 +100,13 @@ class Review < ApplicationRecord
       BookingNotificationJob.perform_later(id, 'telegram_review_rejected')
     end
     
-    Rails.logger.info "📝 Отправлены уведомления об изменении статуса отзыва ID: #{id} на #{status}"
+    Rails.logger.info "Sent review status change notifications for ID: #{id} status: #{status}"
+  end
+
+  # Schedule AI auto-moderation as background job
+  def schedule_ai_moderation
+    ReviewAutoModerationJob.perform_later(id) if defined?(ReviewAutoModerationJob)
+  rescue StandardError => e
+    Rails.logger.warn "Failed to schedule AI moderation for review #{id}: #{e.message}"
   end
 end

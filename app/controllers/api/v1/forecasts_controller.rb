@@ -157,7 +157,8 @@ module Api
         {
           lookback_weeks: (params[:lookback_weeks] || 8).to_i,
           forecast_days: (params[:forecast_days] || 7).to_i,
-          include_seasonality: params[:include_seasonality] != 'false'
+          include_seasonality: params[:include_seasonality] != 'false',
+          include_ai: params[:include_ai] != 'false'
         }
       end
 

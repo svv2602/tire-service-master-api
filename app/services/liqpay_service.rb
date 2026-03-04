@@ -240,6 +240,9 @@ class LiqpayService
           paid_at: Time.current
         )
 
+        # Create Payment record for history tracking
+        create_payment_record(result, 'booking', info['booking_id'], booking.client&.user_id)
+
         # Send notification
         NotificationService.send_payment_successful(booking)
 
@@ -254,6 +257,9 @@ class LiqpayService
           paid_at: Time.current
         )
 
+        # Create Payment record for history tracking
+        create_payment_record(result, 'order', info['order_id'], order.client&.user_id)
+
         Rails.logger.info "[LiqPay] Order ##{order.id} payment successful"
       end
     end
@@ -266,10 +272,16 @@ class LiqpayService
       booking = Booking.find_by(id: info['booking_id'])
       booking&.update!(payment_status_id: PaymentStatus.failed_id)
 
+      # Create failed Payment record
+      create_payment_record(result, 'booking', info['booking_id'], booking&.client&.user_id, 'failed')
+
       Rails.logger.warn "[LiqPay] Booking ##{info['booking_id']} payment failed: #{result[:err_description]}"
     elsif info['payment_type'] == 'tire_order' && info['order_id']
       order = TireOrder.find_by(id: info['order_id'])
       order&.update!(payment_status: 'failed')
+
+      # Create failed Payment record
+      create_payment_record(result, 'order', info['order_id'], order&.client&.user_id, 'failed')
 
       Rails.logger.warn "[LiqPay] Order ##{info['order_id']} payment failed: #{result[:err_description]}"
     end
@@ -282,12 +294,42 @@ class LiqpayService
       booking = Booking.find_by(id: info['booking_id'])
       booking&.update!(payment_status_id: PaymentStatus.refunded_id)
 
+      # Update Payment record status
+      payment = Payment.find_by(payment_type: 'booking', entity_id: info['booking_id'], status: 'success')
+      payment&.update!(status: 'refunded', refunded_at: Time.current, refund_amount: result[:amount])
+
       Rails.logger.info "[LiqPay] Booking ##{info['booking_id']} payment reversed"
+    elsif info['payment_type'] == 'tire_order' && info['order_id']
+      payment = Payment.find_by(payment_type: 'order', entity_id: info['order_id'], status: 'success')
+      payment&.update!(status: 'refunded', refunded_at: Time.current, refund_amount: result[:amount])
+
+      Rails.logger.info "[LiqPay] Order ##{info['order_id']} payment reversed"
     end
   end
 
   def handle_pending_payment(result)
     Rails.logger.info "[LiqPay] Payment pending acceptance: #{result[:order_id]}"
+  end
+
+  # Create a Payment record for tracking payment history
+  def create_payment_record(result, payment_type, entity_id, user_id, status = 'success')
+    return unless user_id && result[:order_id]
+
+    Payment.create!(
+      payment_id: result[:order_id],
+      provider: 'liqpay',
+      payment_type: payment_type,
+      entity_id: entity_id,
+      user_id: user_id,
+      amount: result[:amount],
+      currency: result[:currency] || 'UAH',
+      status: status,
+      description: result[:description],
+      paid_at: status == 'success' ? Time.current : nil,
+      provider_payment_id: result[:transaction_id]
+    )
+  rescue ActiveRecord::RecordInvalid => e
+    Rails.logger.warn "[LiqPay] Failed to create payment record: #{e.message}"
   end
 
   def frontend_url

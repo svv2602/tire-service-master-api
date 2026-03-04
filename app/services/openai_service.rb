@@ -290,7 +290,7 @@ class OpenaiService
   end
 
   def openai_model
-    get_system_setting('openai_model').presence || 'gpt-4o-mini'
+    get_system_setting('openai_model').presence || 'gpt-4.1-mini'
   end
 
   def openai_max_tokens
@@ -347,7 +347,7 @@ class OpenaiService
     # Fallback к дефолтным значениям
     default_values = {
       'openai_api_key' => '',
-      'openai_model' => 'gpt-4o-mini',
+      'openai_model' => 'gpt-4.1-mini',
       'openai_max_tokens' => '500',
       'openai_temperature' => '0.1',
       'openai_timeout' => '30',

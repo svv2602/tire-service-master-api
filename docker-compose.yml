@@ -25,6 +25,54 @@ services:
     networks:
       - tire_service_network
 
+  # PgBouncer connection pooler (Phase-03)
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: tire_service_pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgres://tire_service_user:tire_service_password@postgres:5432/tire_service_development"
+      POOL_MODE: transaction
+      DEFAULT_POOL_SIZE: 20
+      MAX_CLIENT_CONN: 100
+      MIN_POOL_SIZE: 5
+      RESERVE_POOL_SIZE: 5
+      RESERVE_POOL_TIMEOUT: 3
+      SERVER_IDLE_TIMEOUT: 300
+      SERVER_LIFETIME: 3600
+      LOG_CONNECTIONS: 1
+      LOG_DISCONNECTIONS: 1
+      AUTH_TYPE: plain
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tire_service_network
+
+  # Elasticsearch for tire catalog search (Phase-03)
+  elasticsearch:
+    image: elasticsearch:8.12.0
+    container_name: tire_service_elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - tire_service_network
+
   # Redis для кэширования и фоновых задач
   redis:
     image: redis:7-alpine
@@ -218,6 +266,10 @@ volumes:
   api_storage:
     driver: local
     
+  # Elasticsearch данные (Phase-03)
+  elasticsearch_data:
+    driver: local
+
   # React Web volumes
   web_node_modules:
     driver: local

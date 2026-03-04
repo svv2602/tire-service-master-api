@@ -95,7 +95,12 @@ module Api
           return render json: { error: 'Not authorized to respond to this review' }, status: :forbidden
         end
 
-        response = moderation_service.generate_response(review)
+        # Use ReviewReplyGeneratorService for AI-powered personalized replies
+        response = reply_generator_service.generate(
+          review,
+          language: params[:language] || 'ru',
+          partner_name: review.service_point&.name
+        )
 
         render json: { success: true, response: response }
       rescue StandardError => e
@@ -157,6 +162,10 @@ module Api
 
       def moderation_service
         @moderation_service ||= ReviewModerationService.new
+      end
+
+      def reply_generator_service
+        @reply_generator_service ||= ReviewReplyGeneratorService.new
       end
     end
   end

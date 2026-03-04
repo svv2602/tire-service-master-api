@@ -64,6 +64,10 @@ module TireServiceMasterApi
     require_relative '../app/middleware/partner_data_filter_middleware'
     require_relative '../app/middleware/operator_data_filter_middleware'
     require_relative '../app/middleware/audit_context_middleware'
+    require_relative '../app/middleware/api_version_middleware'
+
+    # API versioning middleware (sets API-Version header)
+    config.middleware.use ApiVersionMiddleware
 
     # Добавляем middleware для автоматической фильтрации данных
     config.middleware.use PartnerDataFilterMiddleware
@@ -91,7 +95,9 @@ module TireServiceMasterApi
       'X-Download-Options' => 'noopen',
       'X-Permitted-Cross-Domain-Policies' => 'none',
       'Referrer-Policy' => 'strict-origin-when-cross-origin',
-      'Permissions-Policy' => 'geolocation=(), microphone=(), camera=()'
+      'Permissions-Policy' => 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()',
+      'Cross-Origin-Opener-Policy' => 'same-origin',
+      'Cross-Origin-Resource-Policy' => 'same-origin'
     }
   end
 end

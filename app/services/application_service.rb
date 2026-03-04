@@ -1,9 +1,9 @@
 # Базовый класс для всех сервисов в приложении
 # Предоставляет общие методы и интерфейс
 class ApplicationService
-  # Позволяет вызывать сервис через ClassName.call(args)
-  def self.call(*args, &block)
-    new(*args, &block).call
+  # Allows calling the service via ClassName.call(args) or ClassName.call(key: val)
+  def self.call(*args, **kwargs, &block)
+    new(*args, **kwargs, &block).call
   end
 
   private

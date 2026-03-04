@@ -10,35 +10,44 @@ module Api
       # GET /api/v1/car_brands/:car_brand_id/car_models
       # GET /api/v1/car_models
       def index
-        @car_models = if @car_brand
-          @car_brand.car_models.includes(:brand)
-        else
-          CarModel.includes(:brand)
+        cache_key = CacheVersioning.versioned_key(
+          "car_models:index:#{car_models_cache_params_key}",
+          "car_models"
+        )
+
+        result = Rails.cache.fetch(cache_key, expires_in: 24.hours) do
+          @car_models = if @car_brand
+            @car_brand.car_models.includes(:brand)
+          else
+            CarModel.includes(:brand)
+          end
+
+          # Filter active models
+          @car_models = @car_models.where(is_active: true) if params[:active].present? && params[:active] == 'true'
+
+          # Search by name
+          if params[:query].present?
+            @car_models = @car_models.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
+          end
+
+          # Sort
+          @car_models = @car_models.order(params[:sort] || :name)
+
+          # Pagination
+          page = [params[:page].to_i, 1].max
+          per_page = (params[:per_page] || 10).to_i
+          offset = (page - 1) * per_page
+
+          total_count = @car_models.count
+          @car_models = @car_models.offset(offset).limit(per_page)
+
+          {
+            car_models: @car_models.as_json(include: { brand: { only: [:id, :name] } }),
+            total_items: total_count
+          }
         end
-        
-        # Фильтрация активных моделей
-        @car_models = @car_models.where(is_active: true) if params[:active].present? && params[:active] == 'true'
-        
-        # Поиск по названию
-        if params[:query].present?
-          @car_models = @car_models.where("LOWER(name) LIKE LOWER(?)", "%#{params[:query]}%")
-        end
-        
-        # Сортировка
-        @car_models = @car_models.order(params[:sort] || :name)
-        
-        # Пагинация
-        page = [params[:page].to_i, 1].max  # Минимум 1
-        per_page = (params[:per_page] || 10).to_i
-        offset = (page - 1) * per_page
-        
-        total_count = @car_models.count
-        @car_models = @car_models.offset(offset).limit(per_page)
-        
-        render json: {
-          car_models: @car_models.as_json(include: { brand: { only: [:id, :name] } }),
-          total_items: total_count
-        }
+
+        render json: result
       end
       
       # GET /api/v1/car_brands/:car_brand_id/car_models/:id
@@ -100,6 +109,17 @@ module Api
           render json: { error: 'Unauthorized' }, status: :unauthorized
         end
       end
+
+      def car_models_cache_params_key
+        [
+          params[:car_brand_id],
+          params[:active],
+          params[:query],
+          params[:sort],
+          params[:page],
+          params[:per_page]
+        ].compact.join(':')
+      end
     end
   end
-end 
+end

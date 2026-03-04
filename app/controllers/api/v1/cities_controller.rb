@@ -8,39 +8,48 @@ module Api
       
       # GET /api/v1/cities
       def index
-        cities = City.includes(:region)
-                     .where(is_active: true)
-        
-        # Фильтрация по region_id если параметр передан
-        if params[:region_id].present?
-          cities = cities.where(region_id: params[:region_id])
+        # Build cache key based on request params
+        cache_key = CacheVersioning.versioned_key(
+          "cities:index:#{cities_cache_params_key}",
+          "cities"
+        )
+
+        result = Rails.cache.fetch(cache_key, expires_in: 24.hours) do
+          cities = City.includes(:region)
+                       .where(is_active: true)
+
+          # Filter by region_id if provided
+          if params[:region_id].present?
+            cities = cities.where(region_id: params[:region_id])
+          end
+
+          cities = cities.order(:name)
+
+          # Pagination
+          page = [params[:page].to_i, 1].max
+          per_page = [params[:per_page].to_i, 20].max
+          per_page = [per_page, 100].min
+
+          offset = (page - 1) * per_page
+          total_count = cities.count
+          cities = cities.limit(per_page).offset(offset)
+
+          locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+
+          {
+            data: ActiveModel::Serializer::CollectionSerializer.new(
+              cities,
+              serializer: CitySerializer,
+              locale: locale
+            ),
+            total: total_count,
+            page: page,
+            per_page: per_page,
+            total_pages: (total_count.to_f / per_page).ceil
+          }
         end
-        
-        cities = cities.order(:name)
 
-        # Пагинация
-        page = [params[:page].to_i, 1].max  # Минимум 1
-        per_page = [params[:per_page].to_i, 20].max  # Минимум 20
-        per_page = [per_page, 100].min # Ограничиваем максимум 100 записей на страницу
-        
-        offset = (page - 1) * per_page
-        total_count = cities.count
-        cities = cities.limit(per_page).offset(offset)
-
-        # Определяем язык для сериализации
-        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
-        
-        render json: {
-          data: ActiveModel::Serializer::CollectionSerializer.new(
-            cities, 
-            serializer: CitySerializer,
-            locale: locale
-          ),
-          total: total_count,
-          page: page,
-          per_page: per_page,
-          total_pages: (total_count.to_f / per_page).ceil
-        }
+        render json: result
       end
       
       # GET /api/v1/cities/with_service_points
@@ -143,6 +152,16 @@ module Api
           render json: { error: 'Unauthorized' }, status: :unauthorized
         end
       end
+
+      def cities_cache_params_key
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        [
+          params[:region_id],
+          params[:page],
+          params[:per_page],
+          locale
+        ].compact.join(':')
+      end
     end
   end
-end 
+end

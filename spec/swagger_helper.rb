@@ -125,6 +125,37 @@ RSpec.configure do |config|
                 }
               }
             }
+          },
+          Device: {
+            type: :object,
+            properties: {
+              id: { type: :integer },
+              platform: { type: :string, enum: %w[ios android] },
+              device_name: { type: :string, nullable: true },
+              device_model: { type: :string, nullable: true },
+              os_version: { type: :string, nullable: true },
+              app_version: { type: :string, nullable: true },
+              is_active: { type: :boolean },
+              last_used_at: { type: :string, format: :datetime, nullable: true },
+              created_at: { type: :string, format: :datetime }
+            }
+          },
+          DeviceRequest: {
+            type: :object,
+            properties: {
+              device: {
+                type: :object,
+                properties: {
+                  device_token: { type: :string, description: 'APNs or FCM device token' },
+                  platform: { type: :string, enum: %w[ios android] },
+                  device_name: { type: :string },
+                  device_model: { type: :string },
+                  os_version: { type: :string },
+                  app_version: { type: :string }
+                },
+                required: %w[device_token platform]
+              }
+            }
           }
         },
         securitySchemes: {

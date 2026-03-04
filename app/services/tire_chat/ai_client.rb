@@ -2,18 +2,20 @@
 
 module TireChat
   # AI Client for interaction with OpenAI API
-  # Handles chat completion requests, retries, and error handling
+  # Uses AiRequestWrapper for retry, circuit breaker, and error handling
   class AIClient
     class APIError < StandardError; end
     class RateLimitError < APIError; end
     class TimeoutError < APIError; end
 
     # Configuration
-    DEFAULT_MODEL = 'gpt-4o-mini'
+    DEFAULT_MODEL = 'gpt-4.1-mini'
     DEFAULT_TEMPERATURE = 0.7
     DEFAULT_MAX_TOKENS = 1000
-    MAX_RETRIES = 3
-    RETRY_DELAY = 1 # seconds, will be multiplied exponentially
+
+    # Fallback message when AI is unavailable
+    FALLBACK_MESSAGE_RU = 'Извините, сервис AI-консультанта временно недоступен. Попробуйте позже или воспользуйтесь каталогом шин.'
+    FALLBACK_MESSAGE_UK = 'Вибачте, сервiс AI-консультанта тимчасово недоступний. Спробуйте пiзнiше або скористайтеся каталогом шин.'
 
     attr_reader :openai_service
 
@@ -26,36 +28,46 @@ module TireChat
       OpenaiService.available?
     end
 
-    # Standard chat completion request
+    # Standard chat completion request with AiRequestWrapper resilience
     # @param prompt [String] The prompt to send
     # @param options [Hash] Additional options (model, temperature, max_tokens)
     # @return [String, nil] The response content or nil on failure
     def chat(prompt, options = {})
       return nil unless available?
 
-      with_retry do
+      result = AiRequestWrapper.call(operation: 'tire_chat_completion') do
         response = @openai_service.send(:chat_completion, prompt, options)
         extract_content(response)
       end
-    rescue => e
-      handle_error(e)
-      nil
+
+      if result.success?
+        result.data
+      else
+        Rails.logger.error "TireChat::AIClient chat failed: #{result.error}"
+        nil
+      end
     end
 
-    # Generate tire chat response using OpenAI
+    # Generate tire chat response using OpenAI with fallback
     # @param message [String] User message
     # @param filters [Hash] Current search filters
     # @param locale [String] Language locale (ru/uk)
-    # @return [String, nil] Generated response or nil
+    # @return [String, nil] Generated response or fallback message
     def generate_tire_response(message, filters = {}, locale = 'ru')
-      return nil unless available?
+      return fallback_message(locale) unless available?
 
-      with_retry do
+      result = AiRequestWrapper.call(operation: 'tire_chat_response') do
         @openai_service.generate_tire_chat_response(message, filters, locale)
       end
-    rescue => e
-      handle_error(e)
-      nil
+
+      if result.success? && result.data.present?
+        result.data
+      elsif result.fallback?
+        Rails.logger.warn 'TireChat::AIClient: circuit open, returning fallback message'
+        fallback_message(locale)
+      else
+        nil
+      end
     end
 
     # Analyze user intent using AI
@@ -66,25 +78,14 @@ module TireChat
       parse_json_response(response_content) || default_intent
     end
 
-    private
-
-    # Retry logic with exponential backoff
-    def with_retry(max_retries: MAX_RETRIES)
-      retries = 0
-      begin
-        yield
-      rescue RateLimitError, TimeoutError => e
-        retries += 1
-        if retries <= max_retries
-          sleep_time = RETRY_DELAY * (2 ** (retries - 1))
-          Rails.logger.warn "⚠️ TireChat::AIClient retry #{retries}/#{max_retries} after #{sleep_time}s: #{e.message}"
-          sleep(sleep_time)
-          retry
-        else
-          raise
-        end
-      end
+    # Get fallback message for unavailable AI
+    # @param locale [String] Language locale
+    # @return [String] Fallback message
+    def fallback_message(locale = 'ru')
+      locale == 'uk' ? FALLBACK_MESSAGE_UK : FALLBACK_MESSAGE_RU
     end
+
+    private
 
     # Extract content from OpenAI response
     def extract_content(response)
@@ -106,27 +107,13 @@ module TireChat
 
       JSON.parse(json_content).with_indifferent_access
     rescue JSON::ParserError => e
-      Rails.logger.error "❌ TireChat::AIClient JSON parse error: #{e.message}"
+      Rails.logger.error "TireChat::AIClient JSON parse error: #{e.message}"
       nil
     end
 
     # Default intent when parsing fails
     def default_intent
       { type: 'general_question', parameters: {}, confidence: 0.1 }
-    end
-
-    # Handle and classify errors
-    def handle_error(error)
-      case error.message
-      when /rate limit/i
-        Rails.logger.error "❌ TireChat::AIClient rate limit exceeded"
-        raise RateLimitError, error.message
-      when /timeout/i
-        Rails.logger.error "❌ TireChat::AIClient request timeout"
-        raise TimeoutError, error.message
-      else
-        Rails.logger.error "❌ TireChat::AIClient error: #{error.message}"
-      end
     end
   end
 end

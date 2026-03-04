@@ -13,6 +13,140 @@ info:
     name: MIT
     url: https://opensource.org/licenses/MIT
 paths:
+  "/api/v1/devices":
+    get:
+      summary: Lists registered devices for current user
+      tags:
+      - Devices
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: fields
+        in: query
+        required: false
+        schema:
+          type: string
+        description: 'Sparse fieldsets: comma-separated field names (e.g. fields=id,platform,device_name)'
+      - name: API-Version
+        in: header
+        required: false
+        schema:
+          type: string
+          default: '1'
+        description: API version for forward compatibility
+      responses:
+        '200':
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      "$ref": "#/components/schemas/Device"
+                  total_count:
+                    type: integer
+                  active_count:
+                    type: integer
+        '401':
+          description: Unauthorized
+    post:
+      summary: Registers a device token for push notifications
+      tags:
+      - Devices
+      security:
+      - bearerAuth: []
+      description: |
+        Register a mobile device token (APNs for iOS, FCM for Android) for push notifications.
+
+        **Push Notification Registration Flow:**
+        1. Mobile app obtains a device token from APNs (iOS) or FCM (Android)
+        2. App sends POST /api/v1/devices with the token and platform info
+        3. Server stores/updates the token linked to the authenticated user
+        4. Server uses active device tokens to deliver push notifications
+        5. On logout or uninstall, DELETE /api/v1/devices/:id deactivates the token
+
+        If a device with the same token already exists, it is reassigned to the current user and reactivated.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/DeviceRequest"
+      responses:
+        '201':
+          description: Device registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  device:
+                    "$ref": "#/components/schemas/Device"
+        '200':
+          description: Existing device token updated
+        '422':
+          description: Validation error
+  "/api/v1/devices/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Shows device details
+      tags:
+      - Devices
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Device found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Device"
+        '404':
+          description: Device not found
+    patch:
+      summary: Updates device info (e.g. app version after update)
+      tags:
+      - Devices
+      security:
+      - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device:
+                  type: object
+                  properties:
+                    device_name:
+                      type: string
+                    device_model:
+                      type: string
+                    os_version:
+                      type: string
+                    app_version:
+                      type: string
+      responses:
+        '200':
+          description: Device updated
+    delete:
+      summary: Deactivates a device (soft delete)
+      tags:
+      - Devices
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Device deactivated
   "/api/v1/clients/register":
     post:
       summary: Регистрирует нового клиента
@@ -4278,9 +4412,67 @@ components:
           description: Ошибки валидации по полям
       required:
       - errors
+    Device:
+      type: object
+      properties:
+        id:
+          type: integer
+        platform:
+          type: string
+          enum:
+          - ios
+          - android
+        device_name:
+          type: string
+          nullable: true
+        device_model:
+          type: string
+          nullable: true
+        os_version:
+          type: string
+          nullable: true
+        app_version:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    DeviceRequest:
+      type: object
+      properties:
+        device:
+          type: object
+          required:
+          - device_token
+          - platform
+          properties:
+            device_token:
+              type: string
+              description: APNs or FCM device token
+            platform:
+              type: string
+              enum:
+              - ios
+              - android
+            device_name:
+              type: string
+            device_model:
+              type: string
+            os_version:
+              type: string
+            app_version:
+              type: string
 tags:
 - name: Authentication
   description: Аутентификация и авторизация пользователей
+- name: Devices
+  description: Mobile device token registration for push notifications (APNs / FCM)
 - name: Clients
   description: Управление клиентами
 - name: Partners

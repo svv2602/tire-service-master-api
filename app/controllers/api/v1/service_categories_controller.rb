@@ -8,67 +8,72 @@ module Api
       
       # GET /api/v1/service_categories
       def index
-        # Определяем язык из параметров или заголовков
         locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
-        
-        @service_categories = ServiceCategory.all
-        
-        # Фильтрация: по умолчанию показываем только активные, если не указано иначе
-        if params[:active] == 'false'
-          # Показать неактивные категории
-          @service_categories = @service_categories.where(is_active: false)
-        elsif params[:active] == 'all'
-          # Показать все категории (активные и неактивные)
-          # @service_categories остается без изменений
-        else
-          # По умолчанию показываем только активные
-          @service_categories = @service_categories.where(is_active: true)
-        end
-        
-        # Фильтрация только категорий с активными постами
-        if params[:with_active_posts] == 'true'
-          @service_categories = @service_categories
-            .joins("INNER JOIN service_posts ON service_posts.service_category_id = service_categories.id")
-            .joins("INNER JOIN service_points ON service_points.id = service_posts.service_point_id")
-            .where("service_posts.is_active = true")
-            .where("service_points.is_active = true")
-            .distinct
-        end
-        
-        # Поиск по названию (учитываем локализацию)
-        if params[:query].present?
-          query = params[:query].downcase
-          @service_categories = @service_categories.where(
-            "LOWER(name) LIKE ? OR LOWER(name_uk) LIKE ? OR LOWER(description) LIKE ? OR LOWER(description_uk) LIKE ?",
-            "%#{query}%", "%#{query}%", "%#{query}%", "%#{query}%"
-          )
-        end
-        
-        # Сортировка
-        @service_categories = @service_categories.order(params[:sort] || :name)
-        
-        # Пагинация
-        page = [params[:page].to_i, 1].max  # Минимум 1
-        per_page = (params[:per_page] || 25).to_i
-        offset = (page - 1) * per_page
-        
-        total_count = @service_categories.count
-        @service_categories = @service_categories.offset(offset).limit(per_page)
-        
-        render json: {
-          data: ActiveModel::Serializer::CollectionSerializer.new(
-            @service_categories,
-            serializer: ServiceCategorySerializer,
-            locale: locale,
-            include_services_count: true
-          ),
-          pagination: {
-            current_page: page,
-            total_pages: (total_count.to_f / per_page).ceil,
-            total_count: total_count,
-            per_page: per_page
+
+        cache_key = CacheVersioning.versioned_key(
+          "service_categories:index:#{service_categories_cache_params_key}",
+          "service_categories"
+        )
+
+        result = Rails.cache.fetch(cache_key, expires_in: 12.hours) do
+          @service_categories = ServiceCategory.all
+
+          # Filter: show only active by default unless specified otherwise
+          if params[:active] == 'false'
+            @service_categories = @service_categories.where(is_active: false)
+          elsif params[:active] == 'all'
+            # Show all categories (active and inactive)
+          else
+            @service_categories = @service_categories.where(is_active: true)
+          end
+
+          # Filter categories with active posts only
+          if params[:with_active_posts] == 'true'
+            @service_categories = @service_categories
+              .joins("INNER JOIN service_posts ON service_posts.service_category_id = service_categories.id")
+              .joins("INNER JOIN service_points ON service_points.id = service_posts.service_point_id")
+              .where("service_posts.is_active = true")
+              .where("service_points.is_active = true")
+              .distinct
+          end
+
+          # Search by name (locale-aware)
+          if params[:query].present?
+            query = params[:query].downcase
+            @service_categories = @service_categories.where(
+              "LOWER(name) LIKE ? OR LOWER(name_uk) LIKE ? OR LOWER(description) LIKE ? OR LOWER(description_uk) LIKE ?",
+              "%#{query}%", "%#{query}%", "%#{query}%", "%#{query}%"
+            )
+          end
+
+          # Sort
+          @service_categories = @service_categories.order(params[:sort] || :name)
+
+          # Pagination
+          page = [params[:page].to_i, 1].max
+          per_page = (params[:per_page] || 25).to_i
+          offset = (page - 1) * per_page
+
+          total_count = @service_categories.count
+          @service_categories = @service_categories.offset(offset).limit(per_page)
+
+          {
+            data: ActiveModel::Serializer::CollectionSerializer.new(
+              @service_categories,
+              serializer: ServiceCategorySerializer,
+              locale: locale,
+              include_services_count: true
+            ),
+            pagination: {
+              current_page: page,
+              total_pages: (total_count.to_f / per_page).ceil,
+              total_count: total_count,
+              per_page: per_page
+            }
           }
-        }
+        end
+
+        render json: result
       end
       
       # GET /api/v1/service_categories/:id
@@ -240,6 +245,19 @@ module Api
         unless current_user && current_user.admin?
           render json: { error: 'Forbidden' }, status: :forbidden
         end
+      end
+
+      def service_categories_cache_params_key
+        locale = params[:locale] || request.headers['Accept-Language']&.split(',')&.first || 'ru'
+        [
+          params[:active],
+          params[:with_active_posts],
+          params[:query],
+          params[:sort],
+          params[:page],
+          params[:per_page],
+          locale
+        ].compact.join(':')
       end
       
       def category_json(category, include_services: false, locale: 'ru')

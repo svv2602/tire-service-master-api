@@ -1,7 +1,14 @@
 # frozen_string_literal: true
 
-# Background job for auto-confirming bookings based on service point automation settings
-# Scheduled when a booking is created if auto_confirm_enabled is true
+# Background job for auto-confirming bookings based on service point automation settings.
+# Scheduled by BookingConfirmationService when a booking requires delayed confirmation.
+#
+# This job handles the delayed confirmation path:
+#   1. Verifies booking is still pending
+#   2. Verifies auto-confirm is still enabled on the service point
+#   3. Checks additional conditions (working hours, advance booking, categories)
+#   4. Confirms the booking if all conditions are met
+#   5. Optionally auto-assigns an operator and sends confirmation SMS
 class AutoConfirmBookingJob < ApplicationJob
   queue_as :default
 

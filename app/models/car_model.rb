@@ -1,13 +1,18 @@
 class CarModel < ApplicationRecord
+  include CacheVersioning
+
   # Связи
   belongs_to :brand, class_name: 'CarBrand', foreign_key: 'brand_id'
   has_many :client_cars, foreign_key: 'model_id', dependent: :restrict_with_error
   has_many :car_tire_configurations, foreign_key: 'model_id', dependent: :destroy
-  
+
   # Валидации
   validates :name, presence: true
   validates :name, uniqueness: { scope: :brand_id }
-  
+
+  # Cache invalidation on data changes
+  after_commit :increment_cache_version
+
   # Скоупы
   scope :active, -> { where(is_active: true) }
   scope :for_brand, ->(brand_id) { where(brand_id: brand_id) }
